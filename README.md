@@ -85,11 +85,16 @@ Random queue yoki Mini App taklifi → `ws://…/ws/air-hockey` → server-autho
 
 ## Bot
 
-`/start` asosan Mini App ni ochadi (**OCHISH** / **O‘ynash** WebApp tugmalari → `/app/`).
+`/start` — **AIR HOCKEY** xush kelibsiz matni + stacked **inline** tugmalar (reply keyboard yo‘q):
 
-Reply keyboard: OCHISH (WebApp) · O‘ynash · Reyting · Profil. Rocket Bird olib tashlangan.
+1. **🏒 Air Hockey o‘ynash** — WebApp → `${WEBAPP_URL}/app/`
+2. **🛒 Do‘kon** — hozircha «ombor to‘ldirilmoqda» adabiy javob (+ ixtiyoriy `/app/shop/` stub)
 
-Commands: `/start`, `/profile`, `/rating`
+Profil / Reyting faqat Mini App ichida. Chat Menu Button **OCHISH** saqlanadi.
+
+![Bot /start — AIR HOCKEY](docs/bot-start-air-hockey.png)
+
+Commands: `/start` (asosiy), `/profile`, `/rating` (ixtiyoriy)
 
 ## Folder layout
 
@@ -100,7 +105,7 @@ apps/api/public/app/          Mini App shell (Profil / O‘yin / Reyting)
 apps/api/public/air-hockey/   canvas Air Hockey
 apps/api/src/air-hockey/      matchmaking + rooms
 apps/api/src/presence/        online presence + invites
-apps/api/src/admin/           /admin stats + feature toggles
+apps/api/src/admin/           /admin stats panel
 packages/db/                  SQLite users + scores + matches
 packages/shared/              types + initData verify
 data/                         Local SQLite + avatars (gitignored)
@@ -149,15 +154,15 @@ Other paths:
 1. Merge PR → Railway auto-redeploy (yoki manual redeploy)
 2. `GET /healthz` → `ok: true`, `miniApp: "/app/"`
 3. BotFather Menu Button = `https://…/app/`
-4. Telegram da `/start` → **OCHISH** → Profil / O‘yin / Reyting
+4. Telegram da `/start` → **Air Hockey o‘ynash** → Profil / O‘yin / Reyting
 5. Online o‘yin ball beradi; offline bermaydi
 
 ## Admin
 
 1. Railway Variables ga `ADMIN_SECRET`
 2. `/admin?key=SECRET`
-3. Feature toggles: Mini App, Air Hockey, Reyting, Profil
-4. JSON: `GET` / `POST /api/v1/admin/features`
+3. Statistika: foydalanuvchilar, aktivlik, Air Hockey xonalari/navbat, top reyting
+4. JSON: `GET /api/v1/admin/stats`
 
 ## Notes
 
