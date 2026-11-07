@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="uz">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <title>GAME BOT</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Sora:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header class="app-header">
+        <div>
+          <p class="brand">GAME BOT</p>
+          <p class="brand-sub">mini ilova</p>
+        </div>
+        <div id="connDot" class="conn" title="Aloqa" aria-label="Aloqa"></div>
+      </header>
+
+      <main id="views" class="views">
+        <!-- Profil -->
+        <section id="view-profil" class="view active" data-view="profil">
+          <div class="profile-hero">
+            <button type="button" id="avatarBtn" class="avatar-btn" aria-label="Rasm yuklash">
+              <img id="avatarImg" class="avatar-img hidden" alt="" />
+              <span id="avatarFallback" class="avatar-fallback">?</span>
+              <span class="avatar-cam" aria-hidden="true">✎</span>
+            </button>
+            <input id="avatarInput" type="file" accept="image/jpeg,image/png,image/webp" hidden />
+
+            <div class="nick-row">
+              <h1 id="nickDisplay" class="nick">…</h1>
+              <button type="button" id="editNickBtn" class="icon-btn" aria-label="Nickni tahrirlash">✎</button>
+            </div>
+            <p class="game-pill">🏒 Air Hockey</p>
+            <div class="stat-row">
+              <div>
+                <span class="stat-label">Ball</span>
+                <strong id="statPoints">0</strong>
+              </div>
+              <div>
+                <span class="stat-label">Reyting</span>
+                <strong id="statRating">1000</strong>
+              </div>
+              <div>
+                <span class="stat-label">O‘yinlar</span>
+                <strong id="statGames">0</strong>
+              </div>
+            </div>
+          </div>
+
+          <div id="nickEditor" class="sheet hidden">
+            <label for="nickInput">Nickname</label>
+            <input id="nickInput" maxlength="32" placeholder="Ismingiz" />
+            <div class="sheet-actions">
+              <button type="button" id="nickCancel" class="ghost">Bekor</button>
+              <button type="button" id="nickSave">Saqlash</button>
+            </div>
+            <p id="nickStatus" class="status"></p>
+          </div>
+
+          <p id="profileStatus" class="status center"></p>
+        </section>
+
+        <!-- O‘yin -->
+        <section id="view-oyin" class="view" data-view="oyin">
+          <div class="section-head">
+            <h2>O‘yin</h2>
+            <p>Online raqiblar yoki offline mashq</p>
+          </div>
+
+          <button type="button" id="offlineBtn" class="cta-offline">
+            <span class="cta-ico" aria-hidden="true">🤖</span>
+            <span>
+              <strong>Offline o‘ynash</strong>
+              <small>AI yoki 2 o‘yinchi · ball bermaydi</small>
+            </span>
+          </button>
+
+          <button type="button" id="randomBtn" class="cta-online">
+            <span class="cta-ico" aria-hidden="true">🎲</span>
+            <span>
+              <strong>Random online</strong>
+              <small>Tasodifiy raqib · ball hisoblanadi</small>
+            </span>
+          </button>
+
+          <div class="list-head">
+            <h3>Onlinelar</h3>
+            <span id="onlineCount" class="badge">0</span>
+          </div>
+          <ul id="onlineList" class="user-list"></ul>
+          <p id="onlineEmpty" class="empty hidden">Onlinelar yo‘q</p>
+
+          <div id="inviteBanner" class="invite-banner hidden">
+            <p id="inviteText"></p>
+            <div class="sheet-actions">
+              <button type="button" id="inviteDecline" class="ghost">Rad</button>
+              <button type="button" id="inviteAccept">Qabul</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Reyting -->
+        <section id="view-reyting" class="view" data-view="reyting">
+          <div class="section-head">
+            <h2>Reyting</h2>
+            <p>Online o‘yinlar bo‘yicha ball</p>
+          </div>
+          <ol id="leaderboard" class="board"></ol>
+          <p id="boardEmpty" class="empty hidden">Hali reyting bo‘sh</p>
+          <p id="boardStatus" class="status center"></p>
+        </section>
+      </main>
+
+      <nav class="tabbar" aria-label="Asosiy menyu">
+        <button type="button" class="tab active" data-tab="profil">
+          <span class="tab-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 12a4.5 4.5 0 1 0-4.5-4.5A4.5 4.5 0 0 0 12 12Zm0 2.25c-4 0-7.5 2-7.5 4.5V21h15v-2.25c0-2.5-3.5-4.5-7.5-4.5Z"/></svg>
+          </span>
+          <span>Profil</span>
+        </button>
+        <button type="button" class="tab" data-tab="oyin">
+          <span class="tab-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M7 4h10a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3Zm5 3.5a5.5 5.5 0 1 0 5.5 5.5A5.5 5.5 0 0 0 12 7.5Zm0 2a3.5 3.5 0 1 1-3.5 3.5A3.5 3.5 0 0 1 12 9.5Z"/></svg>
+          </span>
+          <span>O‘yin</span>
+        </button>
+        <button type="button" class="tab" data-tab="reyting">
+          <span class="tab-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M5 21h4v-8H5zm5 0h4V9h-4zm5 0h4V3h-4z"/></svg>
+          </span>
+          <span>Reyting</span>
+        </button>
+      </nav>
+    </div>
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>

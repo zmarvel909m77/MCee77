@@ -7,6 +7,7 @@ import {
   DEFAULT_RATING,
   DEFAULT_TOTAL_POINTS,
   FEATURE_FLAG_KEYS,
+  publicDisplayName,
   type AdminStats,
   type CreateMatchInput,
   type FeatureFlagKey,
@@ -21,6 +22,7 @@ import {
   type ScoreRecord,
   type SubmitScoreInput,
   type SubmitScoreResult,
+  type UpdateProfileInput,
   type UpsertUserInput,
   type User,
 } from "@mcee77/shared";
@@ -34,6 +36,8 @@ interface UserRow {
   telegram_id: number;
   username: string | null;
   display_name: string;
+  nickname: string | null;
+  avatar_url: string | null;
   total_points: number;
   rating: number;
   games_played: number;
@@ -73,6 +77,8 @@ function mapUser(row: UserRow): User {
     telegramId: row.telegram_id,
     username: row.username,
     displayName: row.display_name,
+    nickname: row.nickname ?? null,
+    avatarUrl: row.avatar_url ?? null,
     totalPoints: row.total_points,
     rating: row.rating,
     gamesPlayed: row.games_played,
@@ -130,6 +136,8 @@ export class UserRepository {
         telegram_id INTEGER NOT NULL UNIQUE,
         username TEXT,
         display_name TEXT NOT NULL,
+        nickname TEXT,
+        avatar_url TEXT,
         total_points INTEGER NOT NULL DEFAULT 0,
         rating INTEGER NOT NULL DEFAULT 1000,
         games_played INTEGER NOT NULL DEFAULT 0,
@@ -178,7 +186,7 @@ export class UserRepository {
       );
     `);
 
-    // Migration-safe for existing SQLite DBs created before last_seen_at.
+    // Migration-safe for existing SQLite DBs created before newer columns.
     const cols = this.db
       .prepare(`PRAGMA table_info(users)`)
       .all() as Array<{ name: string }>;
@@ -188,6 +196,12 @@ export class UserRepository {
       this.db.exec(
         `UPDATE users SET last_seen_at = updated_at WHERE last_seen_at IS NULL`,
       );
+    }
+    if (!cols.some((c) => c.name === "nickname")) {
+      this.db.exec(`ALTER TABLE users ADD COLUMN nickname TEXT`);
+    }
+    if (!cols.some((c) => c.name === "avatar_url")) {
+      this.db.exec(`ALTER TABLE users ADD COLUMN avatar_url TEXT`);
     }
 
     this.db.exec(`
@@ -201,6 +215,7 @@ export class UserRepository {
     const now = new Date().toISOString();
 
     if (existing) {
+      // Keep editable nickname/avatar; only refresh Telegram identity fields.
       const stmt = this.db.prepare(`
         UPDATE users
         SET username = ?,
@@ -223,9 +238,9 @@ export class UserRepository {
     const id = randomUUID();
     const stmt = this.db.prepare(`
       INSERT INTO users (
-        id, telegram_id, username, display_name,
+        id, telegram_id, username, display_name, nickname, avatar_url,
         total_points, rating, games_played, created_at, updated_at, last_seen_at
-      ) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, 0, ?, ?, ?)
       RETURNING *
     `);
     const row = stmt.get(
@@ -239,6 +254,38 @@ export class UserRepository {
       now,
       now,
     ) as UserRow;
+    return mapUser(row);
+  }
+
+  updateProfile(input: UpdateProfileInput): User {
+    const existing = this.findById(input.userId);
+    if (!existing) throw new Error("user not found");
+    const now = new Date().toISOString();
+
+    let nickname = existing.nickname;
+    if (typeof input.nickname === "string") {
+      const trimmed = input.nickname.trim().slice(0, 32);
+      nickname = trimmed.length > 0 ? trimmed : null;
+    }
+
+    let avatarUrl = existing.avatarUrl;
+    if (input.avatarUrl !== undefined) {
+      avatarUrl = input.avatarUrl;
+    }
+
+    const row = this.db
+      .prepare(
+        `
+        UPDATE users
+        SET nickname = ?,
+            avatar_url = ?,
+            updated_at = ?,
+            last_seen_at = ?
+        WHERE id = ?
+        RETURNING *
+      `,
+      )
+      .get(nickname, avatarUrl, now, now, input.userId) as UserRow;
     return mapUser(row);
   }
 
@@ -270,7 +317,8 @@ export class UserRepository {
     const rows = this.db
       .prepare(
         `
-        SELECT telegram_id, username, display_name, total_points, rating
+        SELECT telegram_id, username, display_name, nickname, avatar_url,
+               total_points, rating
         FROM users
         ORDER BY total_points DESC, rating DESC, created_at ASC
         LIMIT ?
@@ -280,6 +328,8 @@ export class UserRepository {
       telegram_id: number;
       username: string | null;
       display_name: string;
+      nickname: string | null;
+      avatar_url: string | null;
       total_points: number;
       rating: number;
     }>;
@@ -287,8 +337,12 @@ export class UserRepository {
     return rows.map((row, index) => ({
       rank: index + 1,
       telegramId: row.telegram_id,
-      displayName: row.display_name,
+      displayName: publicDisplayName({
+        nickname: row.nickname,
+        displayName: row.display_name,
+      }),
       username: row.username,
+      avatarUrl: row.avatar_url ?? null,
       totalPoints: row.total_points,
       rating: row.rating,
     }));

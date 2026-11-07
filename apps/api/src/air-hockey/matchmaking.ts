@@ -23,8 +23,19 @@ interface QueueEntry {
  *   and fan-out via Redis pub/sub. Heartbeats / presence already isolate rooms so one stalling
  *   client cannot freeze the event loop (non-blocking ticks + unref timers).
  */
+interface InviteWaiter {
+  inviteKey: string;
+  userId: string;
+  telegramId: number;
+  displayName: string;
+  socket: WebSocket;
+  enqueuedAt: number;
+  timer: NodeJS.Timeout;
+}
+
 export class MatchmakingService {
   private queue: QueueEntry[] = [];
+  private inviteWaiters = new Map<string, InviteWaiter>();
   private rooms = new Map<string, GameRoom>();
   private roomsByToken = new Map<string, GameRoom>();
   private users: UserRepository;
@@ -37,6 +48,7 @@ export class MatchmakingService {
     return {
       queueDepth: this.queue.length,
       activeRooms: this.rooms.size,
+      inviteWaiters: this.inviteWaiters.size,
     };
   }
 
@@ -77,6 +89,81 @@ export class MatchmakingService {
 
   cancelQueue(telegramId: number): void {
     this.removeFromQueue(telegramId);
+    this.removeInviteWaiter(telegramId);
+  }
+
+  /**
+   * Pair two players who accepted a Mini App invite (same inviteKey).
+   * First waiter parks; second creates the room.
+   */
+  joinInvite(
+    player: Omit<QueueEntry, "enqueuedAt" | "timer"> & { inviteKey: string },
+  ): void {
+    this.removeFromQueue(player.telegramId);
+    this.removeInviteWaiter(player.telegramId);
+
+    const key = player.inviteKey.trim();
+    if (!key) {
+      this.send(player.socket, { type: "error", message: "inviteKey kerak" });
+      return;
+    }
+
+    const existing = this.inviteWaiters.get(key);
+    if (!existing) {
+      const waiter: InviteWaiter = {
+        inviteKey: key,
+        userId: player.userId,
+        telegramId: player.telegramId,
+        displayName: player.displayName,
+        socket: player.socket,
+        enqueuedAt: Date.now(),
+        timer: setTimeout(() => {
+          this.inviteWaiters.delete(key);
+          this.send(player.socket, {
+            type: "queue_timeout",
+            message: "Raqib ulanmadi. Qayta taklif qiling.",
+          });
+        }, QUEUE_TIMEOUT_MS),
+      };
+      waiter.timer.unref?.();
+      this.inviteWaiters.set(key, waiter);
+      this.send(player.socket, {
+        type: "queued",
+        position: 1,
+        timeoutMs: QUEUE_TIMEOUT_MS,
+        invite: true,
+      });
+      return;
+    }
+
+    if (existing.telegramId === player.telegramId) {
+      this.send(player.socket, {
+        type: "error",
+        message: "Taklifga allaqachon qo‘shilgansiz",
+      });
+      return;
+    }
+
+    clearTimeout(existing.timer);
+    this.inviteWaiters.delete(key);
+    this.createRoomFromPair(
+      {
+        userId: existing.userId,
+        telegramId: existing.telegramId,
+        displayName: existing.displayName,
+        socket: existing.socket,
+        enqueuedAt: existing.enqueuedAt,
+        timer: existing.timer,
+      },
+      {
+        userId: player.userId,
+        telegramId: player.telegramId,
+        displayName: player.displayName,
+        socket: player.socket,
+        enqueuedAt: Date.now(),
+        timer: setTimeout(() => {}, 0),
+      },
+    );
   }
 
   handleDisconnect(socket: WebSocket): void {
@@ -84,6 +171,14 @@ export class MatchmakingService {
     if (q) {
       this.removeFromQueue(q.telegramId);
       return;
+    }
+
+    for (const [key, w] of this.inviteWaiters) {
+      if (w.socket === socket) {
+        clearTimeout(w.timer);
+        this.inviteWaiters.delete(key);
+        return;
+      }
     }
 
     for (const room of this.rooms.values()) {
@@ -126,6 +221,8 @@ export class MatchmakingService {
   destroy(): void {
     for (const e of this.queue) clearTimeout(e.timer);
     this.queue = [];
+    for (const w of this.inviteWaiters.values()) clearTimeout(w.timer);
+    this.inviteWaiters.clear();
     for (const room of this.rooms.values()) room.destroy();
     this.rooms.clear();
     this.roomsByToken.clear();
@@ -144,47 +241,58 @@ export class MatchmakingService {
         continue;
       }
 
-      const match = this.users.createMatch({
-        mode: "online",
-        playerAId: a.userId,
-        playerBId: b.userId,
-        status: "active",
-      });
+      this.createRoomFromPair(a, b);
+    }
+  }
 
-      const makePlayer = (
-        entry: QueueEntry,
-        seat: Seat,
-      ): RoomPlayer => ({
-        userId: entry.userId,
-        telegramId: entry.telegramId,
-        displayName: entry.displayName,
-        seat,
-        roomToken: "",
-        socket: entry.socket,
-        lastSeenAt: Date.now(),
-        inputX: RINK_W / 2,
-        inputY: seat === 0 ? RINK_H * 0.78 : RINK_H * 0.22,
-      });
+  private createRoomFromPair(a: QueueEntry, b: QueueEntry): void {
+    const match = this.users.createMatch({
+      mode: "online",
+      playerAId: a.userId,
+      playerBId: b.userId,
+      status: "active",
+    });
 
-      const room = new GameRoom({
-        matchId: match.id,
-        players: [makePlayer(a, 0), makePlayer(b, 1)],
-        users: this.users,
-        onEmpty: (r) => this.removeRoom(r),
-      });
+    const makePlayer = (entry: QueueEntry, seat: Seat): RoomPlayer => ({
+      userId: entry.userId,
+      telegramId: entry.telegramId,
+      displayName: entry.displayName,
+      seat,
+      roomToken: "",
+      socket: entry.socket,
+      lastSeenAt: Date.now(),
+      inputX: RINK_W / 2,
+      inputY: seat === 0 ? RINK_H * 0.78 : RINK_H * 0.22,
+    });
 
-      this.rooms.set(room.roomId, room);
-      for (const p of room.players) {
-        this.roomsByToken.set(p.roomToken, room);
+    const room = new GameRoom({
+      matchId: match.id,
+      players: [makePlayer(a, 0), makePlayer(b, 1)],
+      users: this.users,
+      onEmpty: (r) => this.removeRoom(r),
+    });
+
+    this.rooms.set(room.roomId, room);
+    for (const p of room.players) {
+      this.roomsByToken.set(p.roomToken, room);
+    }
+
+    try {
+      this.users.setMatchRoomId(match.id, room.roomId);
+    } catch (err) {
+      console.error("setMatchRoomId failed", err);
+    }
+
+    room.start();
+  }
+
+  private removeInviteWaiter(telegramId: number): void {
+    for (const [key, w] of this.inviteWaiters) {
+      if (w.telegramId === telegramId) {
+        clearTimeout(w.timer);
+        this.inviteWaiters.delete(key);
+        return;
       }
-
-      try {
-        this.users.setMatchRoomId(match.id, room.roomId);
-      } catch (err) {
-        console.error("setMatchRoomId failed", err);
-      }
-
-      room.start();
     }
   }
 

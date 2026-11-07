@@ -20,7 +20,7 @@ const webAppUrl =
     ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
     : "");
 
-const { rocketBirdUrl, airHockeyUrl } = resolveWebAppUrls(webAppUrl);
+const { miniAppUrl, airHockeyUrl } = resolveWebAppUrls(webAppUrl);
 
 const databasePath =
   process.env.DATABASE_PATH ?? resolve(process.cwd(), "../../data/gamebot.sqlite");
@@ -36,10 +36,10 @@ process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
 console.log("GAME BOT starting (long polling)…");
-if (rocketBirdUrl) console.log(`Rocket Bird WebApp URL: ${rocketBirdUrl}`);
+if (miniAppUrl) console.log(`Mini App Menu Button URL: ${miniAppUrl}`);
 if (airHockeyUrl) console.log(`Air Hockey WebApp URL: ${airHockeyUrl}`);
-if (!rocketBirdUrl && !airHockeyUrl) {
-  console.log("WEBAPP_URL not set — game buttons will show setup hint.");
+if (!miniAppUrl) {
+  console.log("WEBAPP_URL not set — Mini App buttons will show setup hint.");
 }
 
 await bot.start({
