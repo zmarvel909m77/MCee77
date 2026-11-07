@@ -11,11 +11,6 @@ export interface SendStartWelcomeOptions {
   chatId: number;
   displayName: string;
   miniAppUrl?: string;
-  /**
-   * When true, append a brief note that only the user can Clear history
-   * (bots cannot wipe private chat). Used for admin broadcast resets.
-   */
-  clearHistoryHint?: boolean;
 }
 
 export interface BroadcastRecipient {
@@ -39,17 +34,8 @@ function sleep(ms: number): Promise<void> {
 }
 
 /** Welcome body shared by /start and admin broadcast. */
-export function buildStartWelcomeText(
-  displayName: string,
-  opts?: { clearHistoryHint?: boolean },
-): string {
-  const base = welcomeMessage(displayName);
-  if (!opts?.clearHistoryHint) return base;
-  return [
-    base,
-    "",
-    "Eski chatni tozalash uchun menyudan «Tozalash» (Clear history) ni tanlang — bot tarixni o‘zi o‘chira olmaydi.",
-  ].join("\n");
+export function buildStartWelcomeText(displayName: string): string {
+  return welcomeMessage(displayName);
 }
 
 export function isTelegramBlockedOrGone(err: unknown): boolean {
@@ -84,9 +70,7 @@ export async function sendStartWelcome(
   opts: SendStartWelcomeOptions,
 ): Promise<void> {
   const miniAppUrl = opts.miniAppUrl?.trim() ?? "";
-  const text = buildStartWelcomeText(opts.displayName, {
-    clearHistoryHint: opts.clearHistoryHint,
-  });
+  const text = buildStartWelcomeText(opts.displayName);
 
   try {
     const rm = await opts.api.sendMessage(opts.chatId, "\u2060", {
@@ -142,7 +126,6 @@ export async function broadcastStartWelcome(
         chatId: row.telegramId,
         displayName: name,
         miniAppUrl: opts.miniAppUrl,
-        clearHistoryHint: true,
       });
       sent += 1;
     } catch (err) {

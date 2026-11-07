@@ -92,7 +92,7 @@ export function renderAdminStatsPage(): string {
       <div class="broadcast-head">
         <div>
           <h2>Botni yangilash</h2>
-          <p class="sub tight">Barcha foydalanuvchilarga yangi /start (O‘ynash · Do‘kon) yuboriladi; eski reply klaviatura olib tashlanadi. Chat tarixini faqat foydalanuvchi «Tozalash» qila oladi.</p>
+          <p class="sub tight">Barcha foydalanuvchilarga yangi /start (O‘ynash · Do‘kon) yuboriladi; eski reply klaviatura olib tashlanadi.</p>
         </div>
         <button type="button" id="broadcastStart">Hammaga /start yuborish</button>
       </div>
