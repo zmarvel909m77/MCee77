@@ -13,7 +13,11 @@ import {
   parseAdminTelegramIds,
   resolveWebAppUrls,
 } from "@mcee77/bot";
-import { createUserRepository } from "@mcee77/db";
+import {
+  createUserRepository,
+  inspectDatabasePersistence,
+  resolveDatabasePath,
+} from "@mcee77/db";
 import { MAX_AVATAR_BYTES, publicDisplayName } from "@mcee77/shared";
 import { registerAdminRoutes } from "./admin/routes.js";
 import { registerAirHockeyWs } from "./air-hockey/ws.js";
@@ -28,8 +32,8 @@ loadEnv({ path: resolve(process.cwd(), "../../.env") });
 loadEnv();
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const databasePath =
-  process.env.DATABASE_PATH ?? resolve(process.cwd(), "../../data/gamebot.sqlite");
+const databasePath = resolveDatabasePath();
+const dbPersistence = inspectDatabasePersistence(databasePath);
 const host = process.env.API_HOST ?? "0.0.0.0";
 /** Railway / Render inject PORT; fall back to API_PORT for local. */
 const port = Number(process.env.PORT ?? process.env.API_PORT ?? 3000);
@@ -63,10 +67,22 @@ const webhookPath =
 const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim() || undefined;
 
 const users = createUserRepository(databasePath);
+const userCountAtBoot = users.countUsers();
 const avatarRoot =
   process.env.AVATAR_DIR?.trim() ||
   resolve(dirname(databasePath), "avatars");
 mkdirSync(avatarRoot, { recursive: true });
+
+console.log(
+  `[db] path=${dbPersistence.absolutePath} users=${userCountAtBoot}` +
+    ` persistent=${dbPersistence.persistent}` +
+    (dbPersistence.volumeMountPath
+      ? ` volumeMount=${dbPersistence.volumeMountPath}`
+      : " volumeMount=(none)"),
+);
+if (dbPersistence.warning) {
+  console.warn(`[db] WARNING: ${dbPersistence.warning}`);
+}
 
 const app = Fastify({ logger: true, bodyLimit: MAX_AVATAR_BYTES + 64_000 });
 
@@ -95,6 +111,11 @@ app.get("/healthz", async () => ({
   webhookPath: botMode === "webhook" ? webhookPath : null,
   adminBot: Boolean(adminBotToken && adminTelegramIds.size > 0 && botToken),
   adminIdsConfigured: adminTelegramIds.size,
+  /** Absolute SQLite path (no secrets). */
+  databasePath: dbPersistence.absolutePath,
+  users: users.countUsers(),
+  dbPersistent: dbPersistence.persistent,
+  volumeMount: dbPersistence.volumeMountPath,
   matchmaking: matchmaking.stats,
   online: presence.listOnline().length,
 }));
@@ -388,6 +409,12 @@ app.log.info(`Mini App shell:       http://${host}:${port}/app/`);
 app.log.info(`Air Hockey Mini App:  http://${host}:${port}/air-hockey/`);
 app.log.info(`Air Hockey WS:        ws://${host}:${port}/ws/air-hockey`);
 app.log.info(`Presence WS:          ws://${host}:${port}/ws/presence`);
+app.log.info(
+  `SQLite: ${dbPersistence.absolutePath} · users=${users.countUsers()} · persistent=${dbPersistence.persistent}`,
+);
+if (dbPersistence.warning) {
+  app.log.warn(dbPersistence.warning);
+}
 app.log.info(`Avatars dir:          ${avatarRoot}`);
 
 if (bot && botMode === "webhook") {

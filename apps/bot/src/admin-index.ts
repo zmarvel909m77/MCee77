@@ -5,7 +5,11 @@
  */
 import { resolve } from "node:path";
 import { config as loadEnv } from "dotenv";
-import { createUserRepository } from "@mcee77/db";
+import {
+  createUserRepository,
+  inspectDatabasePersistence,
+  resolveDatabasePath,
+} from "@mcee77/db";
 import { parseAdminTelegramIds } from "./admin-config.js";
 import { createAdminBot } from "./create-admin-bot.js";
 
@@ -41,10 +45,16 @@ const webAppUrl =
     ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
     : "");
 
-const databasePath =
-  process.env.DATABASE_PATH ??
-  resolve(process.cwd(), "../../data/gamebot.sqlite");
+const databasePath = resolveDatabasePath();
+const dbPersistence = inspectDatabasePersistence(databasePath);
 const users = createUserRepository(databasePath);
+console.log(
+  `[db] path=${dbPersistence.absolutePath} users=${users.countUsers()}` +
+    ` persistent=${dbPersistence.persistent}`,
+);
+if (dbPersistence.warning) {
+  console.warn(`[db] WARNING: ${dbPersistence.warning}`);
+}
 
 const bot = createAdminBot({
   adminToken,

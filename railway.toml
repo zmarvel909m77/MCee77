@@ -3,6 +3,22 @@
 #   WEBAPP_URL (public https://….up.railway.app — set after first domain is known)
 #   ALLOW_DEV_SCORE_SUBMIT=false
 # Optional: TELEGRAM_WEBHOOK_SECRET, TELEGRAM_WEBHOOK_PATH, DATABASE_PATH, BOT_MODE
+# Admin bot: ADMIN_BOT_TOKEN + ADMIN_TELEGRAM_IDS
+#
+# === SQLite persistence (REQUIRED) ===
+# Code writes to DATABASE_PATH (default /data/gamebot.sqlite).
+# Without a Volume mounted at /data, every deploy wipes users → admin
+# broadcast shows "Jami: 0 / Yuborildi: 0".
+#
+# Dashboard (preferred — volumes are not always created from this file):
+#   1. Service → right-click canvas / Command Palette → Add Volume
+#   2. Mount path MUST be exactly: /data
+#   3. Variables → add RAILWAY_RUN_UID=0  (Volume is root-owned; image runs as node)
+#   4. Redeploy. GET /healthz should show dbPersistent:true, volumeMount:"/data"
+#
+# CLI: railway volume add --mount-path /data
+#
+# Do NOT change DATABASE_PATH unless the Volume mount matches.
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"

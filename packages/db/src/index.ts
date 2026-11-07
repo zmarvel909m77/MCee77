@@ -306,9 +306,17 @@ export class UserRepository {
     return row ? mapUser(row) : null;
   }
 
+  /** Cheap total for boot logs / healthz (no secrets). */
+  countUsers(): number {
+    return (
+      this.db.prepare(`SELECT COUNT(*) AS n FROM users`).get() as { n: number }
+    ).n;
+  }
+
   /**
    * All known Telegram user ids for admin /start broadcast.
    * Ordered by first seen so delivery is stable across runs.
+   * No extra filters — empty result means empty `users` table.
    */
   listBroadcastRecipients(): Array<{
     telegramId: number;
@@ -750,3 +758,12 @@ export class UserRepository {
 export function createUserRepository(databasePath: string): UserRepository {
   return new UserRepository(databasePath);
 }
+
+export {
+  PROD_DATABASE_PATH,
+  PROD_DATA_DIR,
+  inspectDatabasePersistence,
+  resolveDatabasePath,
+  type DatabasePersistenceInfo,
+  type ResolveDatabasePathOptions,
+} from "./path.js";
