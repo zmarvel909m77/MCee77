@@ -4,6 +4,8 @@ export type GameId = "rocket_bird" | "air_hockey";
 
 export type GameMode = "solo" | "offline" | "online";
 
+export type MatchStatus = "queued" | "active" | "finished" | "aborted";
+
 export interface User {
   id: string;
   telegramId: number;
@@ -55,13 +57,72 @@ export interface SubmitScoreResult {
   pointsAwarded: number;
 }
 
+export interface MatchRecord {
+  id: string;
+  game: GameId;
+  mode: Exclude<GameMode, "solo">;
+  status: MatchStatus;
+  playerAId: string;
+  playerBId: string | null;
+  scoreA: number;
+  scoreB: number;
+  winnerId: string | null;
+  roomId: string | null;
+  startedAt: string | null;
+  endedAt: string | null;
+}
+
+export interface CreateMatchInput {
+  mode: Exclude<GameMode, "solo">;
+  playerAId: string;
+  playerBId?: string | null;
+  roomId?: string | null;
+  status?: MatchStatus;
+}
+
+export interface FinishMatchInput {
+  matchId: string;
+  scoreA: number;
+  scoreB: number;
+  winnerId: string | null;
+  status?: Extract<MatchStatus, "finished" | "aborted">;
+  /** Points awarded to player A / B (rating + total_points). */
+  pointsA: number;
+  pointsB: number;
+}
+
+export interface FinishMatchResult {
+  match: MatchRecord;
+  playerA: User;
+  playerB: User | null;
+}
+
 /** Max accepted session score (anti-cheat cap for MVP). */
 export const MAX_ROCKET_BIRD_SCORE = 500;
+
+/** Cap for offline Air Hockey client-submitted points. */
+export const MAX_AIR_HOCKEY_OFFLINE_POINTS = 40;
+
+/** Online match point deltas (server-authoritative). */
+export const AIR_HOCKEY_ONLINE_WIN_POINTS = 25;
+export const AIR_HOCKEY_ONLINE_LOSS_POINTS = 8;
+export const AIR_HOCKEY_ONLINE_ABORT_POINTS = 0;
+
+/** Offline participation / win points (client reports, clamped). */
+export const AIR_HOCKEY_OFFLINE_WIN_POINTS = 15;
+export const AIR_HOCKEY_OFFLINE_LOSS_POINTS = 5;
+
+export const AIR_HOCKEY_WIN_SCORE = 5;
 
 /** Points added to total_points equal session score; rating += same for MVP. */
 export function clampRocketBirdScore(raw: number): number {
   if (!Number.isFinite(raw) || raw < 0) return 0;
   return Math.min(Math.floor(raw), MAX_ROCKET_BIRD_SCORE);
+}
+
+export function clampAirHockeyOfflinePoints(raw: number): number {
+  if (!Number.isFinite(raw) || raw < 0) return 0;
+  return Math.min(Math.floor(raw), MAX_AIR_HOCKEY_OFFLINE_POINTS);
 }
 
 export const DEFAULT_RATING = 1000;

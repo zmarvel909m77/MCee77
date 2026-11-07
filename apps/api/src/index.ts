@@ -4,12 +4,15 @@ import { existsSync } from "node:fs";
 import { config as loadEnv } from "dotenv";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
+import websocket from "@fastify/websocket";
 import { createUserRepository } from "@mcee77/db";
 import {
+  clampAirHockeyOfflinePoints,
   clampRocketBirdScore,
   displayNameFromTelegramUser,
   verifyTelegramInitData,
 } from "@mcee77/shared";
+import { registerAirHockeyWs } from "./air-hockey/ws.js";
 
 loadEnv({ path: resolve(process.cwd(), "../../.env") });
 loadEnv();
@@ -25,10 +28,21 @@ const allowDevScoreSubmit = process.env.ALLOW_DEV_SCORE_SUBMIT === "true";
 const users = createUserRepository(databasePath);
 const app = Fastify({ logger: true });
 
+await app.register(websocket);
+
+const matchmaking = registerAirHockeyWs(app, {
+  users,
+  botToken,
+  allowDevScoreSubmit,
+});
+
 app.get("/healthz", async () => ({
   ok: true,
   service: "game-bot-api",
   rocketBird: "/rocket-bird/",
+  airHockey: "/air-hockey/",
+  airHockeyWs: "/ws/air-hockey",
+  matchmaking: matchmaking.stats,
 }));
 
 app.get("/api/v1/leaderboard", async (request) => {
@@ -60,58 +74,97 @@ interface ScoreBody {
   meta?: Record<string, unknown>;
 }
 
-app.post("/api/v1/scores", async (request, reply) => {
-  const body = (request.body ?? {}) as ScoreBody;
-  const game = body.game ?? "rocket_bird";
-  if (game !== "rocket_bird") {
-    return reply.code(400).send({ error: "unsupported game" });
-  }
-
-  const points = clampRocketBirdScore(Number(body.points));
-  let telegramId: number;
-  let username: string | null = null;
-  let displayName: string;
-
+function resolveTelegramIdentity(
+  body: ScoreBody,
+  log: { warn: (obj: unknown, msg?: string) => void },
+):
+  | { ok: true; telegramId: number; username: string | null; displayName: string }
+  | { ok: false; status: number; error: string } {
   if (body.initData?.trim()) {
     if (!botToken) {
-      // TODO: require TELEGRAM_BOT_TOKEN in production for initData HMAC verify
-      return reply.code(503).send({
+      return {
+        ok: false,
+        status: 503,
         error: "TELEGRAM_BOT_TOKEN not configured; cannot verify initData",
-      });
+      };
     }
     try {
       const verified = verifyTelegramInitData(body.initData, botToken);
-      telegramId = verified.user.id;
-      username = verified.user.username ?? null;
-      displayName = displayNameFromTelegramUser(verified.user);
+      return {
+        ok: true,
+        telegramId: verified.user.id,
+        username: verified.user.username ?? null,
+        displayName: displayNameFromTelegramUser(verified.user),
+      };
     } catch (err) {
-      request.log.warn({ err }, "initData verification failed");
-      return reply.code(401).send({ error: "invalid initData" });
+      log.warn({ err }, "initData verification failed");
+      return { ok: false, status: 401, error: "invalid initData" };
     }
-  } else if (allowDevScoreSubmit && body.devTelegramId) {
-    // TODO(MVP): remove or gate behind NODE_ENV=development only before public deploy
-    telegramId = Number(body.devTelegramId);
+  }
+
+  if (allowDevScoreSubmit && body.devTelegramId) {
+    const telegramId = Number(body.devTelegramId);
     if (!Number.isFinite(telegramId) || telegramId <= 0) {
-      return reply.code(400).send({ error: "devTelegramId invalid" });
+      return { ok: false, status: 400, error: "devTelegramId invalid" };
     }
-    displayName = `Dev ${telegramId}`;
-    request.log.warn({ telegramId }, "accepting unauthenticated dev score submit");
-  } else {
-    return reply.code(401).send({
-      error: "initData required (or ALLOW_DEV_SCORE_SUBMIT with devTelegramId)",
+    log.warn({ telegramId }, "accepting unauthenticated dev score submit");
+    return {
+      ok: true,
+      telegramId,
+      username: null,
+      displayName: `Dev ${telegramId}`,
+    };
+  }
+
+  return {
+    ok: false,
+    status: 401,
+    error: "initData required (or ALLOW_DEV_SCORE_SUBMIT with devTelegramId)",
+  };
+}
+
+app.post("/api/v1/scores", async (request, reply) => {
+  const body = (request.body ?? {}) as ScoreBody;
+  const game = body.game ?? "rocket_bird";
+  if (game !== "rocket_bird" && game !== "air_hockey") {
+    return reply.code(400).send({ error: "unsupported game" });
+  }
+
+  const identity = resolveTelegramIdentity(body, request.log);
+  if (!identity.ok) {
+    return reply.code(identity.status).send({ error: identity.error });
+  }
+
+  const points =
+    game === "air_hockey"
+      ? clampAirHockeyOfflinePoints(Number(body.points))
+      : clampRocketBirdScore(Number(body.points));
+
+  const user = users.upsertByTelegramId({
+    telegramId: identity.telegramId,
+    username: identity.username,
+    displayName: identity.displayName,
+  });
+
+  const mode =
+    game === "air_hockey"
+      ? body.mode === "online"
+        ? "offline" // online results are server-written via matches — reject online client claims
+        : "offline"
+      : body.mode === "offline"
+        ? "offline"
+        : "solo";
+
+  if (game === "air_hockey" && body.mode === "online") {
+    return reply.code(400).send({
+      error: "online air hockey results are server-authoritative",
     });
   }
 
-  const user = users.upsertByTelegramId({
-    telegramId,
-    username,
-    displayName,
-  });
-
   const result = users.submitScore({
     userId: user.id,
-    game: "rocket_bird",
-    mode: body.mode === "offline" ? "offline" : "solo",
+    game,
+    mode,
     points,
     meta: body.meta ?? null,
   });
@@ -124,8 +177,21 @@ app.post("/api/v1/scores", async (request, reply) => {
   };
 });
 
+app.get("/api/v1/matches/:id", async (request, reply) => {
+  const params = request.params as { id: string };
+  const match = users.findMatchById(params.id);
+  if (!match) {
+    return reply.code(404).send({ error: "match not found" });
+  }
+  return { match };
+});
+
 app.get("/rocket-bird", async (_request, reply) =>
   reply.redirect("/rocket-bird/", 302),
+);
+
+app.get("/air-hockey", async (_request, reply) =>
+  reply.redirect("/air-hockey/", 302),
 );
 
 const publicRoot = resolve(__dirname, "../public");
@@ -137,6 +203,7 @@ if (existsSync(publicRoot)) {
 }
 
 const shutdown = async () => {
+  matchmaking.destroy();
   await app.close();
   users.close();
   process.exit(0);
@@ -147,3 +214,5 @@ process.on("SIGTERM", shutdown);
 
 await app.listen({ host, port });
 app.log.info(`Rocket Bird Mini App: http://${host}:${port}/rocket-bird/`);
+app.log.info(`Air Hockey Mini App:  http://${host}:${port}/air-hockey/`);
+app.log.info(`Air Hockey WS:        ws://${host}:${port}/ws/air-hockey`);

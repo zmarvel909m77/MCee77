@@ -4,7 +4,7 @@ import { Bot, InlineKeyboard, type Context } from "grammy";
 import { createUserRepository } from "@mcee77/db";
 import { BTN, mainKeyboard } from "./keyboard.js";
 import {
-  airHockeySoon,
+  airHockeyOpenMessage,
   leaderboardMessage,
   profileMessage,
   rocketBirdOpenMessage,
@@ -23,11 +23,15 @@ if (!token) {
 }
 
 const webAppUrl = process.env.WEBAPP_URL?.trim().replace(/\/?$/, "") ?? "";
-const rocketBirdUrl = webAppUrl
-  ? webAppUrl.endsWith("/rocket-bird")
-    ? `${webAppUrl}/`
-    : `${webAppUrl}/rocket-bird/`
-  : "";
+
+function gameUrl(path: "rocket-bird" | "air-hockey"): string {
+  if (!webAppUrl) return "";
+  if (webAppUrl.endsWith(`/${path}`)) return `${webAppUrl}/`;
+  return `${webAppUrl}/${path}/`;
+}
+
+const rocketBirdUrl = gameUrl("rocket-bird");
+const airHockeyUrl = gameUrl("air-hockey");
 
 const databasePath =
   process.env.DATABASE_PATH ?? resolve(process.cwd(), "../../data/gamebot.sqlite");
@@ -52,9 +56,9 @@ function upsertFromContext(ctx: Context) {
   });
 }
 
-function rocketBirdKeyboard(): InlineKeyboard | undefined {
-  if (!rocketBirdUrl) return undefined;
-  return new InlineKeyboard().webApp("🚀 O‘ynash", rocketBirdUrl);
+function webAppKeyboard(label: string, url: string): InlineKeyboard | undefined {
+  if (!url) return undefined;
+  return new InlineKeyboard().webApp(label, url);
 }
 
 bot.command("start", async (ctx) => {
@@ -80,7 +84,7 @@ bot.command("rating", async (ctx) => {
 
 bot.hears(BTN.rocketBird, async (ctx) => {
   upsertFromContext(ctx);
-  const inline = rocketBirdKeyboard();
+  const inline = webAppKeyboard("🚀 O‘ynash", rocketBirdUrl);
   await ctx.reply(rocketBirdOpenMessage(Boolean(inline)), {
     reply_markup: inline ?? mainKeyboard(),
   });
@@ -88,7 +92,10 @@ bot.hears(BTN.rocketBird, async (ctx) => {
 
 bot.hears(BTN.airHockey, async (ctx) => {
   upsertFromContext(ctx);
-  await ctx.reply(airHockeySoon, { reply_markup: mainKeyboard() });
+  const inline = webAppKeyboard("🏒 O‘ynash", airHockeyUrl);
+  await ctx.reply(airHockeyOpenMessage(Boolean(inline)), {
+    reply_markup: inline ?? mainKeyboard(),
+  });
 });
 
 bot.hears(BTN.rating, async (ctx) => {
@@ -118,10 +125,10 @@ process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
 console.log("GAME BOT starting (long polling)…");
-if (rocketBirdUrl) {
-  console.log(`Rocket Bird WebApp URL: ${rocketBirdUrl}`);
-} else {
-  console.log("WEBAPP_URL not set — Rocket Bird button will show setup hint.");
+if (rocketBirdUrl) console.log(`Rocket Bird WebApp URL: ${rocketBirdUrl}`);
+if (airHockeyUrl) console.log(`Air Hockey WebApp URL: ${airHockeyUrl}`);
+if (!rocketBirdUrl && !airHockeyUrl) {
+  console.log("WEBAPP_URL not set — game buttons will show setup hint.");
 }
 
 await bot.start({
