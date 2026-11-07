@@ -10,16 +10,18 @@ function shopUrl(webAppUrl: string): string {
   return base ? `${base}shop/` : "";
 }
 
-function cityStrikeGameUrl(webAppUrl: string): string {
+function karateGameUrl(webAppUrl: string): string {
   if (!webAppUrl) return "";
-  if (webAppUrl.endsWith("/city-strike")) return `${webAppUrl}/`;
-  if (webAppUrl.endsWith("/karate")) return webAppUrl.replace(/\/karate$/, "/city-strike/");
-  return `${webAppUrl}/city-strike/`;
+  if (webAppUrl.endsWith("/karate")) return `${webAppUrl}/`;
+  if (webAppUrl.endsWith("/city-strike")) {
+    return webAppUrl.replace(/\/city-strike$/, "/karate/");
+  }
+  return `${webAppUrl}/karate/`;
 }
 
-/** @deprecated Use cityStrikeGameUrl */
-function karateGameUrl(webAppUrl: string): string {
-  return cityStrikeGameUrl(webAppUrl);
+/** @deprecated Use karateGameUrl */
+function cityStrikeGameUrl(webAppUrl: string): string {
+  return karateGameUrl(webAppUrl);
 }
 
 export function resolveWebAppUrls(webAppUrlRaw: string | undefined): {
@@ -28,18 +30,18 @@ export function resolveWebAppUrls(webAppUrlRaw: string | undefined): {
   karateUrl: string;
   cityStrikeUrl: string;
   shopUrl: string;
-  /** @deprecated Use cityStrikeUrl / miniAppUrl */
+  /** @deprecated Use karateUrl / miniAppUrl */
   airHockeyUrl: string;
 } {
   const webAppUrl = webAppUrlRaw?.trim().replace(/\/?$/, "") ?? "";
-  const cityStrikeUrl = cityStrikeGameUrl(webAppUrl);
+  const karateUrl = karateGameUrl(webAppUrl);
   return {
     webAppUrl,
     miniAppUrl: appUrl(webAppUrl),
-    karateUrl: cityStrikeUrl,
-    cityStrikeUrl,
+    karateUrl,
+    cityStrikeUrl: karateUrl,
     shopUrl: shopUrl(webAppUrl),
-    airHockeyUrl: cityStrikeUrl,
+    airHockeyUrl: karateUrl,
   };
 }
 

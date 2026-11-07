@@ -17,7 +17,7 @@ export interface User {
   /** Public path or URL for profile photo (e.g. /avatars/<id>.jpg). */
   avatarUrl: string | null;
   /**
-   * City Strike high score (best run). Never decreases when a lower run is submitted.
+   * Karate Strike high score (best run). Never decreases when a lower run is submitted.
    * Stored under legacy game id `karate` in the DB.
    */
   totalPoints: number;
@@ -41,9 +41,9 @@ export interface AdminStats {
   activeToday: number;
   active24h: number;
   gamesToday: number;
-  /** Players with a City Strike best score &gt; 0. */
+  /** Players with a Karate Strike best score &gt; 0. */
   karatePlayers: number;
-  /** Highest stored City Strike best score. */
+  /** Highest stored Karate Strike best score. */
   topKarateScore: number;
   topRating: LeaderboardEntry[];
   generatedAt: string;
@@ -75,7 +75,7 @@ export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
 };
 
 export const FEATURE_FLAG_LABELS: Record<FeatureFlagKey, string> = {
-  karate: "City Strike",
+  karate: "Karate Strike",
   rating: "Reyting",
   profile: "Profil",
   mini_app: "Mini App",
@@ -87,7 +87,7 @@ export interface LeaderboardEntry {
   displayName: string;
   username: string | null;
   avatarUrl: string | null;
-  /** City Strike best score. */
+  /** Karate Strike best score. */
   totalPoints: number;
   rating: number;
 }
@@ -171,7 +171,7 @@ export interface FinishMatchResult {
   playerB: User | null;
 }
 
-/** Anti-cheat cap for a single City Strike run. */
+/** Anti-cheat cap for a single Karate Strike run. */
 export const MAX_KARATE_SCORE = 10_000;
 
 /** Max accepted session score (legacy Rocket Bird). */

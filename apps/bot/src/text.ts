@@ -8,7 +8,7 @@ export function welcomeMessage(_displayName: string): string {
   return [
     "🏙️ GAME BOT ga xush kelibsiz!",
     "",
-    "City Strike o‘ynang, rekordingizni yangilang va reytingda yuqoriga chiqing.",
+    "Karate Strike o‘ynang, rekordingizni yangilang va reytingda yuqoriga chiqing.",
     "",
     "👇 Mini Appni ochish uchun tugmani bosing:",
   ].join("\n");
@@ -30,7 +30,7 @@ export function profileMessage(user: User): string {
     "👤 Profil",
     "",
     `Taxallus: ${publicDisplayName(user)}`,
-    `O‘yin: City Strike`,
+    `O‘yin: Karate Strike`,
     `Eng yaxshi ball: ${user.totalPoints}`,
     `O‘yinlar: ${user.gamesPlayed}`,
     "",
@@ -44,7 +44,7 @@ export function leaderboardMessage(entries: LeaderboardEntry[]): string {
       "🏆 Reyting",
       "",
       "Hali hech kim rekord qo‘ymagan.",
-      "City Strike o‘ynab birinchi bo‘ling!",
+      "Karate Strike o‘ynab birinchi bo‘ling!",
       "",
       "Reyting Mini App ichida ochiladi.",
     ].join("\n");
@@ -55,7 +55,7 @@ export function leaderboardMessage(entries: LeaderboardEntry[]): string {
   });
 
   return [
-    "🏆 Reyting (City Strike)",
+    "🏆 Reyting (Karate Strike)",
     "",
     ...lines,
     "",

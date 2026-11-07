@@ -88,8 +88,8 @@ app.get("/healthz", async () => ({
   ok: true,
   service: "game-bot-api",
   miniApp: "/app/",
-  karate: "/city-strike/",
-  cityStrike: "/city-strike/",
+  karate: "/karate/",
+  cityStrike: "/karate/",
   botMode,
   webhookPath: botMode === "webhook" ? webhookPath : null,
   adminBot: Boolean(adminBotToken && adminTelegramIds.size > 0 && botToken),
@@ -113,7 +113,7 @@ function userPayload(user: Awaited<ReturnType<typeof upsertFromIdentity>>) {
   return {
     ...user,
     publicName: publicDisplayName(user),
-    game: "City Strike",
+    game: "Karate Strike",
     karateBestScore: user.totalPoints,
   };
 }
@@ -245,9 +245,10 @@ app.post("/api/v1/scores", async (request, reply) => {
   const game = body.game ?? "karate";
   if (game !== "karate" && game !== "city_strike") {
     return reply.code(400).send({
-      error: "faqat City Strike qo‘llab-quvvatlanadi",
+      error: "faqat Karate Strike qo‘llab-quvvatlanadi",
     });
   }
+  // city_strike accepted as legacy alias; stored as karate
 
   const identity = resolveTelegramIdentity(body, {
     botToken,
@@ -284,15 +285,15 @@ app.get("/app", async (_request, reply) => reply.redirect("/app/", 302));
 app.get("/app/shop", async (_request, reply) =>
   reply.redirect("/app/shop/", 302),
 );
-app.get("/city-strike", async (_request, reply) =>
-  reply.redirect("/city-strike/", 302),
-);
-/** Legacy Karate deep links → City Strike. */
 app.get("/karate", async (_request, reply) =>
-  reply.redirect("/city-strike/", 302),
+  reply.redirect("/karate/", 302),
 );
-app.get("/karate/", async (_request, reply) =>
-  reply.redirect("/city-strike/", 302),
+/** Legacy City Strike deep links → Karate Strike. */
+app.get("/city-strike", async (_request, reply) =>
+  reply.redirect("/karate/", 302),
+);
+app.get("/city-strike/", async (_request, reply) =>
+  reply.redirect("/karate/", 302),
 );
 /** Legacy Air Hockey deep links → games tab. */
 app.get("/air-hockey", async (_request, reply) =>
@@ -372,7 +373,7 @@ process.on("SIGTERM", shutdown);
 
 await app.listen({ host, port });
 app.log.info(`Mini App shell:  http://${host}:${port}/app/`);
-app.log.info(`City Strike Mini App: http://${host}:${port}/city-strike/`);
+app.log.info(`Karate Strike Mini App: http://${host}:${port}/karate/`);
 app.log.info(
   `DB driver=${dbPersistence.driver}` +
     (dbPersistence.absolutePath ? ` path=${dbPersistence.absolutePath}` : "") +

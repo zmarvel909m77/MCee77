@@ -1,7 +1,7 @@
 :root {
   --bg0: #0a0614;
   --bg1: #1a0f2e;
-  --accent: #f0abfc;
+  --accent: #f9a8d4;
   --hot: #ff5c7a;
   --ok: #5eead4;
   --neon: #ff4fd8;
@@ -24,8 +24,8 @@ body {
   font-family: var(--font);
   color: #fff;
   background:
-    radial-gradient(90% 48% at 50% -8%, rgba(190, 60, 160, 0.35), transparent 55%),
-    linear-gradient(180deg, #2a1248, var(--bg0));
+    radial-gradient(90% 48% at 50% -8%, rgba(190, 60, 140, 0.38), transparent 55%),
+    linear-gradient(180deg, #3a1a6e, var(--bg0));
 }
 
 #wrap {
@@ -64,16 +64,43 @@ body {
   text-align: center;
 }
 
+.hud-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.icon-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.icon-btn .mute-slash {
+  display: none;
+}
+
+.icon-btn.muted .mute-slash {
+  display: block;
+}
+
 .hud-best-block {
   text-align: right;
-  min-width: 64px;
+  min-width: 56px;
   padding-right: 2px;
 }
 
 .hud .label {
   display: block;
   font-size: 0.68rem;
-  color: rgba(240, 171, 252, 0.85);
+  color: rgba(249, 168, 212, 0.9);
   font-weight: 600;
 }
 
@@ -133,7 +160,7 @@ body {
 }
 
 .energy-fill {
-  background: linear-gradient(90deg, #ffb020, #ff4fd8 60%, #c084fc);
+  background: linear-gradient(90deg, #ffb020, #ff4fd8 60%, #e85a8a);
 }
 
 .multi-track {
@@ -141,7 +168,7 @@ body {
 }
 
 .multi-fill {
-  background: linear-gradient(90deg, #fde68a, #fbbf24);
+  background: linear-gradient(90deg, #fff7ed, #fde68a);
   transform-origin: left center;
 }
 
@@ -171,7 +198,7 @@ body {
 .hint {
   text-align: center;
   padding: 8px 16px 14px;
-  color: rgba(220, 190, 240, 0.9);
+  color: rgba(240, 200, 220, 0.9);
   font-size: 0.82rem;
   font-weight: 600;
 }
@@ -196,8 +223,8 @@ body {
   padding: 26px 22px;
   border-radius: 22px;
   text-align: center;
-  background: linear-gradient(160deg, #3b1d5c, #16102c);
-  border: 1px solid rgba(240, 171, 252, 0.22);
+  background: linear-gradient(160deg, #4a1d5c, #16102c);
+  border: 1px solid rgba(249, 168, 212, 0.25);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
   animation: pop 280ms ease-out;
 }
@@ -220,7 +247,7 @@ body {
 
 .card p {
   margin: 0;
-  color: rgba(210, 190, 230, 0.95);
+  color: rgba(230, 200, 220, 0.95);
   line-height: 1.45;
   font-size: 0.92rem;
 }

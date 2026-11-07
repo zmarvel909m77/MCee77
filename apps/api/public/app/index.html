@@ -63,24 +63,29 @@
             <p>Tanlang va rekordingizni yangilang</p>
           </div>
 
-          <button type="button" id="playCityStrikeBtn" class="game-card">
+          <button type="button" id="playKarateBtn" class="game-card">
             <span class="game-art" aria-hidden="true">
               <span class="game-art-glow"></span>
               <svg viewBox="0 0 80 96" width="56" height="68" fill="none">
-                <rect x="8" y="48" width="10" height="36" fill="#1a0a28"/>
-                <rect x="20" y="36" width="8" height="48" fill="#14081f"/>
-                <rect x="62" y="40" width="10" height="44" fill="#1a0a28"/>
-                <rect x="34" y="10" width="14" height="70" rx="2" fill="#6b7280"/>
-                <rect x="36" y="14" width="3" height="62" fill="#9ca3af"/>
-                <rect x="12" y="28" width="24" height="10" rx="2" fill="#64748b"/>
-                <circle cx="28" cy="78" r="9" fill="#F5C26B"/>
-                <path d="M20 70h16v4H20z" fill="#f59e0b"/>
-                <rect x="22" y="84" width="14" height="10" rx="2" fill="#f97316"/>
+                <defs>
+                  <linearGradient id="ksSky" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#5b1f78"/>
+                    <stop offset="100%" stop-color="#e85a8a"/>
+                  </linearGradient>
+                </defs>
+                <rect width="80" height="96" rx="10" fill="url(#ksSky)"/>
+                <path d="M10 70h16v-18h4v-6h-24v6h4z" fill="#1a0828" opacity=".85"/>
+                <rect x="34" y="12" width="14" height="68" rx="3" fill="#c49a6c"/>
+                <rect x="14" y="28" width="22" height="8" rx="2" fill="#a67c52"/>
+                <rect x="46" y="48" width="20" height="8" rx="2" fill="#a67c52"/>
+                <rect x="52" y="70" width="16" height="18" rx="3" fill="#e53935"/>
+                <rect x="52" y="82" width="16" height="3" fill="#111"/>
+                <circle cx="60" cy="66" r="6" fill="#f0b888"/>
               </svg>
             </span>
             <span class="game-copy">
-              <strong>City Strike</strong>
-              <small>Minora · 1 zarba = 1 ball · faqat eng yaxshi natija</small>
+              <strong>Karate Strike</strong>
+              <small>Chop · 1 zarba = 1 ball · faqat eng yaxshi natija</small>
             </span>
             <span class="game-go" aria-hidden="true">›</span>
           </button>
@@ -90,7 +95,7 @@
         <section id="view-reyting" class="view" data-view="reyting">
           <div class="section-head">
             <h2>Reyting</h2>
-            <p>City Strike bo‘yicha eng yaxshi natijalar</p>
+            <p>Karate Strike bo‘yicha eng yaxshi natijalar</p>
           </div>
           <ol id="leaderboard" class="board"></ol>
           <p id="boardEmpty" class="empty hidden">
