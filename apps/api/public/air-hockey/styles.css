@@ -27,6 +27,7 @@ body {
   color: var(--text);
   font-family: "Trebuchet MS", "Segoe UI", sans-serif;
   overflow: hidden;
+  overscroll-behavior: none;
 }
 
 #app {

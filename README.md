@@ -59,6 +59,8 @@ Bottom nav **faqat 3 tab**:
 
 Presence: Mini App ochiq bo‘lganda `wss://…/ws/presence` heartbeat.
 
+Vertical swipe/pull-to-close o‘chirilgan (`Telegram.WebApp.disableVerticalSwipes` + `overscroll-behavior: none`); yopish faqat Telegram header **X** orqali.
+
 Play deep-links:
 
 - Offline AI: `/air-hockey/?mode=ai&from=app`
