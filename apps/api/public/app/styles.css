@@ -232,6 +232,7 @@ body {
 }
 
 .cta-offline,
+.cta-local,
 .cta-online {
   width: 100%;
   display: flex;
@@ -249,8 +250,14 @@ body {
 }
 
 .cta-offline:active,
+.cta-local:active,
 .cta-online:active {
   transform: scale(0.985);
+}
+
+.cta-local {
+  background: linear-gradient(120deg, rgba(255, 143, 107, 0.18), rgba(255, 143, 107, 0.04));
+  border-color: rgba(255, 143, 107, 0.32);
 }
 
 .cta-online {
@@ -269,12 +276,14 @@ body {
 }
 
 .cta-offline strong,
+.cta-local strong,
 .cta-online strong {
   display: block;
   font-size: 1rem;
 }
 
 .cta-offline small,
+.cta-local small,
 .cta-online small {
   color: var(--muted);
   font-size: 0.78rem;

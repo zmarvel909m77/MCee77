@@ -37,6 +37,7 @@ const els = {
   statRating: document.getElementById("statRating"),
   statGames: document.getElementById("statGames"),
   offlineBtn: document.getElementById("offlineBtn"),
+  local2pBtn: document.getElementById("local2pBtn"),
   randomBtn: document.getElementById("randomBtn"),
   onlineList: document.getElementById("onlineList"),
   onlineEmpty: document.getElementById("onlineEmpty"),
@@ -220,6 +221,7 @@ function goPlay(mode, extra = {}) {
 }
 
 els.offlineBtn.addEventListener("click", () => goPlay("ai"));
+els.local2pBtn.addEventListener("click", () => goPlay("local"));
 els.randomBtn.addEventListener("click", () => goPlay("online"));
 
 function renderOnline(users) {
