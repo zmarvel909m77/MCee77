@@ -5,6 +5,8 @@ import { config as loadEnv } from "dotenv";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 import websocket from "@fastify/websocket";
+import { webhookCallback } from "grammy";
+import { createBot, resolveWebAppUrls } from "@mcee77/bot";
 import { createUserRepository } from "@mcee77/db";
 import {
   clampAirHockeyOfflinePoints,
@@ -21,9 +23,38 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const databasePath =
   process.env.DATABASE_PATH ?? resolve(process.cwd(), "../../data/gamebot.sqlite");
 const host = process.env.API_HOST ?? "0.0.0.0";
-const port = Number(process.env.API_PORT ?? 3000);
+/** Railway / Render inject PORT; fall back to API_PORT for local. */
+const port = Number(process.env.PORT ?? process.env.API_PORT ?? 3000);
 const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim() ?? "";
 const allowDevScoreSubmit = process.env.ALLOW_DEV_SCORE_SUBMIT === "true";
+
+const webAppUrl =
+  process.env.WEBAPP_URL?.trim().replace(/\/?$/, "") ||
+  (process.env.RAILWAY_PUBLIC_DOMAIN
+    ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+    : "");
+
+const { rocketBirdUrl, airHockeyUrl } = resolveWebAppUrls(webAppUrl);
+
+/**
+ * Bot transport:
+ * - webhook (default in production) — same HTTPS process as API
+ * - long_polling — run `npm run start:bot` separately
+ * - none — API only
+ */
+const botModeRaw = (process.env.BOT_MODE ?? "").trim().toLowerCase();
+const botMode: "webhook" | "long_polling" | "none" =
+  botModeRaw === "webhook" ||
+  botModeRaw === "long_polling" ||
+  botModeRaw === "none"
+    ? botModeRaw
+    : process.env.NODE_ENV === "production"
+      ? "webhook"
+      : "none";
+
+const webhookPath =
+  process.env.TELEGRAM_WEBHOOK_PATH?.trim() || "/telegram/webhook";
+const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim() || undefined;
 
 const users = createUserRepository(databasePath);
 const app = Fastify({ logger: true });
@@ -42,6 +73,8 @@ app.get("/healthz", async () => ({
   rocketBird: "/rocket-bird/",
   airHockey: "/air-hockey/",
   airHockeyWs: "/ws/air-hockey",
+  botMode,
+  webhookPath: botMode === "webhook" ? webhookPath : null,
   matchmaking: matchmaking.stats,
 }));
 
@@ -194,6 +227,25 @@ app.get("/air-hockey", async (_request, reply) =>
   reply.redirect("/air-hockey/", 302),
 );
 
+let bot: ReturnType<typeof createBot> | null = null;
+
+if (botMode === "webhook") {
+  if (!botToken) {
+    app.log.error(
+      "BOT_MODE=webhook requires TELEGRAM_BOT_TOKEN — webhook not registered",
+    );
+  } else {
+    bot = createBot({ token: botToken, users, webAppUrl });
+    const handleUpdate = webhookCallback(bot, "fastify", {
+      secretToken: webhookSecret,
+    });
+    app.post(webhookPath, async (request, reply) => {
+      await handleUpdate(request, reply);
+    });
+    app.log.info(`Telegram webhook route ready at POST ${webhookPath}`);
+  }
+}
+
 const publicRoot = resolve(__dirname, "../public");
 if (existsSync(publicRoot)) {
   await app.register(fastifyStatic, {
@@ -204,6 +256,7 @@ if (existsSync(publicRoot)) {
 
 const shutdown = async () => {
   matchmaking.destroy();
+  // Keep Telegram webhook registered across rolling restarts.
   await app.close();
   users.close();
   process.exit(0);
@@ -216,3 +269,27 @@ await app.listen({ host, port });
 app.log.info(`Rocket Bird Mini App: http://${host}:${port}/rocket-bird/`);
 app.log.info(`Air Hockey Mini App:  http://${host}:${port}/air-hockey/`);
 app.log.info(`Air Hockey WS:        ws://${host}:${port}/ws/air-hockey`);
+
+if (bot && botMode === "webhook") {
+  if (!webAppUrl) {
+    app.log.warn(
+      "WEBAPP_URL (or RAILWAY_PUBLIC_DOMAIN) missing — cannot call setWebhook yet. Set WEBAPP_URL to your public HTTPS origin and redeploy.",
+    );
+  } else {
+    const webhookUrl = `${webAppUrl}${webhookPath.startsWith("/") ? "" : "/"}${webhookPath}`;
+    try {
+      await bot.api.setWebhook(webhookUrl, {
+        secret_token: webhookSecret,
+        drop_pending_updates: true,
+      });
+      const me = await bot.api.getMe();
+      app.log.info(
+        `Telegram webhook set for @${me.username}: ${webhookUrl}`,
+      );
+      if (rocketBirdUrl) app.log.info(`Rocket Bird WebApp: ${rocketBirdUrl}`);
+      if (airHockeyUrl) app.log.info(`Air Hockey WebApp: ${airHockeyUrl}`);
+    } catch (err) {
+      app.log.error({ err }, `failed to setWebhook(${webhookUrl})`);
+    }
+  }
+}

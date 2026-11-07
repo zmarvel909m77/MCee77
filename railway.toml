@@ -1,0 +1,14 @@
+# Railway — single service (Dockerfile). Set secrets in the dashboard:
+#   TELEGRAM_BOT_TOKEN (required)
+#   WEBAPP_URL (public https://….up.railway.app — set after first domain is known)
+#   ALLOW_DEV_SCORE_SUBMIT=false
+# Optional: TELEGRAM_WEBHOOK_SECRET, TELEGRAM_WEBHOOK_PATH, DATABASE_PATH, BOT_MODE
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/healthz"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

@@ -3,6 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/create-bot.d.ts",
+      "import": "./dist/create-bot.js"
+    },
+    "./create-bot": {
+      "types": "./dist/create-bot.d.ts",
+      "import": "./dist/create-bot.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
