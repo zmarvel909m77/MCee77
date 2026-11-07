@@ -30,7 +30,7 @@ export function leaderboardMessage(entries: LeaderboardEntry[]): string {
       "🏆 Reyting",
       "",
       "Hali hech kim ball yig‘magan.",
-      "O‘yinlar tez orada — birinchi bo‘ling!",
+      "Rocket Bird o‘ynab birinchi bo‘ling!",
     ].join("\n");
   }
 
@@ -42,12 +42,23 @@ export function leaderboardMessage(entries: LeaderboardEntry[]): string {
   return ["🏆 Reyting (top)", "", ...lines].join("\n");
 }
 
-export const rocketBirdSoon = [
-  "🚀 Rocket Bird",
-  "",
-  "O‘yin tez orada ochiladi!",
-  "Mini App tayyorlanganda shu yerda deep-link paydo bo‘ladi.",
-].join("\n");
+export function rocketBirdOpenMessage(hasWebApp: boolean): string {
+  if (hasWebApp) {
+    return [
+      "🚀 Rocket Bird",
+      "",
+      "Mini App ochish uchun pastdagi tugmani bosing.",
+      "Tegin — raketa uchadi, quvurlardan o‘ting, ball yig‘ing!",
+    ].join("\n");
+  }
+  return [
+    "🚀 Rocket Bird",
+    "",
+    "WEBAPP_URL sozlanmagan.",
+    "Serverda HTTPS Mini App URL ni `.env` ga qo‘ying (masalan tunnel).",
+    "Lokal: API ni ishga tushirib `/rocket-bird/` ni brauzerda oching.",
+  ].join("\n");
+}
 
 export const airHockeySoon = [
   "🏒 Air Hockey",

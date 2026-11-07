@@ -5,7 +5,12 @@ import Database from "better-sqlite3";
 import {
   DEFAULT_RATING,
   DEFAULT_TOTAL_POINTS,
+  type GameId,
+  type GameMode,
   type LeaderboardEntry,
+  type ScoreRecord,
+  type SubmitScoreInput,
+  type SubmitScoreResult,
   type UpsertUserInput,
   type User,
 } from "@mcee77/shared";
@@ -22,6 +27,16 @@ interface UserRow {
   updated_at: string;
 }
 
+interface ScoreRow {
+  id: string;
+  user_id: string;
+  game: GameId;
+  mode: GameMode;
+  points: number;
+  meta: string | null;
+  created_at: string;
+}
+
 function mapUser(row: UserRow): User {
   return {
     id: row.id,
@@ -33,6 +48,18 @@ function mapUser(row: UserRow): User {
     gamesPlayed: row.games_played,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+function mapScore(row: ScoreRow): ScoreRecord {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    game: row.game,
+    mode: row.mode,
+    points: row.points,
+    meta: row.meta ? (JSON.parse(row.meta) as Record<string, unknown>) : null,
+    createdAt: row.created_at,
   };
 }
 
@@ -62,6 +89,19 @@ export class UserRepository {
 
       CREATE INDEX IF NOT EXISTS idx_users_total_points
         ON users(total_points DESC);
+
+      CREATE TABLE IF NOT EXISTS scores (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id),
+        game TEXT NOT NULL,
+        mode TEXT NOT NULL,
+        points INTEGER NOT NULL,
+        meta TEXT,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_scores_user_created
+        ON scores(user_id, created_at DESC);
     `);
   }
 
@@ -115,6 +155,13 @@ export class UserRepository {
     return row ? mapUser(row) : null;
   }
 
+  findById(id: string): User | null {
+    const row = this.db
+      .prepare(`SELECT * FROM users WHERE id = ?`)
+      .get(id) as UserRow | undefined;
+    return row ? mapUser(row) : null;
+  }
+
   getLeaderboard(limit = 10): LeaderboardEntry[] {
     const rows = this.db
       .prepare(
@@ -141,6 +188,62 @@ export class UserRepository {
       totalPoints: row.total_points,
       rating: row.rating,
     }));
+  }
+
+  /**
+   * Persist a session score and bump user total_points, rating, games_played.
+   * MVP: points awarded = session points (already clamped by caller).
+   */
+  submitScore(input: SubmitScoreInput): SubmitScoreResult {
+    const now = new Date().toISOString();
+    const tx = this.db.transaction(() => {
+      const user = this.findById(input.userId);
+      if (!user) {
+        throw new Error("user not found");
+      }
+
+      const scoreId = randomUUID();
+      const metaJson = input.meta ? JSON.stringify(input.meta) : null;
+      const scoreRow = this.db
+        .prepare(
+          `
+          INSERT INTO scores (id, user_id, game, mode, points, meta, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+          RETURNING *
+        `,
+        )
+        .get(
+          scoreId,
+          input.userId,
+          input.game,
+          input.mode,
+          input.points,
+          metaJson,
+          now,
+        ) as ScoreRow;
+
+      const updated = this.db
+        .prepare(
+          `
+          UPDATE users
+          SET total_points = total_points + ?,
+              rating = rating + ?,
+              games_played = games_played + 1,
+              updated_at = ?
+          WHERE id = ?
+          RETURNING *
+        `,
+        )
+        .get(input.points, input.points, now, input.userId) as UserRow;
+
+      return {
+        score: mapScore(scoreRow),
+        user: mapUser(updated),
+        pointsAwarded: input.points,
+      };
+    });
+
+    return tx();
   }
 
   close(): void {
