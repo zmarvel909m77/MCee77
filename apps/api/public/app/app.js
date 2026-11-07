@@ -11,8 +11,8 @@ if (tg) {
     tg.disableVerticalSwipes();
   }
   try {
-    tg.setHeaderColor("#072028");
-    tg.setBackgroundColor("#031216");
+    tg.setHeaderColor("#11111d");
+    tg.setBackgroundColor("#11111d");
   } catch {
     /* older clients */
   }
