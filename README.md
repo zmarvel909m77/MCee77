@@ -85,7 +85,7 @@ Random queue yoki Mini App taklifi → `ws://…/ws/air-hockey` → server-autho
 
 ## Bot
 
-`/start` — **AIR HOCKEY** xush kelibsiz matni + stacked **inline** tugmalar (reply keyboard yo‘q):
+`/start` — qisqa **Online Air hockey** xush kelibsiz matni + stacked **inline** tugmalar (reply keyboard yo‘q):
 
 1. **🏒 Air Hockey o‘ynash** — WebApp → `${WEBAPP_URL}/app/`
 2. **🛒 Do‘kon** — hozircha «ombor to‘ldirilmoqda» adabiy javob (+ ixtiyoriy `/app/shop/` stub)
