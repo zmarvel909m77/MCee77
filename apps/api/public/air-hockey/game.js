@@ -41,6 +41,8 @@ const MAX_PUCK_SPEED = 14;
 const WALL_BOUNCE = 0.92;
 const PADDLE_RESTITUTION = 1.05;
 const WIN_SCORE = 5;
+/** Mallet sits ahead of fingertip toward table center (not under the finger). */
+const TOUCH_AHEAD_Y = PADDLE_R + 22;
 const bootParams = new URLSearchParams(location.search);
 const bootMode = bootParams.get("mode");
 const bootInvite = bootParams.get("invite");
@@ -66,6 +68,8 @@ const state = {
 
 /** pointer id → seat */
 const pointers = new Map();
+/** pointer id → { dx, dy } grab offset (mallet − touch), keeps finger off the mallet */
+const pointerGrab = new Map();
 
 /** Online */
 let ws = null;
@@ -120,7 +124,32 @@ function resetLocalState() {
   state.score = [0, 0];
   hudScore.textContent = "0 — 0";
   pointers.clear();
+  pointerGrab.clear();
   resetPuck(Math.random() < 0.5 ? 0 : 1);
+}
+
+/**
+ * Lock a grab offset on pointerdown so the mallet does not jump under the finger.
+ * Keeps (or enforces) an ahead-of-finger offset toward center; if the player
+ * already had a larger ahead offset, keep that relative grab for smooth motion.
+ */
+function lockGrabOffset(seat, paddle, touchX, touchY) {
+  const ahead = seat === 0 ? -TOUCH_AHEAD_Y : TOUCH_AHEAD_Y;
+  let dx = paddle.x - touchX;
+  let dy = paddle.y - touchY;
+  // Ensure vertical offset is at least "ahead toward center" (finger below/above mallet).
+  if (seat === 0) {
+    // Bottom: mallet should be above finger (dy negative).
+    if (dy > ahead) dy = ahead;
+  } else {
+    // Top: mallet should be below finger (dy positive).
+    if (dy < ahead) dy = ahead;
+  }
+  // Soft-cap horizontal grab so first touch still feels connected.
+  const maxDx = PADDLE_R * 1.25;
+  if (dx > maxDx) dx = maxDx;
+  if (dx < -maxDx) dx = -maxDx;
+  return { dx, dy };
 }
 
 function clampPaddle(paddle, side, targetX, targetY) {
@@ -235,8 +264,12 @@ canvas.addEventListener("pointerdown", (e) => {
   const seat = mode === "online" ? mySeat : seatForLocalPointer(p.y);
   if (seat === null) return;
   if (mode === "ai" && seat !== 0) return;
+  const paddle = state.paddles[seat];
+  const grab = lockGrabOffset(seat, paddle, p.x, p.y);
   pointers.set(e.pointerId, seat);
-  clampPaddle(state.paddles[seat], seat, p.x, p.y);
+  pointerGrab.set(e.pointerId, grab);
+  // Move to touch + grab (ahead of finger) — never snap mallet under fingertip.
+  clampPaddle(paddle, seat, p.x + grab.dx, p.y + grab.dy);
   if (mode === "online") sendInput();
 });
 
@@ -244,13 +277,15 @@ canvas.addEventListener("pointermove", (e) => {
   if (phase !== "playing") return;
   const seat = pointers.get(e.pointerId);
   if (seat === undefined) return;
+  const grab = pointerGrab.get(e.pointerId) || { dx: 0, dy: seat === 0 ? -TOUCH_AHEAD_Y : TOUCH_AHEAD_Y };
   const p = canvasPoint(e.clientX, e.clientY);
-  clampPaddle(state.paddles[seat], seat, p.x, p.y);
+  clampPaddle(state.paddles[seat], seat, p.x + grab.dx, p.y + grab.dy);
   if (mode === "online") sendInput();
 });
 
 function endPointer(e) {
   pointers.delete(e.pointerId);
+  pointerGrab.delete(e.pointerId);
 }
 
 canvas.addEventListener("pointerup", endPointer);
