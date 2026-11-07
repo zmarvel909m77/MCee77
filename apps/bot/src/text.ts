@@ -30,7 +30,7 @@ export function leaderboardMessage(entries: LeaderboardEntry[]): string {
       "🏆 Reyting",
       "",
       "Hali hech kim ball yig‘magan.",
-      "Rocket Bird o‘ynab birinchi bo‘ling!",
+      "Rocket Bird yoki Air Hockey o‘ynab birinchi bo‘ling!",
     ].join("\n");
   }
 
@@ -60,9 +60,20 @@ export function rocketBirdOpenMessage(hasWebApp: boolean): string {
   ].join("\n");
 }
 
-export const airHockeySoon = [
-  "🏒 Air Hockey",
-  "",
-  "O‘yin tez orada ochiladi!",
-  "Offline va online rejimlar keyingi bosqichda.",
-].join("\n");
+export function airHockeyOpenMessage(hasWebApp: boolean): string {
+  if (hasWebApp) {
+    return [
+      "🏒 Air Hockey",
+      "",
+      "Mini App ochish uchun pastdagi tugmani bosing.",
+      "Offline (AI / 2 o‘yinchi) yoki Online random matchmaking.",
+    ].join("\n");
+  }
+  return [
+    "🏒 Air Hockey",
+    "",
+    "WEBAPP_URL sozlanmagan.",
+    "Serverda HTTPS Mini App URL ni `.env` ga qo‘ying (masalan tunnel).",
+    "Lokal: API ni ishga tushirib `/air-hockey/` ni brauzerda oching.",
+  ].join("\n");
+}
