@@ -1,0 +1,21 @@
+{
+  "name": "mcee77-game-bot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GAME BOT — Telegram games with rating (Rocket Bird + Air Hockey)",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @mcee77/shared -w @mcee77/db -w @mcee77/api -w @mcee77/bot",
+    "dev:bot": "npm run dev -w @mcee77/bot",
+    "dev:api": "npm run dev -w @mcee77/api",
+    "start:bot": "npm run start -w @mcee77/bot",
+    "start:api": "npm run start -w @mcee77/api",
+    "typecheck": "npm run typecheck -w @mcee77/shared -w @mcee77/db -w @mcee77/api -w @mcee77/bot"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
