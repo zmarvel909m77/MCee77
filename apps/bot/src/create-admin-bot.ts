@@ -52,15 +52,20 @@ function formatCounts(result: {
   blocked: number;
   failed: number;
   durationMs: number;
+  firstError?: string;
 }): string {
   const sec = Math.round(result.durationMs / 1000);
-  return [
+  const lines = [
     `Yuborildi: ${result.sent}`,
     `Bloklagan: ${result.blocked}`,
     `Xato: ${result.failed}`,
     `Jami: ${result.total}`,
     `Vaqt: ${sec} s`,
-  ].join(" · ");
+  ];
+  if (result.firstError) {
+    lines.push(`Birinchi xato: ${result.firstError}`);
+  }
+  return lines.join(" · ");
 }
 
 /**
@@ -147,14 +152,26 @@ export function createAdminBot(options: CreateAdminBotOptions): Bot {
     await ctx.reply("Yangi /start yuborilmoqda…");
     try {
       const recipients = await options.users.listBroadcastRecipients();
+      if (recipients.length === 0) {
+        await ctx.reply(
+          "Bazada foydalanuvchi yo‘q — avval @mcee77bot da /start bosing.",
+          { reply_markup: adminKeyboard() },
+        );
+        return;
+      }
       const result = await broadcastStartWelcome({
         api: deliveryApi,
         recipients,
         miniAppUrl,
       });
-      await ctx.reply(`Tayyor.\n${formatCounts(result)}`, {
-        reply_markup: adminKeyboard(),
-      });
+      await ctx.reply(
+        [
+          result.sent > 0 ? "Tayyor." : "Yakunlandi — hech kimga yetmadi.",
+          formatCounts(result),
+          "Tekshirish: @mcee77bot chatini oching.",
+        ].join("\n"),
+        { reply_markup: adminKeyboard() },
+      );
     } catch (err) {
       await ctx.reply(
         `Xato: ${err instanceof Error ? err.message : "yuborish"}`,
@@ -274,13 +291,19 @@ export function createAdminBot(options: CreateAdminBotOptions): Bot {
 
     try {
       const recipients = await options.users.listBroadcastRecipients();
+      if (recipients.length === 0) {
+        await ctx.reply(
+          "Bazada foydalanuvchi yo‘q — avval @mcee77bot da /start bosing.",
+          { reply_markup: adminKeyboard() },
+        );
+        return;
+      }
       const result = await broadcastAdminMessage({
         deliveryApi,
         sourceApi: ctx.api,
         sourceBotToken: options.adminToken,
         recipients,
         message: msg,
-        skipTelegramIds: adminIds,
       });
       const top = recipients
         .slice(0, 3)
@@ -293,9 +316,10 @@ export function createAdminBot(options: CreateAdminBotOptions): Bot {
         .join(", ");
       await ctx.reply(
         [
-          "Broadcast tayyor.",
+          result.sent > 0 ? "Broadcast tayyor." : "Broadcast yakunlandi — hech kimga yetmadi.",
           formatCounts(result),
-          top ? `Namuna: ${top}${recipients.length > 3 ? "…" : ""}` : "",
+          top ? `Qabul qiluvchilar: ${top}${recipients.length > 3 ? "…" : ""}` : "",
+          "Tekshirish: @mcee77bot chatini oching (admin bot emas).",
         ]
           .filter(Boolean)
           .join("\n"),
