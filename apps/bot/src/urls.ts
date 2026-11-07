@@ -10,25 +10,29 @@ function shopUrl(webAppUrl: string): string {
   return base ? `${base}shop/` : "";
 }
 
-function airHockeyGameUrl(webAppUrl: string): string {
+function karateGameUrl(webAppUrl: string): string {
   if (!webAppUrl) return "";
-  if (webAppUrl.endsWith("/air-hockey")) return `${webAppUrl}/`;
-  return `${webAppUrl}/air-hockey/`;
+  if (webAppUrl.endsWith("/karate")) return `${webAppUrl}/`;
+  return `${webAppUrl}/karate/`;
 }
 
 export function resolveWebAppUrls(webAppUrlRaw: string | undefined): {
   webAppUrl: string;
   miniAppUrl: string;
-  airHockeyUrl: string;
+  karateUrl: string;
   shopUrl: string;
+  /** @deprecated Use karateUrl / miniAppUrl */
+  airHockeyUrl: string;
 } {
   const webAppUrl = webAppUrlRaw?.trim().replace(/\/?$/, "") ?? "";
+  const karateUrl = karateGameUrl(webAppUrl);
   return {
     webAppUrl,
     miniAppUrl: appUrl(webAppUrl),
-    airHockeyUrl: airHockeyGameUrl(webAppUrl),
+    karateUrl,
     shopUrl: shopUrl(webAppUrl),
+    airHockeyUrl: karateUrl,
   };
 }
 
-export { appUrl, shopUrl, airHockeyGameUrl };
+export { appUrl, shopUrl, karateGameUrl };

@@ -2,7 +2,7 @@
   "name": "mcee77-game-bot",
   "version": "0.1.0",
   "private": true,
-  "description": "GAME BOT — Telegram Mini App Air Hockey with rating",
+  "description": "GAME BOT — Telegram Mini App Karate (GAMEE-style) with high-score rating",
   "workspaces": [
     "apps/*",
     "packages/*"

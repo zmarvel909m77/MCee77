@@ -62,11 +62,6 @@ const bot = createAdminBot({
   users,
   adminTelegramIds: adminIds,
   webAppUrl,
-  getLiveStats: () => ({
-    onlineCount: 0,
-    activeRooms: 0,
-    queueDepth: 0,
-  }),
 });
 
 const shutdown = () => {
