@@ -1,16 +1,18 @@
 import type { LeaderboardEntry, User } from "@mcee77/shared";
 import { publicDisplayName } from "@mcee77/shared";
 
-/** /start welcome — Uzbek Latin, AIR HOCKEY brand first. */
-export function welcomeMessage(displayName: string): string {
+/**
+ * /start welcome — short Uzbek Latin (shared by /start + reset_start broadcast).
+ * `displayName` kept for call-site compatibility; greeting omitted so the
+ * copy matches the product template closely.
+ */
+export function welcomeMessage(_displayName: string): string {
   return [
-    `Assalomu alaykum, ${displayName}!`,
+    "🎮 Online Air hockey’ga xush kelibsiz!",
     "",
-    "AIR HOCKEY ga xush kelibsiz.",
+    "Do‘stlaringiz bilan o‘ynang va reytingingizni oshiring!",
     "",
-    "Do‘stlaringiz bilan stol ustida uchuvchi shaybani haydab o‘ynang, reytingingizni yuksaltiring yoki onlayn jangda kuchingizni sinang.",
-    "",
-    "O‘yinni boshlash uchun pastdagi tugmani bosing.",
+    "👇 O‘yinni boshlash uchun tugmani bosing:",
   ].join("\n");
 }
 
