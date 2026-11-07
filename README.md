@@ -110,8 +110,90 @@ packages/shared/              types + initData verify
 data/                         Local SQLite file (gitignored)
 ```
 
+## Deploy (Railway) / Deploy qilish
+
+Bitta servis: Fastify (REST + static Mini Apps + Air Hockey WebSocket) **va** grammY bot (webhook, xuddi shu HTTPS).
+
+One service runs the API + Mini Apps + WS **and** the Telegram bot (webhook on the same HTTPS origin).
+
+### Env variables / O‘zgaruvchilar
+
+| Variable | Required | Prod value |
+|----------|----------|------------|
+| `TELEGRAM_BOT_TOKEN` | **yes** | BotFather token for `@mcee77bot` (dashboard secret — **never commit**) |
+| `WEBAPP_URL` | **yes** (after URL known) | `https://<your-app>.up.railway.app` (no trailing slash) |
+| `ALLOW_DEV_SCORE_SUBMIT` | yes | `false` |
+| `PORT` | set by host | Railway/Render inject this; app binds `PORT` then `API_PORT` |
+| `BOT_MODE` | optional | `webhook` (Dockerfile default) |
+| `DATABASE_PATH` | optional | `/data/gamebot.sqlite` in Docker |
+| `TELEGRAM_WEBHOOK_SECRET` | optional | random string; also sent to `setWebhook` |
+| `NODE_ENV` | optional | `production` |
+
+### Railway (dashboard) — qadamma-qadam / step-by-step
+
+**O‘zbekcha**
+
+1. [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub** → `zmarvel909m77/MCee77` (branch `main` merge dan keyin).
+2. Railway `Dockerfile` + `railway.toml` ni o‘qiydi.
+3. **Variables** → qo‘shing:
+   - `TELEGRAM_BOT_TOKEN` = BotFather dagi token (hech qachon chat/README/git ga yozmang)
+   - `ALLOW_DEV_SCORE_SUBMIT` = `false`
+   - `NODE_ENV` = `production`
+4. **Settings → Networking → Generate Domain** → public HTTPS URL chiqadi.
+5. `WEBAPP_URL` = shu URL (masalan `https://xxxx.up.railway.app`) ni Variables ga qo‘shing → redeploy.
+6. Ixtiyoriy: **Volumes** → `/data` mount (SQLite saqlansin).
+7. Deploy logda `Telegram webhook set for @mcee77bot` va `/healthz` → `ok: true` bo‘lishi kerak.
+
+**English**
+
+1. [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub** → this repo.
+2. Builder uses `Dockerfile` / `railway.toml`.
+3. Add Variables: `TELEGRAM_BOT_TOKEN`, `ALLOW_DEV_SCORE_SUBMIT=false`, `NODE_ENV=production`.
+4. Generate a public domain, then set `WEBAPP_URL` to that `https://…` origin and redeploy.
+5. Optional volume at `/data` so SQLite survives restarts.
+6. Confirm logs show webhook set and `GET /healthz` returns ok.
+
+### BotFather Menu Button / Web App URL
+
+After `WEBAPP_URL` is live:
+
+1. Open [@BotFather](https://t.me/BotFather) → `/mybots` → `@mcee77bot`
+2. **Bot Settings → Menu Button** (or **Configure Mini App**): set URL to  
+   `https://<WEBAPP_URL-host>/rocket-bird/`  
+   (or leave menu on bot reply keyboard; inline **O‘ynash** buttons already open the games)
+3. Deep paths used by the bot:
+   - Rocket Bird: `${WEBAPP_URL}/rocket-bird/`
+   - Air Hockey: `${WEBAPP_URL}/air-hockey/`
+   - WebSocket: `wss://<same-host>/ws/air-hockey`
+   - Telegram webhook: `${WEBAPP_URL}/telegram/webhook`
+
+### Docker (local prod-like)
+
+```bash
+cp .env.example .env   # set TELEGRAM_BOT_TOKEN + WEBAPP_URL (public HTTPS tunnel)
+docker compose up --build
+```
+
+`npm run start:prod` starts the API process with `BOT_MODE=webhook` in the image.
+
+### Render (fallback)
+
+If Railway is unavailable: new **Web Service** from the GitHub repo, Dockerfile runtime, same env vars, set `PORT` automatically. Health check path: `/healthz`.
+
+### Secret missing? / Token yo‘qmi?
+
+Deploy CLI cannot invent a BotFather token. In Railway:
+
+1. Project → your service → **Variables**
+2. **+ New Variable** → name `TELEGRAM_BOT_TOKEN`
+3. Paste the token from BotFather (`/token` or API Token field)
+4. Save → wait for redeploy
+
+Never paste the token into git, PR comments, or chat.
+
 ## Notes
 
 - Do not commit `.env` or real tokens.
 - `ALLOW_DEV_SCORE_SUBMIT` is for local browser tests only — disable in production.
 - Online Air Hockey results are server-authoritative (`finishMatch`); offline scores are clamped.
+- Production default: one process, Telegram **webhook** on the same HTTPS URL as the Mini Apps.
