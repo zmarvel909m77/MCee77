@@ -1,25 +1,27 @@
-import type { FeatureFlagKey, LeaderboardEntry, User } from "@mcee77/shared";
-import { FEATURE_FLAG_LABELS, publicDisplayName } from "@mcee77/shared";
+import type { LeaderboardEntry, User } from "@mcee77/shared";
+import { publicDisplayName } from "@mcee77/shared";
 
+/** /start welcome — Uzbek Latin, AIR HOCKEY brand first. */
 export function welcomeMessage(displayName: string): string {
   return [
-    `Salom, ${displayName}! 👋`,
+    `Assalomu alaykum, ${displayName}!`,
     "",
-    "GAME BOT ga xush kelibsiz.",
-    "Air Hockey o‘ynang, online o‘yinlarda ball to‘plang, reytingda ko‘tariling.",
+    "AIR HOCKEY ga xush kelibsiz.",
     "",
-    "Pastdagi OCHISH / O‘ynash tugmasi orqali Mini App ni oching.",
+    "Do‘stlaringiz bilan stol ustida uchuvchi shaybani haydab o‘ynang, reytingingizni yuksaltiring yoki onlayn jangda kuchingizni sinang.",
+    "",
+    "O‘yinni boshlash uchun pastdagi tugmani bosing.",
   ].join("\n");
 }
 
-/** Brief notice when a menu section is admin-disabled (Uzbek Latin). */
-export function sectionDisabledMessage(key: FeatureFlagKey): string {
-  const label = FEATURE_FLAG_LABELS[key];
+/** Do‘kon — resources not ready yet (literary, polite). */
+export function shopUnavailableMessage(): string {
   return [
-    `${label}`,
+    "Do‘kon",
     "",
-    "Bu bo‘lim hozircha vaqtincha o‘chirilgan.",
-    "Keyinroq qayta urinib ko‘ring.",
+    "Hozircha do‘kon javonlari bo‘sh — omborimiz yangi resurslar bilan to‘ldirilmoqda.",
+    "",
+    "Tez orada bu yerda sovg‘alar va imkoniyatlar paydo bo‘ladi. Sabr-toqatingiz uchun rahmat.",
   ].join("\n");
 }
 
@@ -34,6 +36,8 @@ export function profileMessage(user: User): string {
     `Ball: ${user.totalPoints}`,
     `Reyting: ${user.rating}`,
     `O‘yinlar: ${user.gamesPlayed}`,
+    "",
+    "Profil Mini App ichida ochiladi.",
   ].join("\n");
 }
 
@@ -44,6 +48,8 @@ export function leaderboardMessage(entries: LeaderboardEntry[]): string {
       "",
       "Hali hech kim ball yig‘magan.",
       "Online Air Hockey o‘ynab birinchi bo‘ling!",
+      "",
+      "Reyting Mini App ichida ochiladi.",
     ].join("\n");
   }
 
@@ -52,27 +58,29 @@ export function leaderboardMessage(entries: LeaderboardEntry[]): string {
     return `${e.rank}. ${name} — ${e.totalPoints} ball · ${e.rating}`;
   });
 
-  return ["🏆 Reyting (top)", "", ...lines].join("\n");
+  return [
+    "🏆 Reyting (top)",
+    "",
+    ...lines,
+    "",
+    "To‘liq reyting Mini App ichida.",
+  ].join("\n");
 }
 
 export function miniAppOpenMessage(hasWebApp: boolean): string {
   if (hasWebApp) {
     return [
-      "🏒 GAME BOT — Air Hockey",
+      "🏒 AIR HOCKEY",
       "",
       "Mini App ochish uchun pastdagi tugmani bosing.",
       "Profil · O‘yin · Reyting — barchasi ichida.",
-      "",
-      "Online g‘alaba/mag‘lubiyat ball beradi.",
-      "Offline o‘yin ball bermaydi.",
     ].join("\n");
   }
   return [
-    "🏒 GAME BOT",
+    "🏒 AIR HOCKEY",
     "",
     "WEBAPP_URL sozlanmagan.",
     "Serverda HTTPS Mini App URL ni `.env` ga qo‘ying.",
-    "Lokal: API ni ishga tushirib `/app/` ni brauzerda oching.",
   ].join("\n");
 }
 

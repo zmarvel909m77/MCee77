@@ -290,6 +290,9 @@ app.get("/api/v1/matches/:id", async (request, reply) => {
 
 app.get("/", async (_request, reply) => reply.redirect("/app/", 302));
 app.get("/app", async (_request, reply) => reply.redirect("/app/", 302));
+app.get("/app/shop", async (_request, reply) =>
+  reply.redirect("/app/shop/", 302),
+);
 app.get("/air-hockey", async (_request, reply) =>
   reply.redirect("/air-hockey/", 302),
 );

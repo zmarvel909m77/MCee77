@@ -1,12 +1,17 @@
 import { Bot, InlineKeyboard, type Context } from "grammy";
 import type { createUserRepository } from "@mcee77/db";
-import { publicDisplayName, type FeatureFlagKey } from "@mcee77/shared";
-import { BTN, mainKeyboard } from "./keyboard.js";
+import { publicDisplayName } from "@mcee77/shared";
+import {
+  BTN,
+  CB,
+  REMOVE_REPLY_KEYBOARD,
+  startInlineKeyboard,
+} from "./keyboard.js";
 import {
   airHockeyOpenMessage,
   leaderboardMessage,
   profileMessage,
-  sectionDisabledMessage,
+  shopUnavailableMessage,
   welcomeMessage,
 } from "./text.js";
 
@@ -25,6 +30,12 @@ function appUrl(webAppUrl: string): string {
   return `${webAppUrl}/app/`;
 }
 
+function shopUrl(webAppUrl: string): string {
+  if (!webAppUrl) return "";
+  const base = appUrl(webAppUrl);
+  return base ? `${base}shop/` : "";
+}
+
 function airHockeyGameUrl(webAppUrl: string): string {
   if (!webAppUrl) return "";
   if (webAppUrl.endsWith("/air-hockey")) return `${webAppUrl}/`;
@@ -39,6 +50,7 @@ export function createBot(options: CreateBotOptions): Bot {
   const { token, users } = options;
   const webAppUrl = options.webAppUrl?.trim().replace(/\/?$/, "") ?? "";
   const miniApp = appUrl(webAppUrl);
+  const shopApp = shopUrl(webAppUrl);
 
   const bot = new Bot(token);
 
@@ -59,95 +71,74 @@ export function createBot(options: CreateBotOptions): Bot {
     });
   }
 
-  function flags() {
-    return users.getFeatureFlags();
-  }
-
-  function replyMarkup() {
-    return mainKeyboard({ flags: flags(), miniAppUrl: miniApp });
-  }
-
-  function openAppInline(label = "OCHISH"): InlineKeyboard | undefined {
+  function openAppInline(label: string = BTN.open): InlineKeyboard | undefined {
     if (!miniApp) return undefined;
     return new InlineKeyboard().webApp(label, miniApp);
   }
 
-  async function refuseIfDisabled(
-    ctx: Context,
-    key: FeatureFlagKey,
-  ): Promise<boolean> {
-    if (flags()[key]) return false;
-    await ctx.reply(sectionDisabledMessage(key), {
-      reply_markup: replyMarkup(),
-    });
-    return true;
+  /** Clear legacy reply keyboard without leaving a visible spam message. */
+  async function clearReplyKeyboard(ctx: Context): Promise<void> {
+    try {
+      const rm = await ctx.reply("\u2060", {
+        reply_markup: REMOVE_REPLY_KEYBOARD,
+      });
+      if (ctx.chat) {
+        await ctx.api.deleteMessage(ctx.chat.id, rm.message_id).catch(() => {});
+      }
+    } catch {
+      /* ignore — keyboard may already be gone */
+    }
   }
 
   bot.command("start", async (ctx) => {
     const user = upsertFromContext(ctx);
     const name = user ? publicDisplayName(user) : displayNameFrom(ctx);
-    const inline = openAppInline("OCHISH");
-    // Inline OCHISH for chat; also refresh reply keyboard with WebApp + shortcuts.
+
+    await clearReplyKeyboard(ctx);
+
     await ctx.reply(welcomeMessage(name), {
-      reply_markup: inline ?? replyMarkup(),
+      reply_markup: startInlineKeyboard({
+        miniAppUrl: miniApp,
+        // Shop stays a chat callback (polished literary reply); page exists as stub.
+      }),
     });
-    await ctx.reply("Menyu:", { reply_markup: replyMarkup() });
+  });
+
+  bot.callbackQuery(CB.shop, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    upsertFromContext(ctx);
+    const inline = shopApp
+      ? new InlineKeyboard().webApp("Do‘kon sahifasi", shopApp)
+      : undefined;
+    await ctx.reply(shopUnavailableMessage(), {
+      reply_markup: inline,
+    });
+  });
+
+  bot.callbackQuery("play_no_webapp", async (ctx) => {
+    await ctx.answerCallbackQuery({
+      text: "WEBAPP_URL sozlanmagan",
+      show_alert: true,
+    });
+    await ctx.reply(airHockeyOpenMessage(false));
   });
 
   bot.command("profile", async (ctx) => {
-    if (await refuseIfDisabled(ctx, "profile")) return;
     const user = upsertFromContext(ctx);
     if (!user) {
       await ctx.reply("Foydalanuvchi topilmadi. /start ni bosing.");
       return;
     }
     await ctx.reply(profileMessage(user), {
-      reply_markup: openAppInline("Profilni ochish") ?? replyMarkup(),
+      reply_markup: openAppInline("Profilni ochish"),
     });
   });
 
   bot.command("rating", async (ctx) => {
-    if (await refuseIfDisabled(ctx, "rating")) return;
     upsertFromContext(ctx);
     const board = users.getLeaderboard(10);
     await ctx.reply(leaderboardMessage(board), {
-      reply_markup: openAppInline("Reytingni ochish") ?? replyMarkup(),
-    });
-  });
-
-  bot.hears(BTN.play, async (ctx) => {
-    const f = flags();
-    if (!f.mini_app && !f.air_hockey) {
-      await ctx.reply(sectionDisabledMessage("mini_app"), {
-        reply_markup: replyMarkup(),
-      });
-      return;
-    }
-    upsertFromContext(ctx);
-    const inline = openAppInline("O‘ynash");
-    await ctx.reply(airHockeyOpenMessage(Boolean(inline || miniApp)), {
-      reply_markup: inline ?? replyMarkup(),
-    });
-  });
-
-  bot.hears(BTN.rating, async (ctx) => {
-    if (await refuseIfDisabled(ctx, "rating")) return;
-    upsertFromContext(ctx);
-    const board = users.getLeaderboard(10);
-    await ctx.reply(leaderboardMessage(board), {
-      reply_markup: openAppInline("Reytingni ochish") ?? replyMarkup(),
-    });
-  });
-
-  bot.hears(BTN.profile, async (ctx) => {
-    if (await refuseIfDisabled(ctx, "profile")) return;
-    const user = upsertFromContext(ctx);
-    if (!user) {
-      await ctx.reply("Foydalanuvchi topilmadi. /start ni bosing.");
-      return;
-    }
-    await ctx.reply(profileMessage(user), {
-      reply_markup: openAppInline("Profilni ochish") ?? replyMarkup(),
+      reply_markup: openAppInline("Reytingni ochish"),
     });
   });
 
@@ -162,11 +153,13 @@ export function resolveWebAppUrls(webAppUrlRaw: string | undefined): {
   webAppUrl: string;
   miniAppUrl: string;
   airHockeyUrl: string;
+  shopUrl: string;
 } {
   const webAppUrl = webAppUrlRaw?.trim().replace(/\/?$/, "") ?? "";
   return {
     webAppUrl,
     miniAppUrl: appUrl(webAppUrl),
     airHockeyUrl: airHockeyGameUrl(webAppUrl),
+    shopUrl: shopUrl(webAppUrl),
   };
 }
