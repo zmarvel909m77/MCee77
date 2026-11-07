@@ -19,7 +19,9 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "tsx watch src/index.ts",
-    "start": "node dist/index.js"
+    "dev:admin": "tsx watch src/admin-index.ts",
+    "start": "node dist/index.js",
+    "start:admin": "node dist/admin-index.js"
   },
   "dependencies": {
     "@mcee77/db": "*",

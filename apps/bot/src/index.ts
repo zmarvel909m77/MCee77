@@ -1,7 +1,8 @@
 import { resolve } from "node:path";
 import { config as loadEnv } from "dotenv";
 import { createUserRepository } from "@mcee77/db";
-import { createBot, resolveWebAppUrls } from "./create-bot.js";
+import { createBot } from "./create-bot.js";
+import { resolveWebAppUrls } from "./urls.js";
 
 loadEnv({ path: resolve(process.cwd(), "../../.env") });
 loadEnv();

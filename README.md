@@ -117,10 +117,12 @@ Bitta servis: Fastify (REST + Mini App + WS) **va** grammY webhook.
 
 | Variable | Required | Prod value |
 |----------|----------|------------|
-| `TELEGRAM_BOT_TOKEN` | **yes** | BotFather token (never commit) |
+| `TELEGRAM_BOT_TOKEN` | **yes** | Game bot (@mcee77bot) token — never commit |
 | `WEBAPP_URL` | **yes** | `https://web-production-05946.up.railway.app` |
 | `ALLOW_DEV_SCORE_SUBMIT` | yes | `false` |
-| `ADMIN_SECRET` | recommended | random string for `/admin` |
+| `ADMIN_BOT_TOKEN` | **for Telegram admin** | Token for `@MCee_adminbot` (never commit) |
+| `ADMIN_TELEGRAM_IDS` | **for Telegram admin** | Your numeric Telegram id(s), comma-separated |
+| `ADMIN_SECRET` | optional web `/admin` | random string for browser panel |
 | `PORT` | set by host | Railway injects |
 | `BOT_MODE` | optional | `webhook` (Dockerfile default) |
 | `DATABASE_PATH` | optional | `/data/gamebot.sqlite` |
@@ -157,12 +159,34 @@ Other paths:
 4. Telegram da `/start` → **Air Hockey o‘ynash** → Profil / O‘yin / Reyting
 5. Online o‘yin ball beradi; offline bermaydi
 
-## Admin
+## Admin (Telegram — preferred)
+
+Alohida admin bot: **[@MCee_adminbot](https://t.me/MCee_adminbot)** (o‘yin boti `@mcee77bot` dan farq qiladi).
+
+**Railway Variables (majburiy admin uchun — token/id ni chatga yozmang):**
+
+| Variable | Qiymat |
+|----------|--------|
+| `ADMIN_BOT_TOKEN` | `@MCee_adminbot` BotFather tokeni |
+| `ADMIN_TELEGRAM_IDS` | Sizning raqamli Telegram id (vergul bilan bir nechta mumkin) |
+
+1. BotFather dan `@MCee_adminbot` tokenini oling → Railway da `ADMIN_BOT_TOKEN` (commit qilmang).
+2. O‘z Telegram **raqamli** id ingizni `ADMIN_TELEGRAM_IDS` ga qo‘ying. Id ni `@userinfobot` orqali oling.
+3. Redeploy. API jarayoni `@MCee_adminbot` ni long-polling qiladi; o‘yinchilarga xabarlar `TELEGRAM_BOT_TOKEN` (`@mcee77bot`) orqali ketadi.
+4. [@MCee_adminbot](https://t.me/MCee_adminbot) ga `/start` → menyu:
+   - **Statistika** — jami user, online, aktivlik, xonalar
+   - **Reyting** — top leaderboard
+   - **Hammaga yuborish** — keyingi matn/media barcha o‘yin userlarga
+   - **Yangi /start yuborish** — `ReplyKeyboardRemove` + yangi AIR HOCKEY welcome (chat tarixini bot o‘chira olmaydi)
+
+Buyruqlar: `/stats` `/rating` `/broadcast` `/reset_start` `/cancel`
+
+## Admin (web — optional)
 
 1. Railway Variables ga `ADMIN_SECRET`
 2. `/admin?key=SECRET`
-3. Statistika: foydalanuvchilar, aktivlik, Air Hockey xonalari/navbat, top reyting
-4. JSON: `GET /api/v1/admin/stats`
+3. Statistika + **Hammaga /start yuborish** tugmasi
+4. JSON: `GET /api/v1/admin/stats`, `POST /api/v1/admin/broadcast-start`
 
 ## Notes
 

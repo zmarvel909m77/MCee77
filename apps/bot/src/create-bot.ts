@@ -1,19 +1,34 @@
 import { Bot, InlineKeyboard, type Context } from "grammy";
 import type { createUserRepository } from "@mcee77/db";
 import { publicDisplayName } from "@mcee77/shared";
-import {
-  BTN,
-  CB,
-  REMOVE_REPLY_KEYBOARD,
-  startInlineKeyboard,
-} from "./keyboard.js";
+import { BTN, CB } from "./keyboard.js";
 import {
   airHockeyOpenMessage,
   leaderboardMessage,
   profileMessage,
   shopUnavailableMessage,
-  welcomeMessage,
 } from "./text.js";
+import { sendStartWelcome } from "./start-welcome.js";
+import { appUrl, shopUrl } from "./urls.js";
+
+export {
+  broadcastStartWelcome,
+  buildStartWelcomeText,
+  sendStartWelcome,
+  type BroadcastRecipient,
+  type BroadcastStartResult,
+} from "./start-welcome.js";
+export {
+  createAdminBot,
+  parseAdminTelegramIds,
+  type CreateAdminBotOptions,
+  type LiveAdminStats,
+} from "./create-admin-bot.js";
+export { resolveWebAppUrls } from "./urls.js";
+export {
+  broadcastAdminMessage,
+  type BroadcastMessageResult,
+} from "./broadcast-message.js";
 
 export type UserRepository = ReturnType<typeof createUserRepository>;
 
@@ -22,24 +37,6 @@ export interface CreateBotOptions {
   users: UserRepository;
   /** Public HTTPS origin (no trailing slash). Used for Mini App WebApp buttons. */
   webAppUrl?: string;
-}
-
-function appUrl(webAppUrl: string): string {
-  if (!webAppUrl) return "";
-  if (webAppUrl.endsWith("/app")) return `${webAppUrl}/`;
-  return `${webAppUrl}/app/`;
-}
-
-function shopUrl(webAppUrl: string): string {
-  if (!webAppUrl) return "";
-  const base = appUrl(webAppUrl);
-  return base ? `${base}shop/` : "";
-}
-
-function airHockeyGameUrl(webAppUrl: string): string {
-  if (!webAppUrl) return "";
-  if (webAppUrl.endsWith("/air-hockey")) return `${webAppUrl}/`;
-  return `${webAppUrl}/air-hockey/`;
 }
 
 /**
@@ -76,31 +73,16 @@ export function createBot(options: CreateBotOptions): Bot {
     return new InlineKeyboard().webApp(label, miniApp);
   }
 
-  /** Clear legacy reply keyboard without leaving a visible spam message. */
-  async function clearReplyKeyboard(ctx: Context): Promise<void> {
-    try {
-      const rm = await ctx.reply("\u2060", {
-        reply_markup: REMOVE_REPLY_KEYBOARD,
-      });
-      if (ctx.chat) {
-        await ctx.api.deleteMessage(ctx.chat.id, rm.message_id).catch(() => {});
-      }
-    } catch {
-      /* ignore — keyboard may already be gone */
-    }
-  }
-
   bot.command("start", async (ctx) => {
     const user = upsertFromContext(ctx);
     const name = user ? publicDisplayName(user) : displayNameFrom(ctx);
+    if (!ctx.chat) return;
 
-    await clearReplyKeyboard(ctx);
-
-    await ctx.reply(welcomeMessage(name), {
-      reply_markup: startInlineKeyboard({
-        miniAppUrl: miniApp,
-        // Shop stays a chat callback (polished literary reply); page exists as stub.
-      }),
+    await sendStartWelcome({
+      api: ctx.api,
+      chatId: ctx.chat.id,
+      displayName: name,
+      miniAppUrl: miniApp,
     });
   });
 
@@ -147,19 +129,4 @@ export function createBot(options: CreateBotOptions): Bot {
   });
 
   return bot;
-}
-
-export function resolveWebAppUrls(webAppUrlRaw: string | undefined): {
-  webAppUrl: string;
-  miniAppUrl: string;
-  airHockeyUrl: string;
-  shopUrl: string;
-} {
-  const webAppUrl = webAppUrlRaw?.trim().replace(/\/?$/, "") ?? "";
-  return {
-    webAppUrl,
-    miniAppUrl: appUrl(webAppUrl),
-    airHockeyUrl: airHockeyGameUrl(webAppUrl),
-    shopUrl: shopUrl(webAppUrl),
-  };
 }
