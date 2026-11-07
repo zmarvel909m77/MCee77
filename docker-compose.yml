@@ -2,6 +2,7 @@
 # Usage:
 #   cp .env.example .env   # set TELEGRAM_BOT_TOKEN + WEBAPP_URL (public HTTPS)
 #   docker compose up --build
+# Optional: set DATABASE_URL to use Postgres instead of the SQLite volume.
 services:
   game-bot:
     build: .
@@ -14,6 +15,7 @@ services:
       BOT_MODE: webhook
       ALLOW_DEV_SCORE_SUBMIT: "false"
       DATABASE_PATH: /data/gamebot.sqlite
+      DATABASE_URL: ${DATABASE_URL:-}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       WEBAPP_URL: ${WEBAPP_URL}
       TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}

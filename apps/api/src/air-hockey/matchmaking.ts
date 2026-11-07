@@ -84,7 +84,7 @@ export class MatchmakingService {
       position: this.queue.length,
       timeoutMs: QUEUE_TIMEOUT_MS,
     });
-    this.tryPair();
+    void this.tryPair();
   }
 
   cancelQueue(telegramId: number): void {
@@ -146,7 +146,7 @@ export class MatchmakingService {
 
     clearTimeout(existing.timer);
     this.inviteWaiters.delete(key);
-    this.createRoomFromPair(
+    void this.createRoomFromPair(
       {
         userId: existing.userId,
         telegramId: existing.telegramId,
@@ -228,7 +228,7 @@ export class MatchmakingService {
     this.roomsByToken.clear();
   }
 
-  private tryPair(): void {
+  private async tryPair(): Promise<void> {
     while (this.queue.length >= 2) {
       const a = this.queue.shift()!;
       const b = this.queue.shift()!;
@@ -241,17 +241,34 @@ export class MatchmakingService {
         continue;
       }
 
-      this.createRoomFromPair(a, b);
+      await this.createRoomFromPair(a, b);
     }
   }
 
-  private createRoomFromPair(a: QueueEntry, b: QueueEntry): void {
-    const match = this.users.createMatch({
-      mode: "online",
-      playerAId: a.userId,
-      playerBId: b.userId,
-      status: "active",
-    });
+  private async createRoomFromPair(
+    a: QueueEntry,
+    b: QueueEntry,
+  ): Promise<void> {
+    let match;
+    try {
+      match = await this.users.createMatch({
+        mode: "online",
+        playerAId: a.userId,
+        playerBId: b.userId,
+        status: "active",
+      });
+    } catch (err) {
+      console.error("createMatch failed", err);
+      this.send(a.socket, {
+        type: "error",
+        message: "Match yaratib bo‘lmadi",
+      });
+      this.send(b.socket, {
+        type: "error",
+        message: "Match yaratib bo‘lmadi",
+      });
+      return;
+    }
 
     const makePlayer = (entry: QueueEntry, seat: Seat): RoomPlayer => ({
       userId: entry.userId,
@@ -278,7 +295,7 @@ export class MatchmakingService {
     }
 
     try {
-      this.users.setMatchRoomId(match.id, room.roomId);
+      await this.users.setMatchRoomId(match.id, room.roomId);
     } catch (err) {
       console.error("setMatchRoomId failed", err);
     }

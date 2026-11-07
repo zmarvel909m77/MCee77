@@ -50,23 +50,25 @@ export function registerPresenceWs(
         }
 
         if (msg.type === "hello") {
-          try {
-            const authed = authenticatePresence(msg, opts);
-            telegramId = authed.telegramId;
-            presence.connect(socket, authed);
-            safeSend(socket, {
-              type: "welcome",
-              telegramId: authed.telegramId,
-              displayName: authed.displayName,
-              users: presence.listOnline(authed.telegramId),
-            });
-          } catch (err) {
-            safeSend(socket, {
-              type: "error",
-              message: err instanceof Error ? err.message : "Auth xato",
-            });
-            socket.close();
-          }
+          void (async () => {
+            try {
+              const authed = await authenticatePresence(msg, opts);
+              telegramId = authed.telegramId;
+              presence.connect(socket, authed);
+              safeSend(socket, {
+                type: "welcome",
+                telegramId: authed.telegramId,
+                displayName: authed.displayName,
+                users: presence.listOnline(authed.telegramId),
+              });
+            } catch (err) {
+              safeSend(socket, {
+                type: "error",
+                message: err instanceof Error ? err.message : "Auth xato",
+              });
+              socket.close();
+            }
+          })();
           return;
         }
 
@@ -82,7 +84,7 @@ export function registerPresenceWs(
         }
 
         if (msg.type === "refresh") {
-          presence.refreshProfile(telegramId);
+          void presence.refreshProfile(telegramId);
           return;
         }
 
@@ -114,20 +116,20 @@ export function registerPresenceWs(
   return presence;
 }
 
-function authenticatePresence(
+async function authenticatePresence(
   msg: PresenceHello,
   opts: {
     users: UserRepository;
     botToken: string;
     allowDevScoreSubmit: boolean;
   },
-): {
+): Promise<{
   userId: string;
   telegramId: number;
   displayName: string;
   avatarUrl: string | null;
   rating: number;
-} {
+}> {
   let telegramId: number;
   let username: string | null = null;
   let displayName: string;
@@ -150,7 +152,7 @@ function authenticatePresence(
     throw new Error("initData kerak (yoki ALLOW_DEV_SCORE_SUBMIT)");
   }
 
-  const user = opts.users.upsertByTelegramId({
+  const user = await opts.users.upsertByTelegramId({
     telegramId,
     username,
     displayName,

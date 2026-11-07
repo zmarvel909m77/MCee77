@@ -116,37 +116,39 @@ export function registerAirHockeyWs(
           return;
         }
 
-        try {
-          authed = authenticate(msg, opts);
-        } catch (err) {
-          safeSend(socket, {
-            type: "error",
-            message: err instanceof Error ? err.message : "Auth xato",
-          });
-          socket.close();
-          return;
-        }
-
-        helloDone = true;
-        safeSend(socket, {
-          type: "welcome",
-          telegramId: authed.telegramId,
-          displayName: authed.displayName,
-        });
-
-        if (msg.roomToken) {
-          const ok = matchmaking.reconnect({
-            roomToken: msg.roomToken,
-            socket,
-            telegramId: authed.telegramId,
-          });
-          if (!ok) {
+        void (async () => {
+          try {
+            authed = await authenticate(msg, opts);
+          } catch (err) {
             safeSend(socket, {
               type: "error",
-              message: "Xona topilmadi — navbatga qo‘shiling",
+              message: err instanceof Error ? err.message : "Auth xato",
             });
+            socket.close();
+            return;
           }
-        }
+
+          helloDone = true;
+          safeSend(socket, {
+            type: "welcome",
+            telegramId: authed.telegramId,
+            displayName: authed.displayName,
+          });
+
+          if (msg.roomToken) {
+            const ok = matchmaking.reconnect({
+              roomToken: msg.roomToken,
+              socket,
+              telegramId: authed.telegramId,
+            });
+            if (!ok) {
+              safeSend(socket, {
+                type: "error",
+                message: "Xona topilmadi — navbatga qo‘shiling",
+              });
+            }
+          }
+        })();
       });
 
       socket.on("close", () => {
@@ -162,14 +164,14 @@ export function registerAirHockeyWs(
   return matchmaking;
 }
 
-function authenticate(
+async function authenticate(
   msg: HelloMessage,
   opts: {
     users: UserRepository;
     botToken: string;
     allowDevScoreSubmit: boolean;
   },
-): { userId: string; telegramId: number; displayName: string } {
+): Promise<{ userId: string; telegramId: number; displayName: string }> {
   let telegramId: number;
   let username: string | null = null;
   let displayName: string;
@@ -192,7 +194,7 @@ function authenticate(
     throw new Error("initData kerak (yoki ALLOW_DEV_SCORE_SUBMIT)");
   }
 
-  const user = opts.users.upsertByTelegramId({
+  const user = await opts.users.upsertByTelegramId({
     telegramId,
     username,
     displayName,

@@ -71,7 +71,7 @@ export function resolveTelegramIdentity(
   };
 }
 
-export function upsertFromIdentity(
+export async function upsertFromIdentity(
   users: UserRepository,
   identity: Extract<ResolvedIdentity, { ok: true }>,
 ) {

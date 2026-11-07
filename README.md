@@ -11,7 +11,7 @@ Primary entry = Telegram Mini App shell at `${WEBAPP_URL}/app/` (Profil · O‘y
 - **Bot:** Node.js + TypeScript + [grammY](https://grammy.dev)
 - **API + Mini App:** Fastify (`/api/v1/*` + static shell/game + WebSocket)
 - **Realtime:** `@fastify/websocket` — presence + Air Hockey matchmaking
-- **DB:** SQLite via `better-sqlite3` (Postgres-ready schema)
+- **DB:** shared `@mcee77/db` — **PostgreSQL** when `DATABASE_URL` is set, else **SQLite** (`better-sqlite3`) for local/dev
 - **Layout:** npm workspaces — `apps/bot`, `apps/api`, `packages/db`, `packages/shared`
 
 ## Scoring / Ball qoidalari
@@ -106,7 +106,7 @@ apps/api/public/air-hockey/   canvas Air Hockey
 apps/api/src/air-hockey/      matchmaking + rooms
 apps/api/src/presence/        online presence + invites
 apps/api/src/admin/           /admin stats panel
-packages/db/                  SQLite users + scores + matches
+packages/db/                  Postgres (DATABASE_URL) or SQLite users/scores/matches
 packages/shared/              types + initData verify
 data/                         Local SQLite + avatars (gitignored)
 ```
@@ -125,27 +125,35 @@ Bitta servis: Fastify (REST + Mini App + WS) **va** grammY webhook.
 | `ADMIN_SECRET` | optional web `/admin` | random string for browser panel |
 | `PORT` | set by host | Railway injects |
 | `BOT_MODE` | optional | `webhook` (Dockerfile default) |
-| `DATABASE_PATH` | optional | `/data/gamebot.sqlite` (must sit on the Volume) |
+| `DATABASE_URL` | **yes on Railway (Trial)** | Reference from Railway PostgreSQL plugin |
+| `DATABASE_PATH` | optional SQLite fallback | `/data/gamebot.sqlite` (only if no `DATABASE_URL`) |
 | `AVATAR_DIR` | optional | `/data/avatars` |
-| `RAILWAY_RUN_UID` | **yes with Volume** | `0` (Volume is root-owned; image runs as `node`) |
+| `RAILWAY_RUN_UID` | only with Volume | `0` (Volume is root-owned; image runs as `node`) |
 | `TELEGRAM_WEBHOOK_SECRET` | optional | random string |
 
-### Railway Volume (required — prevents user wipe on deploy)
+### Railway PostgreSQL (recommended — works on Trial)
 
-SQLite defaults to **`/data/gamebot.sqlite`**. Container disk is ephemeral: without a Volume, every redeploy creates an empty DB → admin broadcast shows **Jami: 0 / Yuborildi: 0**.
+Railway **Trial** often has **no Volumes** in Settings, so SQLite under `/data` is wiped on every deploy. Use Postgres instead:
 
-1. Railway dashboard → your service → **Add Volume** (or Command Palette → Add Volume).
-2. **Mount path must be exactly `/data`** — same path the code uses (do not use `/app/data` unless you also change `DATABASE_PATH`).
-3. Variables → set **`RAILWAY_RUN_UID=0`** so the app can write the Volume.
-4. Redeploy. Check `GET /healthz`:
-   - `databasePath`: `"/data/gamebot.sqlite"`
-   - `volumeMount`: `"/data"`
+1. Railway project → **New** → **Database** → **PostgreSQL**.
+2. Open the **web** (API) service → **Variables** → **Add Variable** / **Reference** → select `DATABASE_URL` from the Postgres service (Railway injects the connection string — do not paste secrets into git).
+3. Redeploy the web service.
+4. Check `GET /healthz`:
+   - `databaseDriver`: `"postgres"`
    - `dbPersistent`: `true`
-   - `users`: count of rows in SQLite
+   - `databasePath`: `null`
+   - `users`: row count (starts at `0` until people `/start` again)
+5. Each player must `/start` [@mcee77bot](https://t.me/mcee77bot) once so their row is upserted into Postgres. Old ephemeral SQLite data cannot be recovered.
 
-CLI alternative: `railway volume add --mount-path /data`
+After this, redeploys keep users, ratings, matches, and admin broadcast recipients.
 
-If users were already lost (no prior Volume), they cannot be recovered from the old ephemeral disk — each person must `/start` [@mcee77bot](https://t.me/mcee77bot) again. After the Volume is attached, future deploys keep the DB.
+### Railway Volume (optional — SQLite only)
+
+Volumes are **optional** when `DATABASE_URL` (Postgres) is set. Use a Volume only if you stay on SQLite or want durable avatar files on disk:
+
+1. Service → **Add Volume** · mount path **`/data`** · set `RAILWAY_RUN_UID=0`.
+2. Leave `DATABASE_URL` unset so the app uses SQLite at `/data/gamebot.sqlite`.
+3. `GET /healthz` → `databaseDriver:"sqlite"`, `dbPersistent:true`, `volumeMount:"/data"`.
 
 ### BotFather Menu Button
 
@@ -170,10 +178,11 @@ Other paths:
 ### Post-merge checklist
 
 1. Merge PR → Railway auto-redeploy (yoki manual redeploy)
-2. `GET /healthz` → `ok: true`, `miniApp: "/app/"`
-3. BotFather Menu Button = `https://…/app/`
-4. Telegram da `/start` → **Air Hockey o‘ynash** → Profil / O‘yin / Reyting
-5. Online o‘yin ball beradi; offline bermaydi
+2. Confirm Postgres: Variables include referenced `DATABASE_URL`
+3. `GET /healthz` → `ok: true`, `databaseDriver: "postgres"`, `miniApp: "/app/"`
+4. BotFather Menu Button = `https://…/app/`
+5. Telegram da `/start` → **Air Hockey o‘ynash** → Profil / O‘yin / Reyting
+6. Online o‘yin ball beradi; offline bermaydi
 
 ## Admin (Telegram — preferred)
 

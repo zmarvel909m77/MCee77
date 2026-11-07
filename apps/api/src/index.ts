@@ -13,11 +13,7 @@ import {
   parseAdminTelegramIds,
   resolveWebAppUrls,
 } from "@mcee77/bot";
-import {
-  createUserRepository,
-  inspectDatabasePersistence,
-  resolveDatabasePath,
-} from "@mcee77/db";
+import { openDatabase, resolveAvatarDir } from "@mcee77/db";
 import { MAX_AVATAR_BYTES, publicDisplayName } from "@mcee77/shared";
 import { registerAdminRoutes } from "./admin/routes.js";
 import { registerAirHockeyWs } from "./air-hockey/ws.js";
@@ -32,8 +28,8 @@ loadEnv({ path: resolve(process.cwd(), "../../.env") });
 loadEnv();
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const databasePath = resolveDatabasePath();
-const dbPersistence = inspectDatabasePersistence(databasePath);
+const { users, config: dbConfig } = await openDatabase();
+const dbPersistence = dbConfig.persistence;
 const host = process.env.API_HOST ?? "0.0.0.0";
 /** Railway / Render inject PORT; fall back to API_PORT for local. */
 const port = Number(process.env.PORT ?? process.env.API_PORT ?? 3000);
@@ -66,15 +62,16 @@ const webhookPath =
   process.env.TELEGRAM_WEBHOOK_PATH?.trim() || "/telegram/webhook";
 const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim() || undefined;
 
-const users = createUserRepository(databasePath);
-const userCountAtBoot = users.countUsers();
-const avatarRoot =
-  process.env.AVATAR_DIR?.trim() ||
-  resolve(dirname(databasePath), "avatars");
+const userCountAtBoot = await users.countUsers();
+const avatarRoot = resolveAvatarDir(dbConfig);
 mkdirSync(avatarRoot, { recursive: true });
 
 console.log(
-  `[db] path=${dbPersistence.absolutePath} users=${userCountAtBoot}` +
+  `[db] driver=${dbPersistence.driver}` +
+    (dbPersistence.absolutePath
+      ? ` path=${dbPersistence.absolutePath}`
+      : " path=(postgres)") +
+    ` users=${userCountAtBoot}` +
     ` persistent=${dbPersistence.persistent}` +
     (dbPersistence.volumeMountPath
       ? ` volumeMount=${dbPersistence.volumeMountPath}`
@@ -111,9 +108,11 @@ app.get("/healthz", async () => ({
   webhookPath: botMode === "webhook" ? webhookPath : null,
   adminBot: Boolean(adminBotToken && adminTelegramIds.size > 0 && botToken),
   adminIdsConfigured: adminTelegramIds.size,
-  /** Absolute SQLite path (no secrets). */
+  /** Active persistence driver — postgres when DATABASE_URL is set. */
+  databaseDriver: dbPersistence.driver,
+  /** Absolute SQLite path, or null when using Postgres (no secrets). */
   databasePath: dbPersistence.absolutePath,
-  users: users.countUsers(),
+  users: await users.countUsers(),
   dbPersistent: dbPersistence.persistent,
   volumeMount: dbPersistence.volumeMountPath,
   matchmaking: matchmaking.stats,
@@ -123,7 +122,7 @@ app.get("/healthz", async () => ({
 app.get("/api/v1/leaderboard", async (request) => {
   const query = request.query as { limit?: string };
   const limit = Math.min(Math.max(Number(query.limit ?? 10) || 10, 1), 50);
-  return { items: users.getLeaderboard(limit) };
+  return { items: await users.getLeaderboard(limit) };
 });
 
 app.get("/api/v1/online", async () => ({
@@ -141,7 +140,7 @@ app.post("/api/v1/me", async (request, reply) => {
   if (!identity.ok) {
     return reply.code(identity.status).send({ error: identity.error });
   }
-  const user = upsertFromIdentity(users, identity);
+  const user = await upsertFromIdentity(users, identity);
   return {
     user: {
       ...user,
@@ -158,7 +157,7 @@ app.get("/api/v1/me", async (request, reply) => {
   if (!Number.isFinite(telegramId) || telegramId <= 0) {
     return reply.code(400).send({ error: "telegram_id required" });
   }
-  const user = users.findByTelegramId(telegramId);
+  const user = await users.findByTelegramId(telegramId);
   if (!user) {
     return reply.code(404).send({ error: "user not found" });
   }
@@ -181,15 +180,15 @@ app.patch("/api/v1/me", async (request, reply) => {
   if (!identity.ok) {
     return reply.code(identity.status).send({ error: identity.error });
   }
-  const user = upsertFromIdentity(users, identity);
+  const user = await upsertFromIdentity(users, identity);
   if (typeof body.nickname !== "string") {
     return reply.code(400).send({ error: "nickname required" });
   }
-  const updated = users.updateProfile({
+  const updated = await users.updateProfile({
     userId: user.id,
     nickname: body.nickname,
   });
-  presence.refreshProfile(updated.telegramId);
+  await presence.refreshProfile(updated.telegramId);
   return {
     user: {
       ...updated,
@@ -224,16 +223,16 @@ app.post("/api/v1/me/avatar", async (request, reply) => {
     return reply.code(400).send({ error: parsed.error });
   }
 
-  const user = upsertFromIdentity(users, identity);
+  const user = await upsertFromIdentity(users, identity);
   const fileName = `${user.id}.${parsed.ext}`;
   const abs = join(avatarRoot, fileName);
   writeFileSync(abs, parsed.buffer);
   const avatarUrl = `/avatars/${fileName}?v=${createHash("sha1").update(parsed.buffer).digest("hex").slice(0, 8)}`;
-  const updated = users.updateProfile({
+  const updated = await users.updateProfile({
     userId: user.id,
     avatarUrl: `/avatars/${fileName}`,
   });
-  presence.refreshProfile(updated.telegramId);
+  await presence.refreshProfile(updated.telegramId);
   return {
     user: {
       ...updated,
@@ -299,8 +298,8 @@ app.post("/api/v1/scores", async (request, reply) => {
   }
 
   // Offline never awards points (product rule) — do not mutate rating/totals.
-  const user = upsertFromIdentity(users, identity);
-  users.touchLastSeen(user.id);
+  const user = await upsertFromIdentity(users, identity);
+  await users.touchLastSeen(user.id);
 
   return {
     ok: true,
@@ -313,7 +312,7 @@ app.post("/api/v1/scores", async (request, reply) => {
 
 app.get("/api/v1/matches/:id", async (request, reply) => {
   const params = request.params as { id: string };
-  const match = users.findMatchById(params.id);
+  const match = await users.findMatchById(params.id);
   if (!match) {
     return reply.code(404).send({ error: "match not found" });
   }
@@ -397,7 +396,7 @@ const shutdown = async () => {
   presence.destroy();
   matchmaking.destroy();
   await app.close();
-  users.close();
+  await users.close();
   process.exit(0);
 };
 
@@ -410,7 +409,9 @@ app.log.info(`Air Hockey Mini App:  http://${host}:${port}/air-hockey/`);
 app.log.info(`Air Hockey WS:        ws://${host}:${port}/ws/air-hockey`);
 app.log.info(`Presence WS:          ws://${host}:${port}/ws/presence`);
 app.log.info(
-  `SQLite: ${dbPersistence.absolutePath} · users=${users.countUsers()} · persistent=${dbPersistence.persistent}`,
+  `DB driver=${dbPersistence.driver}` +
+    (dbPersistence.absolutePath ? ` path=${dbPersistence.absolutePath}` : "") +
+    ` · users=${await users.countUsers()} · persistent=${dbPersistence.persistent}`,
 );
 if (dbPersistence.warning) {
   app.log.warn(dbPersistence.warning);

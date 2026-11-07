@@ -38,7 +38,7 @@ export function registerAdminRoutes(
     if (!requireAdmin(request, reply)) return;
 
     const live = opts.matchmaking.stats;
-    const stats = opts.users.getAdminStats({
+    const stats = await opts.users.getAdminStats({
       airHockey: {
         activeRooms: live.activeRooms,
         queueDepth: live.queueDepth,
@@ -51,7 +51,7 @@ export function registerAdminRoutes(
   app.get("/api/v1/admin/features", async (request, reply) => {
     if (!requireAdmin(request, reply)) return;
     return {
-      features: opts.users.getFeatureFlags({ bypassCache: true }),
+      features: await opts.users.getFeatureFlags({ bypassCache: true }),
     };
   });
 
@@ -76,7 +76,7 @@ export function registerAdminRoutes(
       });
     }
 
-    const features = opts.users.setFeatureFlags(partial);
+    const features = await opts.users.setFeatureFlags(partial);
     return { ok: true, features };
   });
 
@@ -103,7 +103,7 @@ export function registerAdminRoutes(
       });
     }
 
-    const recipients = opts.users.listBroadcastRecipients();
+    const recipients = await opts.users.listBroadcastRecipients();
     const { miniAppUrl } = resolveWebAppUrls(opts.webAppUrl);
 
     broadcastInFlight = broadcastStartWelcome({

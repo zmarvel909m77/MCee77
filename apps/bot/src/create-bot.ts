@@ -1,5 +1,5 @@
 import { Bot, InlineKeyboard, type Context } from "grammy";
-import type { createUserRepository } from "@mcee77/db";
+import type { UserRepository } from "@mcee77/db";
 import { publicDisplayName } from "@mcee77/shared";
 import { BTN, CB } from "./keyboard.js";
 import {
@@ -30,7 +30,7 @@ export {
   type BroadcastMessageResult,
 } from "./broadcast-message.js";
 
-export type UserRepository = ReturnType<typeof createUserRepository>;
+export type { UserRepository };
 
 export interface CreateBotOptions {
   token: string;
@@ -58,7 +58,7 @@ export function createBot(options: CreateBotOptions): Bot {
     return full || from.username || "O‘yinchi";
   }
 
-  function upsertFromContext(ctx: Context) {
+  async function upsertFromContext(ctx: Context) {
     const from = ctx.from;
     if (!from) return null;
     return users.upsertByTelegramId({
@@ -74,7 +74,7 @@ export function createBot(options: CreateBotOptions): Bot {
   }
 
   bot.command("start", async (ctx) => {
-    const user = upsertFromContext(ctx);
+    const user = await upsertFromContext(ctx);
     const name = user ? publicDisplayName(user) : displayNameFrom(ctx);
     if (!ctx.chat) return;
 
@@ -88,7 +88,7 @@ export function createBot(options: CreateBotOptions): Bot {
 
   bot.callbackQuery(CB.shop, async (ctx) => {
     await ctx.answerCallbackQuery();
-    upsertFromContext(ctx);
+    await upsertFromContext(ctx);
     const inline = shopApp
       ? new InlineKeyboard().webApp("Do‘kon sahifasi", shopApp)
       : undefined;
@@ -106,7 +106,7 @@ export function createBot(options: CreateBotOptions): Bot {
   });
 
   bot.command("profile", async (ctx) => {
-    const user = upsertFromContext(ctx);
+    const user = await upsertFromContext(ctx);
     if (!user) {
       await ctx.reply("Foydalanuvchi topilmadi. /start ni bosing.");
       return;
@@ -117,8 +117,8 @@ export function createBot(options: CreateBotOptions): Bot {
   });
 
   bot.command("rating", async (ctx) => {
-    upsertFromContext(ctx);
-    const board = users.getLeaderboard(10);
+    await upsertFromContext(ctx);
+    const board = await users.getLeaderboard(10);
     await ctx.reply(leaderboardMessage(board), {
       reply_markup: openAppInline("Reytingni ochish"),
     });
