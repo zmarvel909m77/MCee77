@@ -33,6 +33,8 @@ const els = {
   nickSave: document.getElementById("nickSave"),
   nickStatus: document.getElementById("nickStatus"),
   profileStatus: document.getElementById("profileStatus"),
+  presenceLine: document.getElementById("presenceLine"),
+  presenceText: document.getElementById("presenceText"),
   statPoints: document.getElementById("statPoints"),
   statRating: document.getElementById("statRating"),
   statGames: document.getElementById("statGames"),
@@ -96,6 +98,12 @@ if (hash === "oyin" || hash === "reyting" || hash === "profil") {
   setTab(hash);
 }
 
+function setPresence(online) {
+  if (!els.presenceLine || !els.presenceText) return;
+  els.presenceLine.classList.toggle("on", online);
+  els.presenceText.textContent = online ? "Onlayn" : "Aloqa yo‘q";
+}
+
 function renderProfile(user) {
   me = user;
   const name = user.publicName || user.nickname || user.displayName || "O‘yinchi";
@@ -103,7 +111,6 @@ function renderProfile(user) {
   els.statPoints.textContent = String(user.totalPoints ?? 0);
   els.statRating.textContent = String(user.rating ?? 1000);
   els.statGames.textContent = String(user.gamesPlayed ?? 0);
-  els.avatarFallback.textContent = (name.trim()[0] || "?").toUpperCase();
   if (user.avatarUrl) {
     els.avatarImg.src = user.avatarUrl;
     els.avatarImg.classList.remove("hidden");
@@ -291,6 +298,7 @@ function connectPresence() {
   presenceWs.onopen = () => {
     presenceWs.send(JSON.stringify({ type: "hello", ...authPayload() }));
     els.connDot.classList.add("on");
+    setPresence(true);
     if (heartbeatTimer) clearInterval(heartbeatTimer);
     heartbeatTimer = setInterval(() => {
       presenceSend({ type: "heartbeat" });
@@ -298,6 +306,7 @@ function connectPresence() {
   };
   presenceWs.onclose = () => {
     els.connDot.classList.remove("on");
+    setPresence(false);
     setTimeout(connectPresence, 2500);
   };
   presenceWs.onmessage = (ev) => {
