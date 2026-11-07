@@ -59,6 +59,7 @@ export function registerPresenceWs(
                 type: "welcome",
                 telegramId: authed.telegramId,
                 displayName: authed.displayName,
+                onlineCount: presence.onlineCount(),
                 users: presence.listOnline(authed.telegramId),
               });
             } catch (err) {

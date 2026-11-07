@@ -116,7 +116,7 @@ app.get("/healthz", async () => ({
   dbPersistent: dbPersistence.persistent,
   volumeMount: dbPersistence.volumeMountPath,
   matchmaking: matchmaking.stats,
-  online: presence.listOnline().length,
+  online: presence.onlineCount(),
 }));
 
 app.get("/api/v1/leaderboard", async (request) => {
@@ -126,8 +126,39 @@ app.get("/api/v1/leaderboard", async (request) => {
 });
 
 app.get("/api/v1/online", async () => ({
+  onlineCount: presence.onlineCount(),
   users: presence.listOnline(),
 }));
+
+/**
+ * HTTP presence keepalive — registers the Mini App viewer as online even when
+ * the presence WebSocket has not authenticated yet (or was dropped by a WebView).
+ * Returns the same peer list the WS `online` event would push.
+ */
+app.post("/api/v1/presence/ping", async (request, reply) => {
+  const body = (request.body ?? {}) as IdentityBody;
+  const identity = resolveTelegramIdentity(body, {
+    botToken,
+    allowDevScoreSubmit,
+    log: request.log,
+  });
+  if (!identity.ok) {
+    return reply.code(identity.status).send({ error: identity.error });
+  }
+  const user = await upsertFromIdentity(users, identity);
+  presence.touchHttp({
+    userId: user.id,
+    telegramId: user.telegramId,
+    displayName: publicDisplayName(user),
+    avatarUrl: user.avatarUrl,
+    rating: user.rating,
+  });
+  return {
+    ok: true,
+    onlineCount: presence.onlineCount(),
+    users: presence.listOnline(user.telegramId),
+  };
+});
 
 /** Authenticated profile bootstrap (initData or dev). */
 app.post("/api/v1/me", async (request, reply) => {
@@ -361,7 +392,7 @@ if (adminBotToken && botToken && adminTelegramIds.size > 0) {
     adminTelegramIds,
     webAppUrl,
     getLiveStats: () => ({
-      onlineCount: presence.listOnline().length,
+      onlineCount: presence.onlineCount(),
       activeRooms: matchmaking.stats.activeRooms,
       queueDepth: matchmaking.stats.queueDepth,
     }),

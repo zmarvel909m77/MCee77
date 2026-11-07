@@ -9,7 +9,8 @@ interface PresenceClient {
   displayName: string;
   avatarUrl: string | null;
   rating: number;
-  socket: WebSocket;
+  /** WebSocket when connected; null for HTTP-only presence pings. */
+  socket: WebSocket | null;
   lastHeartbeat: number;
 }
 
@@ -68,7 +69,7 @@ export class PresenceService {
     },
   ): void {
     const prev = this.clients.get(opts.telegramId);
-    if (prev && prev.socket !== socket) {
+    if (prev?.socket && prev.socket !== socket) {
       try {
         prev.socket.close();
       } catch {
@@ -85,11 +86,37 @@ export class PresenceService {
     this.broadcastOnline();
   }
 
+  /**
+   * HTTP keepalive so Mini App still registers as online when the presence
+   * WebSocket is slow to auth, blocked, or silently dropped by a WebView.
+   */
+  touchHttp(opts: {
+    userId: string;
+    telegramId: number;
+    displayName: string;
+    avatarUrl: string | null;
+    rating: number;
+  }): void {
+    const prev = this.clients.get(opts.telegramId);
+    this.clients.set(opts.telegramId, {
+      ...opts,
+      socket: prev?.socket ?? null,
+      lastHeartbeat: Date.now(),
+    });
+    void this.users.touchLastSeen(opts.userId);
+    this.broadcastOnline();
+  }
+
   heartbeat(telegramId: number): void {
     const c = this.clients.get(telegramId);
     if (!c) return;
     c.lastHeartbeat = Date.now();
     void this.users.touchLastSeen(c.userId);
+  }
+
+  /** Total connected Mini App sessions (includes the viewer). */
+  onlineCount(): number {
+    return this.clients.size;
   }
 
   async refreshProfile(telegramId: number): Promise<void> {
@@ -104,9 +131,11 @@ export class PresenceService {
   }
 
   disconnect(socket: WebSocket): void {
-    for (const [id, c] of this.clients) {
+    for (const [, c] of this.clients) {
       if (c.socket === socket) {
-        this.clients.delete(id);
+        // Drop the socket; HTTP /api/v1/presence/ping may keep them online.
+        // Do not refresh lastHeartbeat — sweep removes if pings stop.
+        c.socket = null;
         this.broadcastOnline();
         return;
       }
@@ -116,8 +145,8 @@ export class PresenceService {
   sendInvite(fromTelegramId: number, toTelegramId: number): void {
     const from = this.clients.get(fromTelegramId);
     const to = this.clients.get(toTelegramId);
-    if (!from) return;
-    if (!to) {
+    if (!from?.socket) return;
+    if (!to?.socket) {
       this.send(from.socket, {
         type: "invite_error",
         message: "O‘yinchi onlayn emas",
@@ -233,10 +262,12 @@ export class PresenceService {
       if (now - c.lastHeartbeat > HEARTBEAT_STALE_MS) {
         this.clients.delete(id);
         changed = true;
-        try {
-          c.socket.close();
-        } catch {
-          /* ignore */
+        if (c.socket) {
+          try {
+            c.socket.close();
+          } catch {
+            /* ignore */
+          }
         }
       }
     }
@@ -247,16 +278,19 @@ export class PresenceService {
   }
 
   private broadcastOnline(): void {
+    const total = this.clients.size;
     for (const c of this.clients.values()) {
+      if (!c.socket) continue;
       this.send(c.socket, {
         type: "online",
+        onlineCount: total,
         users: this.listOnline(c.telegramId),
       });
     }
   }
 
-  private send(socket: WebSocket, msg: Record<string, unknown>): void {
-    if (socket.readyState !== socket.OPEN) return;
+  private send(socket: WebSocket | null, msg: Record<string, unknown>): void {
+    if (!socket || socket.readyState !== socket.OPEN) return;
     try {
       socket.send(JSON.stringify(msg));
     } catch {
