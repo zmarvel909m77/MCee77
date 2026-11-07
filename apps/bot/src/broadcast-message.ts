@@ -1,4 +1,4 @@
-import { Api, InputFile } from "grammy";
+import { Api, GrammyError, InputFile } from "grammy";
 import type { Message } from "@grammyjs/types";
 import { isTelegramBlockedOrGone } from "./start-welcome.js";
 
@@ -11,6 +11,19 @@ export interface BroadcastMessageResult {
   blocked: number;
   failed: number;
   durationMs: number;
+  /** First non-blocked Telegram/API error (no tokens). */
+  firstError?: string;
+}
+
+/** Safe Telegram / generic error text for logs and admin replies (never tokens). */
+export function telegramErrorDetail(err: unknown): string {
+  if (err instanceof GrammyError) {
+    const desc = err.description?.trim();
+    if (desc) return `Telegram ${err.error_code}: ${desc}`;
+    return `Telegram ${err.error_code}: ${err.message}`;
+  }
+  if (err instanceof Error) return err.message;
+  return String(err);
 }
 
 function sleep(ms: number): Promise<void> {
@@ -123,8 +136,6 @@ export interface BroadcastMessageOptions {
   sourceBotToken: string;
   recipients: Array<{ telegramId: number }>;
   message: Message;
-  /** Skip broadcasting back to the admin chat id(s). */
-  skipTelegramIds?: Set<number>;
   ratePerSec?: number;
   onProgress?: (done: number, total: number) => void;
 }
@@ -139,10 +150,12 @@ export async function broadcastAdminMessage(
   let sent = 0;
   let blocked = 0;
   let failed = 0;
+  let firstError: string | undefined;
 
-  const targets = opts.recipients.filter(
-    (r) => !opts.skipTelegramIds?.has(r.telegramId),
-  );
+  // Deliver to every registered game user, including admins who also play.
+  // Telegram user ids are shared across bots; skipping ADMIN_TELEGRAM_IDS
+  // previously dropped the only recipient when the owner was also the admin.
+  const targets = opts.recipients;
   const total = targets.length;
 
   for (let i = 0; i < targets.length; i++) {
@@ -161,9 +174,10 @@ export async function broadcastAdminMessage(
         blocked += 1;
       } else {
         failed += 1;
+        const detail = telegramErrorDetail(err);
+        if (!firstError) firstError = detail;
         console.error(
-          `broadcast message failed for ${row.telegramId}:`,
-          err instanceof Error ? err.message : err,
+          `broadcast message failed for ${row.telegramId}: ${detail}`,
         );
       }
     }
@@ -178,6 +192,7 @@ export async function broadcastAdminMessage(
     blocked,
     failed,
     durationMs: Date.now() - started,
+    firstError,
   };
 }
 

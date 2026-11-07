@@ -31,6 +31,7 @@ export interface BroadcastStartResult {
   blocked: number;
   failed: number;
   durationMs: number;
+  firstError?: string;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -53,8 +54,26 @@ export function buildStartWelcomeText(
 
 export function isTelegramBlockedOrGone(err: unknown): boolean {
   if (!(err instanceof GrammyError)) return false;
-  // 403: blocked / deactivated; 400: chat not found
-  return err.error_code === 403 || err.error_code === 400;
+  // 403: blocked / user deactivated
+  if (err.error_code === 403) return true;
+  // Narrow 400s — do not treat every Bad Request as "blocked"
+  if (err.error_code !== 400) return false;
+  const desc = (err.description ?? err.message).toLowerCase();
+  return (
+    desc.includes("chat not found") ||
+    desc.includes("user is deactivated") ||
+    desc.includes("peer_id_invalid")
+  );
+}
+
+function telegramErrorDetail(err: unknown): string {
+  if (err instanceof GrammyError) {
+    const desc = err.description?.trim();
+    if (desc) return `Telegram ${err.error_code}: ${desc}`;
+    return `Telegram ${err.error_code}: ${err.message}`;
+  }
+  if (err instanceof Error) return err.message;
+  return String(err);
 }
 
 /**
@@ -107,6 +126,7 @@ export async function broadcastStartWelcome(
   let sent = 0;
   let blocked = 0;
   let failed = 0;
+  let firstError: string | undefined;
   const total = opts.recipients.length;
 
   for (let i = 0; i < opts.recipients.length; i++) {
@@ -130,9 +150,10 @@ export async function broadcastStartWelcome(
         blocked += 1;
       } else {
         failed += 1;
+        const detail = telegramErrorDetail(err);
+        if (!firstError) firstError = detail;
         console.error(
-          `broadcast /start failed for ${row.telegramId}:`,
-          err instanceof Error ? err.message : err,
+          `broadcast /start failed for ${row.telegramId}: ${detail}`,
         );
       }
     }
@@ -149,5 +170,6 @@ export async function broadcastStartWelcome(
     blocked,
     failed,
     durationMs: Date.now() - started,
+    firstError,
   };
 }
