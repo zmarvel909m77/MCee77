@@ -1,13 +1,13 @@
 import { resolve } from "node:path";
 import { config as loadEnv } from "dotenv";
-import { Bot, type Context } from "grammy";
+import { Bot, InlineKeyboard, type Context } from "grammy";
 import { createUserRepository } from "@mcee77/db";
 import { BTN, mainKeyboard } from "./keyboard.js";
 import {
   airHockeySoon,
   leaderboardMessage,
   profileMessage,
-  rocketBirdSoon,
+  rocketBirdOpenMessage,
   welcomeMessage,
 } from "./text.js";
 
@@ -21,6 +21,13 @@ if (!token) {
   );
   process.exit(1);
 }
+
+const webAppUrl = process.env.WEBAPP_URL?.trim().replace(/\/?$/, "") ?? "";
+const rocketBirdUrl = webAppUrl
+  ? webAppUrl.endsWith("/rocket-bird")
+    ? `${webAppUrl}/`
+    : `${webAppUrl}/rocket-bird/`
+  : "";
 
 const databasePath =
   process.env.DATABASE_PATH ?? resolve(process.cwd(), "../../data/gamebot.sqlite");
@@ -43,6 +50,11 @@ function upsertFromContext(ctx: Context) {
     username: from.username ?? null,
     displayName: displayNameFrom(ctx),
   });
+}
+
+function rocketBirdKeyboard(): InlineKeyboard | undefined {
+  if (!rocketBirdUrl) return undefined;
+  return new InlineKeyboard().webApp("🚀 O‘ynash", rocketBirdUrl);
 }
 
 bot.command("start", async (ctx) => {
@@ -68,7 +80,10 @@ bot.command("rating", async (ctx) => {
 
 bot.hears(BTN.rocketBird, async (ctx) => {
   upsertFromContext(ctx);
-  await ctx.reply(rocketBirdSoon, { reply_markup: mainKeyboard() });
+  const inline = rocketBirdKeyboard();
+  await ctx.reply(rocketBirdOpenMessage(Boolean(inline)), {
+    reply_markup: inline ?? mainKeyboard(),
+  });
 });
 
 bot.hears(BTN.airHockey, async (ctx) => {
@@ -103,6 +118,12 @@ process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
 console.log("GAME BOT starting (long polling)…");
+if (rocketBirdUrl) {
+  console.log(`Rocket Bird WebApp URL: ${rocketBirdUrl}`);
+} else {
+  console.log("WEBAPP_URL not set — Rocket Bird button will show setup hint.");
+}
+
 await bot.start({
   onStart: (info) => {
     console.log(`Bot @${info.username} is running`);
