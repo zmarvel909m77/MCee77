@@ -1,5 +1,5 @@
 import { Api, Bot, type Context } from "grammy";
-import type { createUserRepository } from "@mcee77/db";
+import type { UserRepository } from "@mcee77/db";
 import { publicDisplayName } from "@mcee77/shared";
 import {
   isAdminTelegramId,
@@ -18,7 +18,7 @@ import { broadcastStartWelcome } from "./start-welcome.js";
 import { leaderboardMessage } from "./text.js";
 import { resolveWebAppUrls } from "./urls.js";
 
-export type UserRepository = ReturnType<typeof createUserRepository>;
+export type { UserRepository };
 
 export interface LiveAdminStats {
   onlineCount: number;
@@ -97,8 +97,8 @@ export function createAdminBot(options: CreateAdminBotOptions): Bot {
     );
   }
 
-  function statsText(): string {
-    const s = options.users.getAdminStats({
+  async function statsText(): Promise<string> {
+    const s = await options.users.getAdminStats({
       airHockey: {
         activeRooms: live().activeRooms,
         queueDepth: live().queueDepth,
@@ -146,7 +146,7 @@ export function createAdminBot(options: CreateAdminBotOptions): Bot {
     pendingBroadcast.delete(ctx.from!.id);
     await ctx.reply("Yangi /start yuborilmoqda…");
     try {
-      const recipients = options.users.listBroadcastRecipients();
+      const recipients = await options.users.listBroadcastRecipients();
       const result = await broadcastStartWelcome({
         api: deliveryApi,
         recipients,
@@ -185,11 +185,11 @@ export function createAdminBot(options: CreateAdminBotOptions): Bot {
   });
 
   bot.command("stats", async (ctx) => {
-    await ctx.reply(statsText(), { reply_markup: adminKeyboard() });
+    await ctx.reply(await statsText(), { reply_markup: adminKeyboard() });
   });
 
   bot.command("rating", async (ctx) => {
-    const board = options.users.getLeaderboard(15);
+    const board = await options.users.getLeaderboard(15);
     await ctx.reply(leaderboardMessage(board), {
       reply_markup: adminKeyboard(),
     });
@@ -218,11 +218,11 @@ export function createAdminBot(options: CreateAdminBotOptions): Bot {
   });
 
   bot.hears(ADMIN_BTN.stats, async (ctx) => {
-    await ctx.reply(statsText(), { reply_markup: adminKeyboard() });
+    await ctx.reply(await statsText(), { reply_markup: adminKeyboard() });
   });
 
   bot.hears(ADMIN_BTN.rating, async (ctx) => {
-    const board = options.users.getLeaderboard(15);
+    const board = await options.users.getLeaderboard(15);
     await ctx.reply(leaderboardMessage(board), {
       reply_markup: adminKeyboard(),
     });
@@ -273,7 +273,7 @@ export function createAdminBot(options: CreateAdminBotOptions): Bot {
     await ctx.reply("Hammaga yuborilmoqda…");
 
     try {
-      const recipients = options.users.listBroadcastRecipients();
+      const recipients = await options.users.listBroadcastRecipients();
       const result = await broadcastAdminMessage({
         deliveryApi,
         sourceApi: ctx.api,

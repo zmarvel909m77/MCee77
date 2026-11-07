@@ -81,7 +81,7 @@ export class PresenceService {
       socket,
       lastHeartbeat: Date.now(),
     });
-    this.users.touchLastSeen(opts.userId);
+    void this.users.touchLastSeen(opts.userId);
     this.broadcastOnline();
   }
 
@@ -89,13 +89,13 @@ export class PresenceService {
     const c = this.clients.get(telegramId);
     if (!c) return;
     c.lastHeartbeat = Date.now();
-    this.users.touchLastSeen(c.userId);
+    void this.users.touchLastSeen(c.userId);
   }
 
-  refreshProfile(telegramId: number): void {
+  async refreshProfile(telegramId: number): Promise<void> {
     const c = this.clients.get(telegramId);
     if (!c) return;
-    const user = this.users.findByTelegramId(telegramId);
+    const user = await this.users.findByTelegramId(telegramId);
     if (!user) return;
     c.displayName = publicDisplayName(user);
     c.avatarUrl = user.avatarUrl;

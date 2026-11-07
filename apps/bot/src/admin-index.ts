@@ -5,11 +5,7 @@
  */
 import { resolve } from "node:path";
 import { config as loadEnv } from "dotenv";
-import {
-  createUserRepository,
-  inspectDatabasePersistence,
-  resolveDatabasePath,
-} from "@mcee77/db";
+import { openDatabase } from "@mcee77/db";
 import { parseAdminTelegramIds } from "./admin-config.js";
 import { createAdminBot } from "./create-admin-bot.js";
 
@@ -45,11 +41,15 @@ const webAppUrl =
     ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
     : "");
 
-const databasePath = resolveDatabasePath();
-const dbPersistence = inspectDatabasePersistence(databasePath);
-const users = createUserRepository(databasePath);
+const { users, config: dbConfig } = await openDatabase();
+const dbPersistence = dbConfig.persistence;
+const userCount = await users.countUsers();
 console.log(
-  `[db] path=${dbPersistence.absolutePath} users=${users.countUsers()}` +
+  `[db] driver=${dbPersistence.driver}` +
+    (dbPersistence.absolutePath
+      ? ` path=${dbPersistence.absolutePath}`
+      : " path=(postgres)") +
+    ` users=${userCount}` +
     ` persistent=${dbPersistence.persistent}`,
 );
 if (dbPersistence.warning) {
@@ -70,8 +70,7 @@ const bot = createAdminBot({
 });
 
 const shutdown = () => {
-  users.close();
-  process.exit(0);
+  void users.close().finally(() => process.exit(0));
 };
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);

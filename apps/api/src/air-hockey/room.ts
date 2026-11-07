@@ -290,7 +290,7 @@ export class GameRoom {
     }
 
     try {
-      this.users.finishMatch({
+      await this.users.finishMatch({
         matchId: this.matchId,
         scoreA: this.state.score[0],
         scoreB: this.state.score[1],
