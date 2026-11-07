@@ -120,8 +120,8 @@ Bitta servis: Fastify (REST + Mini App + WS) **va** grammY webhook.
 | `TELEGRAM_BOT_TOKEN` | **yes** | Game bot (@mcee77bot) token — never commit |
 | `WEBAPP_URL` | **yes** | `https://web-production-05946.up.railway.app` |
 | `ALLOW_DEV_SCORE_SUBMIT` | yes | `false` |
-| `ADMIN_BOT_TOKEN` | for Telegram admin | Second BotFather bot token (never commit) |
-| `ADMIN_TELEGRAM_IDS` | for Telegram admin | Your numeric Telegram id(s), comma-separated |
+| `ADMIN_BOT_TOKEN` | **for Telegram admin** | Token for `@MCee_adminbot` (never commit) |
+| `ADMIN_TELEGRAM_IDS` | **for Telegram admin** | Your numeric Telegram id(s), comma-separated |
 | `ADMIN_SECRET` | optional web `/admin` | random string for browser panel |
 | `PORT` | set by host | Railway injects |
 | `BOT_MODE` | optional | `webhook` (Dockerfile default) |
@@ -161,12 +161,19 @@ Other paths:
 
 ## Admin (Telegram — preferred)
 
-Alohida admin bot (o‘yin boti `@mcee77bot` dan farq qiladi).
+Alohida admin bot: **[@MCee_adminbot](https://t.me/MCee_adminbot)** (o‘yin boti `@mcee77bot` dan farq qiladi).
 
-1. BotFather da yangi bot oching → token ni Railway Variables ga `ADMIN_BOT_TOKEN` qilib qo‘ying (commit qilmang).
-2. O‘z Telegram **raqamli** id ingizni `ADMIN_TELEGRAM_IDS` ga qo‘ying (masalan `123456789`). Id ni `@userinfobot` orqali oling.
-3. Redeploy. API jarayoni admin botni long-polling qiladi; o‘yinchilarga xabarlar `TELEGRAM_BOT_TOKEN` orqali ketadi.
-4. Admin botga `/start` → menyu:
+**Railway Variables (majburiy admin uchun — token/id ni chatga yozmang):**
+
+| Variable | Qiymat |
+|----------|--------|
+| `ADMIN_BOT_TOKEN` | `@MCee_adminbot` BotFather tokeni |
+| `ADMIN_TELEGRAM_IDS` | Sizning raqamli Telegram id (vergul bilan bir nechta mumkin) |
+
+1. BotFather dan `@MCee_adminbot` tokenini oling → Railway da `ADMIN_BOT_TOKEN` (commit qilmang).
+2. O‘z Telegram **raqamli** id ingizni `ADMIN_TELEGRAM_IDS` ga qo‘ying. Id ni `@userinfobot` orqali oling.
+3. Redeploy. API jarayoni `@MCee_adminbot` ni long-polling qiladi; o‘yinchilarga xabarlar `TELEGRAM_BOT_TOKEN` (`@mcee77bot`) orqali ketadi.
+4. [@MCee_adminbot](https://t.me/MCee_adminbot) ga `/start` → menyu:
    - **Statistika** — jami user, online, aktivlik, xonalar
    - **Reyting** — top leaderboard
    - **Hammaga yuborish** — keyingi matn/media barcha o‘yin userlarga
