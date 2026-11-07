@@ -306,6 +306,36 @@ export class UserRepository {
     return row ? mapUser(row) : null;
   }
 
+  /**
+   * All known Telegram user ids for admin /start broadcast.
+   * Ordered by first seen so delivery is stable across runs.
+   */
+  listBroadcastRecipients(): Array<{
+    telegramId: number;
+    displayName: string;
+    nickname: string | null;
+  }> {
+    const rows = this.db
+      .prepare(
+        `
+        SELECT telegram_id, display_name, nickname
+        FROM users
+        ORDER BY created_at ASC
+      `,
+      )
+      .all() as Array<{
+      telegram_id: number;
+      display_name: string;
+      nickname: string | null;
+    }>;
+
+    return rows.map((row) => ({
+      telegramId: row.telegram_id,
+      displayName: row.display_name,
+      nickname: row.nickname ?? null,
+    }));
+  }
+
   findById(id: string): User | null {
     const row = this.db
       .prepare(`SELECT * FROM users WHERE id = ?`)

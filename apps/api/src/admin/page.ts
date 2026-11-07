@@ -87,6 +87,17 @@ export function renderAdminStatsPage(): string {
       <h2>Top reyting</h2>
       <ol id="topList" class="top-list"></ol>
     </section>
+
+    <section class="broadcast" aria-label="Botni yangilash">
+      <div class="broadcast-head">
+        <div>
+          <h2>Botni yangilash</h2>
+          <p class="sub tight">Barcha foydalanuvchilarga yangi /start (O‘ynash · Do‘kon) yuboriladi; eski reply klaviatura olib tashlanadi. Chat tarixini faqat foydalanuvchi «Tozalash» qila oladi.</p>
+        </div>
+        <button type="button" id="broadcastStart">Hammaga /start yuborish</button>
+      </div>
+      <p class="sub" id="broadcastStatus">Faqat aniq bosilganda ishlaydi — avtomatik takrorlanmaydi.</p>
+    </section>
   </main>
   <script>${ADMIN_JS}</script>
 </body>
@@ -274,6 +285,28 @@ h2 {
 .top-list .pts { color: var(--accent-2); font-weight: 700; font-variant-numeric: tabular-nums; }
 .empty { color: var(--muted); margin: 0; }
 code { color: var(--accent-2); }
+.broadcast {
+  margin-top: 18px;
+  padding: 20px;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: var(--card);
+}
+.broadcast-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.broadcast-head h2 { margin-bottom: 4px; }
+.sub.tight { margin: 0; font-size: 0.88rem; max-width: 48ch; }
+#broadcastStatus { margin: 0; min-height: 1.2em; }
+#broadcastStart:disabled { opacity: 0.55; cursor: wait; }
+@media (max-width: 520px) {
+  .broadcast-head { flex-direction: column; align-items: stretch; }
+  .broadcast-head button { width: 100%; }
+}
 `;
 
 const ADMIN_JS = `
@@ -289,6 +322,8 @@ const ADMIN_JS = `
     gamesToday: document.getElementById("gamesToday"),
     topList: document.getElementById("topList"),
     refresh: document.getElementById("refresh"),
+    broadcastStart: document.getElementById("broadcastStart"),
+    broadcastStatus: document.getElementById("broadcastStatus"),
   };
 
   function fmt(n) {
@@ -352,7 +387,49 @@ const ADMIN_JS = `
     }
   }
 
+  async function broadcastStart() {
+    const ok = window.confirm(
+      "Barcha foydalanuvchilarga yangi /start yuborilsinmi?\\n\\nBu amal faqat bir marta, siz bosganingizda ishlaydi."
+    );
+    if (!ok) return;
+
+    els.broadcastStart.disabled = true;
+    els.broadcastStatus.textContent = "Yuborilmoqda… biroz kuting";
+    try {
+      const res = await fetch("/api/v1/admin/broadcast-start", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+      });
+      if (authRedirect(res)) return;
+      const data = await res.json().catch(function () { return {}; });
+      if (res.status === 409) {
+        els.broadcastStatus.textContent =
+          "Allaqachon ketmoqda — tugashini kuting";
+        return;
+      }
+      if (!res.ok) {
+        throw new Error(
+          (data && (data.message || data.error)) || ("HTTP " + res.status)
+        );
+      }
+      els.broadcastStatus.textContent =
+        "Tayyor: " +
+        fmt(data.sent) + " yuborildi · " +
+        fmt(data.blocked) + " bloklagan · " +
+        fmt(data.failed) + " xato · jami " +
+        fmt(data.total) +
+        " (" + Math.round((Number(data.durationMs) || 0) / 1000) + " s)";
+    } catch (err) {
+      els.broadcastStatus.textContent =
+        "Xato: " + (err && err.message ? err.message : "yuborish");
+    } finally {
+      els.broadcastStart.disabled = false;
+    }
+  }
+
   els.refresh.addEventListener("click", loadStats);
+  els.broadcastStart.addEventListener("click", broadcastStart);
   loadStats();
   setInterval(loadStats, 15000);
 })();

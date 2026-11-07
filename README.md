@@ -162,7 +162,8 @@ Other paths:
 1. Railway Variables ga `ADMIN_SECRET`
 2. `/admin?key=SECRET`
 3. Statistika: foydalanuvchilar, aktivlik, Air Hockey xonalari/navbat, top reyting
-4. JSON: `GET /api/v1/admin/stats`
+4. **Botni yangilash** → **Hammaga /start yuborish** (bir marta, aniq bosilganda): barcha DB userlarga yangi welcome + inline tugmalar; eski reply keyboard olib tashlanadi. Chat tarixini faqat foydalanuvchi «Tozalash / Clear history» qila oladi.
+5. JSON: `GET /api/v1/admin/stats`, `POST /api/v1/admin/broadcast-start`
 
 ## Notes
 

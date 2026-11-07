@@ -297,26 +297,28 @@ app.get("/air-hockey", async (_request, reply) =>
   reply.redirect("/air-hockey/", 302),
 );
 
-registerAdminRoutes(app, { users, matchmaking });
-
 let bot: ReturnType<typeof createBot> | null = null;
 
-if (botMode === "webhook") {
-  if (!botToken) {
-    app.log.error(
-      "BOT_MODE=webhook requires TELEGRAM_BOT_TOKEN — webhook not registered",
-    );
-  } else {
-    bot = createBot({ token: botToken, users, webAppUrl });
-    const handleUpdate = webhookCallback(bot, "fastify", {
-      secretToken: webhookSecret,
-    });
-    app.post(webhookPath, async (request, reply) => {
-      await handleUpdate(request, reply);
-    });
-    app.log.info(`Telegram webhook route ready at POST ${webhookPath}`);
-  }
+// Bot instance is needed for webhook handling and admin /start broadcast.
+if (botToken) {
+  bot = createBot({ token: botToken, users, webAppUrl });
+} else if (botMode === "webhook") {
+  app.log.error(
+    "BOT_MODE=webhook requires TELEGRAM_BOT_TOKEN — webhook not registered",
+  );
 }
+
+if (botMode === "webhook" && bot) {
+  const handleUpdate = webhookCallback(bot, "fastify", {
+    secretToken: webhookSecret,
+  });
+  app.post(webhookPath, async (request, reply) => {
+    await handleUpdate(request, reply);
+  });
+  app.log.info(`Telegram webhook route ready at POST ${webhookPath}`);
+}
+
+registerAdminRoutes(app, { users, matchmaking, bot, webAppUrl });
 
 const publicRoot = resolve(__dirname, "../public");
 if (existsSync(publicRoot)) {

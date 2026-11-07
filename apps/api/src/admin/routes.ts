@@ -1,4 +1,10 @@
 import type { FastifyInstance } from "fastify";
+import type { Bot } from "grammy";
+import {
+  broadcastStartWelcome,
+  resolveWebAppUrls,
+  type BroadcastStartResult,
+} from "@mcee77/bot";
 import type { UserRepository } from "@mcee77/db";
 import {
   FEATURE_FLAG_KEYS,
@@ -20,8 +26,14 @@ export function registerAdminRoutes(
   opts: {
     users: UserRepository;
     matchmaking: MatchmakingService;
+    /** When set, admin can broadcast /start via Telegram API. */
+    bot?: Bot | null;
+    webAppUrl?: string;
   },
 ): void {
+  /** One explicit broadcast at a time — never auto-repeat. */
+  let broadcastInFlight: Promise<BroadcastStartResult> | null = null;
+
   app.get("/api/v1/admin/stats", async (request, reply) => {
     if (!requireAdmin(request, reply)) return;
 
@@ -66,6 +78,52 @@ export function registerAdminRoutes(
 
     const features = opts.users.setFeatureFlags(partial);
     return { ok: true, features };
+  });
+
+  /**
+   * Explicit admin action: re-send current /start (ReplyKeyboardRemove +
+   * welcome + inline O‘ynash/Do‘kon) to every stored telegram user.
+   * Bots cannot clear private chat history — only the user can.
+   */
+  app.post("/api/v1/admin/broadcast-start", async (request, reply) => {
+    if (!requireAdmin(request, reply)) return;
+
+    const bot = opts.bot ?? null;
+    if (!bot) {
+      return reply.code(503).send({
+        error: "bot_unavailable",
+        message: "TELEGRAM_BOT_TOKEN / bot instance yo‘q — broadcast imkonsiz",
+      });
+    }
+
+    if (broadcastInFlight) {
+      return reply.code(409).send({
+        error: "broadcast_in_progress",
+        message: "Broadcast allaqachon ketmoqda — tugashini kuting",
+      });
+    }
+
+    const recipients = opts.users.listBroadcastRecipients();
+    const { miniAppUrl } = resolveWebAppUrls(opts.webAppUrl);
+
+    broadcastInFlight = broadcastStartWelcome({
+      api: bot.api,
+      recipients,
+      miniAppUrl,
+    });
+
+    try {
+      const result = await broadcastInFlight;
+      return result;
+    } catch (err) {
+      request.log.error({ err }, "admin broadcast-start failed");
+      return reply.code(500).send({
+        error: "broadcast_failed",
+        message: err instanceof Error ? err.message : "unknown",
+      });
+    } finally {
+      broadcastInFlight = null;
+    }
   });
 
   app.get("/admin/", async (_request, reply) =>
