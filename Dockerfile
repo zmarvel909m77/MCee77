@@ -27,6 +27,8 @@ FROM node:20-bookworm-slim AS runtime
 
 WORKDIR /app
 
+# SQLite + avatars live under /data. On Railway, attach a Volume mounted at
+# /data and set RAILWAY_RUN_UID=0 (volume is root-owned; we run as node).
 ENV NODE_ENV=production \
     ALLOW_DEV_SCORE_SUBMIT=false \
     BOT_MODE=webhook \

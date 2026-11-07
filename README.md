@@ -125,11 +125,27 @@ Bitta servis: Fastify (REST + Mini App + WS) **va** grammY webhook.
 | `ADMIN_SECRET` | optional web `/admin` | random string for browser panel |
 | `PORT` | set by host | Railway injects |
 | `BOT_MODE` | optional | `webhook` (Dockerfile default) |
-| `DATABASE_PATH` | optional | `/data/gamebot.sqlite` |
+| `DATABASE_PATH` | optional | `/data/gamebot.sqlite` (must sit on the Volume) |
 | `AVATAR_DIR` | optional | `/data/avatars` |
+| `RAILWAY_RUN_UID` | **yes with Volume** | `0` (Volume is root-owned; image runs as `node`) |
 | `TELEGRAM_WEBHOOK_SECRET` | optional | random string |
 
-Volume: mount `/data` so SQLite + avatars survive restarts.
+### Railway Volume (required — prevents user wipe on deploy)
+
+SQLite defaults to **`/data/gamebot.sqlite`**. Container disk is ephemeral: without a Volume, every redeploy creates an empty DB → admin broadcast shows **Jami: 0 / Yuborildi: 0**.
+
+1. Railway dashboard → your service → **Add Volume** (or Command Palette → Add Volume).
+2. **Mount path must be exactly `/data`** — same path the code uses (do not use `/app/data` unless you also change `DATABASE_PATH`).
+3. Variables → set **`RAILWAY_RUN_UID=0`** so the app can write the Volume.
+4. Redeploy. Check `GET /healthz`:
+   - `databasePath`: `"/data/gamebot.sqlite"`
+   - `volumeMount`: `"/data"`
+   - `dbPersistent`: `true`
+   - `users`: count of rows in SQLite
+
+CLI alternative: `railway volume add --mount-path /data`
+
+If users were already lost (no prior Volume), they cannot be recovered from the old ephemeral disk — each person must `/start` [@mcee77bot](https://t.me/mcee77bot) again. After the Volume is attached, future deploys keep the DB.
 
 ### BotFather Menu Button
 
