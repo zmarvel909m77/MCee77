@@ -143,7 +143,7 @@ export class UserRepository {
         nickname TEXT,
         avatar_url TEXT,
         total_points INTEGER NOT NULL DEFAULT 0,
-        rating INTEGER NOT NULL DEFAULT 1000,
+        rating INTEGER NOT NULL DEFAULT 0,
         games_played INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
@@ -171,7 +171,7 @@ export class UserRepository {
 
       CREATE TABLE IF NOT EXISTS matches (
         id TEXT PRIMARY KEY,
-        game TEXT NOT NULL DEFAULT 'air_hockey',
+        game TEXT NOT NULL DEFAULT 'karate',
         mode TEXT NOT NULL,
         status TEXT NOT NULL,
         player_a_id TEXT NOT NULL REFERENCES users(id),
@@ -204,7 +204,7 @@ export class UserRepository {
         nickname TEXT,
         avatar_url TEXT,
         total_points INTEGER NOT NULL DEFAULT 0,
-        rating INTEGER NOT NULL DEFAULT 1000,
+        rating INTEGER NOT NULL DEFAULT 0,
         games_played INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
@@ -229,7 +229,7 @@ export class UserRepository {
 
       CREATE TABLE IF NOT EXISTS matches (
         id TEXT PRIMARY KEY,
-        game TEXT NOT NULL DEFAULT 'air_hockey',
+        game TEXT NOT NULL DEFAULT 'karate',
         mode TEXT NOT NULL,
         status TEXT NOT NULL,
         player_a_id TEXT NOT NULL REFERENCES users(id),
@@ -429,7 +429,8 @@ export class UserRepository {
         SELECT telegram_id, username, display_name, nickname, avatar_url,
                total_points, rating
         FROM users
-        ORDER BY total_points DESC, rating DESC, created_at ASC
+        WHERE total_points > 0
+        ORDER BY total_points DESC, games_played ASC, created_at ASC
         LIMIT ?
       `,
       [limit],
@@ -450,7 +451,8 @@ export class UserRepository {
   }
 
   /**
-   * Persist a session score and bump user total_points, rating, games_played.
+   * Persist a Karate run. total_points / rating store the personal best only:
+   * if run ≤ stored best, keep best; if higher, update.
    */
   async submitScore(input: SubmitScoreInput): Promise<SubmitScoreResult> {
     const now = new Date().toISOString();
@@ -460,8 +462,14 @@ export class UserRepository {
         throw new Error("user not found");
       }
 
+      const previousBest = user.totalPoints;
+      const isNewBest = input.points > previousBest;
+      const nextBest = isNewBest ? input.points : previousBest;
+
       const scoreId = randomUUID();
-      const metaJson = input.meta ? JSON.stringify(input.meta) : null;
+      const metaJson = input.meta
+        ? JSON.stringify({ ...input.meta, isNewBest, previousBest })
+        : JSON.stringify({ isNewBest, previousBest });
       const scoreRow = await this.db.get<ScoreRow>(
         `
           INSERT INTO scores (id, user_id, game, mode, points, meta, created_at)
@@ -482,21 +490,23 @@ export class UserRepository {
       const updated = await this.db.get<UserRow>(
         `
           UPDATE users
-          SET total_points = total_points + ?,
-              rating = rating + ?,
+          SET total_points = ?,
+              rating = ?,
               games_played = games_played + 1,
               updated_at = ?,
               last_seen_at = ?
           WHERE id = ?
           RETURNING *
         `,
-        [input.points, input.points, now, now, input.userId],
+        [nextBest, nextBest, now, now, input.userId],
       );
 
       return {
         score: mapScore(scoreRow!),
         user: mapUser(updated!),
-        pointsAwarded: input.points,
+        pointsAwarded: isNewBest ? input.points - previousBest : 0,
+        isNewBest,
+        previousBest,
       };
     });
   }
@@ -510,7 +520,7 @@ export class UserRepository {
         INSERT INTO matches (
           id, game, mode, status, player_a_id, player_b_id,
           score_a, score_b, winner_id, room_id, started_at, ended_at
-        ) VALUES (?, 'air_hockey', ?, ?, ?, ?, 0, 0, NULL, ?, ?, NULL)
+        ) VALUES (?, 'karate', ?, ?, ?, ?, 0, 0, NULL, ?, ?, NULL)
         RETURNING *
       `,
       [
@@ -601,7 +611,7 @@ export class UserRepository {
           await this.db.run(
             `
               INSERT INTO scores (id, user_id, game, mode, points, meta, created_at)
-              VALUES (?, ?, 'air_hockey', ?, ?, ?, ?)
+              VALUES (?, ?, 'karate', ?, ?, ?, ?)
             `,
             [
               randomUUID(),
@@ -619,18 +629,21 @@ export class UserRepository {
           );
         }
 
+        // Legacy match finish: treat awarded points as a candidate best score.
+        const current = await this.findById(userId);
+        const best = Math.max(current?.totalPoints ?? 0, points);
         const updated = await this.db.get<UserRow>(
           `
             UPDATE users
-            SET total_points = total_points + ?,
-                rating = rating + ?,
+            SET total_points = ?,
+                rating = ?,
                 games_played = games_played + 1,
                 updated_at = ?,
                 last_seen_at = ?
             WHERE id = ?
             RETURNING *
           `,
-          [points, points, now, now, userId],
+          [best, best, now, now, userId],
         );
         return updated!;
       };
@@ -660,13 +673,9 @@ export class UserRepository {
   }
 
   /**
-   * Admin dashboard counters. Live Air Hockey rooms/queue come from the
-   * in-memory matchmaking service and are merged by the API layer.
+   * Admin dashboard counters — DB users, Karate runs, and high-score board.
    */
-  async getAdminStats(opts?: {
-    airHockey?: { activeRooms: number; queueDepth: number };
-    topLimit?: number;
-  }): Promise<AdminStats> {
+  async getAdminStats(opts?: { topLimit?: number }): Promise<AdminStats> {
     const now = new Date();
     const isoNow = now.toISOString();
     const dayStart = new Date(now);
@@ -685,39 +694,31 @@ export class UserRepository {
       [ago24h],
     );
 
-    const soloOfflineTodayRow = await this.db.get<{ n: number }>(
+    const gamesTodayRow = await this.db.get<{ n: number }>(
       `
           SELECT COUNT(*) AS n FROM scores
           WHERE created_at >= ?
-            AND mode IN ('solo', 'offline')
+            AND game = 'karate'
         `,
       [dayStartIso],
     );
 
-    const matchesTodayRow = await this.db.get<{ n: number }>(
-      `
-          SELECT COUNT(*) AS n FROM matches
-          WHERE status IN ('finished', 'aborted')
-            AND COALESCE(ended_at, started_at) >= ?
-        `,
-      [dayStartIso],
+    const karatePlayersRow = await this.db.get<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM users WHERE total_points > 0`,
+    );
+    const topScoreRow = await this.db.get<{ n: number }>(
+      `SELECT COALESCE(MAX(total_points), 0) AS n FROM users`,
     );
 
-    const activeRooms = opts?.airHockey?.activeRooms ?? 0;
-    const queueDepth = opts?.airHockey?.queueDepth ?? 0;
     const topLimit = Math.min(Math.max(opts?.topLimit ?? 5, 1), 20);
 
     return {
       totalUsers,
       activeToday: Number(activeTodayRow?.n ?? 0),
       active24h: Number(active24hRow?.n ?? 0),
-      gamesToday:
-        Number(soloOfflineTodayRow?.n ?? 0) + Number(matchesTodayRow?.n ?? 0),
-      airHockey: {
-        activeRooms,
-        approxPlayers: activeRooms * 2,
-        queueDepth,
-      },
+      gamesToday: Number(gamesTodayRow?.n ?? 0),
+      karatePlayers: Number(karatePlayersRow?.n ?? 0),
+      topKarateScore: Number(topScoreRow?.n ?? 0),
       topRating: await this.getLeaderboard(topLimit),
       generatedAt: isoNow,
     };
@@ -742,7 +743,9 @@ export class UserRepository {
     );
 
     for (const row of rows) {
-      const id = row.key.slice(FEATURE_SETTING_PREFIX.length) as FeatureFlagKey;
+      const raw = row.key.slice(FEATURE_SETTING_PREFIX.length);
+      // Legacy Air Hockey toggle → Karate.
+      const id = (raw === "air_hockey" ? "karate" : raw) as FeatureFlagKey;
       if (!(FEATURE_FLAG_KEYS as readonly string[]).includes(id)) continue;
       flags[id] = row.value === "1" || row.value === "true";
     }

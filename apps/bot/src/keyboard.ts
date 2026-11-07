@@ -2,8 +2,8 @@ import { InlineKeyboard } from "grammy";
 
 /** Inline button labels (Uzbek Latin). */
 export const BTN = {
-  play: "🏒 Air Hockey o‘ynash",
-  shop: "🛒 Do‘kon",
+  play: "🥋 O‘ynash",
+  shop: "🛒 Magazin",
   open: "OCHISH",
 } as const;
 
@@ -19,8 +19,8 @@ export interface StartInlineOptions {
 }
 
 /**
- * Stacked inline keyboard under /start (Shashka-style).
- * No reply keyboard. No “Mini o‘yinlar”.
+ * Stacked inline keyboard under /start.
+ * No reply keyboard.
  */
 export function startInlineKeyboard(opts: StartInlineOptions = {}): InlineKeyboard {
   const mini = opts.miniAppUrl?.trim() ?? "";

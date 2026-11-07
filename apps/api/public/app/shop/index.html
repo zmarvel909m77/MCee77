@@ -6,25 +6,24 @@
       name="viewport"
       content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
     />
-    <title>Do‘kon — AIR HOCKEY</title>
+    <title>Magazin — GAME BOT</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Sora:wght@600;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap"
       rel="stylesheet"
     />
     <style>
       :root {
-        --bg0: #07101c;
-        --bg1: #12263f;
-        --ice: #7ec8ff;
-        --text: #f4f8fc;
-        --muted: #9db4d0;
-        --card: rgba(255, 255, 255, 0.06);
-        --line: rgba(255, 255, 255, 0.12);
+        --bg0: #09070f;
+        --bg1: #120e1c;
+        --text: #ffffff;
+        --muted: #a89bc8;
+        --accent: #c4b5fd;
+        --card: rgba(43, 29, 95, 0.35);
+        --line: rgba(180, 160, 230, 0.18);
         --font: "Manrope", system-ui, sans-serif;
-        --display: "Sora", "Manrope", sans-serif;
       }
       * {
         box-sizing: border-box;
@@ -36,9 +35,9 @@
         color: var(--text);
         font-family: var(--font);
         background:
-          radial-gradient(80% 60% at 20% 0%, rgba(126, 200, 255, 0.18), transparent 55%),
-          radial-gradient(70% 50% at 100% 20%, rgba(46, 196, 182, 0.12), transparent 50%),
+          radial-gradient(80% 60% at 20% 0%, rgba(139, 108, 240, 0.22), transparent 55%),
           linear-gradient(165deg, var(--bg1), var(--bg0) 60%);
+        overscroll-behavior: none;
       }
       body {
         padding: 28px 20px 40px;
@@ -60,13 +59,13 @@
         text-transform: uppercase;
         font-size: 0.72rem;
         font-weight: 800;
-        color: var(--ice);
+        color: var(--accent);
       }
       h1 {
         margin: 0 0 14px;
-        font-family: var(--display);
         font-size: 1.7rem;
         letter-spacing: -0.02em;
+        font-weight: 800;
       }
       p {
         margin: 0;
@@ -94,14 +93,11 @@
   </head>
   <body>
     <main>
-      <p class="brand">AIR HOCKEY</p>
-      <h1>Do‘kon</h1>
-      <p>
-        Hozircha do‘kon javonlari bo‘sh — omborimiz yangi resurslar bilan
-        to‘ldirilmoqda.
-      </p>
-      <p>Tez orada bu yerda sovg‘alar va imkoniyatlar paydo bo‘ladi.</p>
-      <button type="button" class="back" id="backBtn">O‘yinga qaytish</button>
+      <p class="brand">MCee77</p>
+      <h1>Magazin</h1>
+      <p>Hozircha resurslar yo‘q — omborimiz yangi imkoniyatlar bilan to‘ldirilmoqda.</p>
+      <p>Tez orada bu yerda sovg‘alar paydo bo‘ladi.</p>
+      <button type="button" class="back" id="backBtn">O‘yinlarga qaytish</button>
     </main>
     <script>
       (function () {
@@ -116,7 +112,7 @@
           } catch (_) {}
         }
         document.getElementById("backBtn").addEventListener("click", function () {
-          window.location.href = "../";
+          window.location.href = "../#oyinlar";
         });
       })();
     </script>

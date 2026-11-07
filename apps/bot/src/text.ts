@@ -3,40 +3,35 @@ import { publicDisplayName } from "@mcee77/shared";
 
 /**
  * /start welcome — short Uzbek Latin (shared by /start + reset_start broadcast).
- * `displayName` kept for call-site compatibility; greeting omitted so the
- * copy matches the product template closely.
  */
 export function welcomeMessage(_displayName: string): string {
   return [
-    "🎮 Online Air hockey’ga xush kelibsiz!",
+    "🥋 GAME BOT ga xush kelibsiz!",
     "",
-    "Do‘stlaringiz bilan o‘ynang va reytingingizni oshiring!",
+    "Karate o‘ynang, rekordingizni yangilang va reytingda yuqoriga chiqing.",
     "",
-    "👇 O‘yinni boshlash uchun tugmani bosing:",
+    "👇 Mini Appni ochish uchun tugmani bosing:",
   ].join("\n");
 }
 
 /** Do‘kon — resources not ready yet (literary, polite). */
 export function shopUnavailableMessage(): string {
   return [
-    "Do‘kon",
+    "Magazin",
     "",
-    "Hozircha do‘kon javonlari bo‘sh — omborimiz yangi resurslar bilan to‘ldirilmoqda.",
+    "Hozircha resurslar yo‘q — omborimiz yangi imkoniyatlar bilan to‘ldirilmoqda.",
     "",
-    "Tez orada bu yerda sovg‘alar va imkoniyatlar paydo bo‘ladi. Sabr-toqatingiz uchun rahmat.",
+    "Tez orada bu yerda sovg‘alar paydo bo‘ladi. Sabr-toqatingiz uchun rahmat.",
   ].join("\n");
 }
 
 export function profileMessage(user: User): string {
-  const handle = user.username ? `@${user.username}` : "—";
   return [
     "👤 Profil",
     "",
-    `Ism: ${publicDisplayName(user)}`,
-    `Username: ${handle}`,
-    `O‘yin: Air Hockey`,
-    `Ball: ${user.totalPoints}`,
-    `Reyting: ${user.rating}`,
+    `Taxallus: ${publicDisplayName(user)}`,
+    `O‘yin: Karate`,
+    `Eng yaxshi ball: ${user.totalPoints}`,
     `O‘yinlar: ${user.gamesPlayed}`,
     "",
     "Profil Mini App ichida ochiladi.",
@@ -48,20 +43,19 @@ export function leaderboardMessage(entries: LeaderboardEntry[]): string {
     return [
       "🏆 Reyting",
       "",
-      "Hali hech kim ball yig‘magan.",
-      "Online Air Hockey o‘ynab birinchi bo‘ling!",
+      "Hali hech kim rekord qo‘ymagan.",
+      "Karate o‘ynab birinchi bo‘ling!",
       "",
       "Reyting Mini App ichida ochiladi.",
     ].join("\n");
   }
 
   const lines = entries.map((e) => {
-    const name = e.username ? `@${e.username}` : e.displayName;
-    return `${e.rank}. ${name} — ${e.totalPoints} ball · ${e.rating}`;
+    return `${e.rank}. ${e.displayName} — ${e.totalPoints} ball`;
   });
 
   return [
-    "🏆 Reyting (top)",
+    "🏆 Reyting (Karate)",
     "",
     ...lines,
     "",
@@ -72,14 +66,14 @@ export function leaderboardMessage(entries: LeaderboardEntry[]): string {
 export function miniAppOpenMessage(hasWebApp: boolean): string {
   if (hasWebApp) {
     return [
-      "🏒 AIR HOCKEY",
+      "🥋 GAME BOT",
       "",
       "Mini App ochish uchun pastdagi tugmani bosing.",
-      "Profil · O‘yin · Reyting — barchasi ichida.",
+      "Magazin · O‘yinlar · Reyting",
     ].join("\n");
   }
   return [
-    "🏒 AIR HOCKEY",
+    "🥋 GAME BOT",
     "",
     "WEBAPP_URL sozlanmagan.",
     "Serverda HTTPS Mini App URL ni `.env` ga qo‘ying.",

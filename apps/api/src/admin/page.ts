@@ -62,29 +62,29 @@ export function renderAdminStatsPage(): string {
         <p class="hint">24 soatda: <span id="active24h">—</span></p>
       </article>
       <article class="stat accent">
-        <p class="label">Hozir o‘yinda</p>
-        <p class="num" id="inGame">—</p>
-        <p class="hint">xonalar · taxminiy o‘yinchilar</p>
+        <p class="label">Karate rekordchilar</p>
+        <p class="num" id="karatePlayers">—</p>
+        <p class="hint">eng yuqori: <span id="topKarateScore">—</span></p>
       </article>
     </section>
 
-    <section class="row" aria-label="Jonli Air Hockey">
-      <article class="stat compact">
-        <p class="label">Air Hockey xonalari</p>
-        <p class="num sm" id="activeRooms">—</p>
-      </article>
-      <article class="stat compact">
-        <p class="label">Navbat</p>
-        <p class="num sm" id="queueDepth">—</p>
-      </article>
+    <section class="row" aria-label="Karate">
       <article class="stat compact">
         <p class="label">Bugungi o‘yinlar</p>
         <p class="num sm" id="gamesToday">—</p>
       </article>
+      <article class="stat compact">
+        <p class="label">Rekordchilar</p>
+        <p class="num sm" id="karatePlayers2">—</p>
+      </article>
+      <article class="stat compact">
+        <p class="label">Eng yaxshi ball</p>
+        <p class="num sm" id="topKarateScore2">—</p>
+      </article>
     </section>
 
     <section class="top" aria-label="Top reyting">
-      <h2>Top reyting</h2>
+      <h2>Top Karate</h2>
       <ol id="topList" class="top-list"></ol>
     </section>
 
@@ -316,9 +316,10 @@ const ADMIN_JS = `
     totalUsers: document.getElementById("totalUsers"),
     activeToday: document.getElementById("activeToday"),
     active24h: document.getElementById("active24h"),
-    inGame: document.getElementById("inGame"),
-    activeRooms: document.getElementById("activeRooms"),
-    queueDepth: document.getElementById("queueDepth"),
+    karatePlayers: document.getElementById("karatePlayers"),
+    karatePlayers2: document.getElementById("karatePlayers2"),
+    topKarateScore: document.getElementById("topKarateScore"),
+    topKarateScore2: document.getElementById("topKarateScore2"),
     gamesToday: document.getElementById("gamesToday"),
     topList: document.getElementById("topList"),
     refresh: document.getElementById("refresh"),
@@ -342,11 +343,11 @@ const ADMIN_JS = `
     els.totalUsers.textContent = fmt(data.totalUsers);
     els.activeToday.textContent = fmt(data.activeToday);
     els.active24h.textContent = fmt(data.active24h);
-    els.activeRooms.textContent = fmt(data.airHockey.activeRooms);
-    els.queueDepth.textContent = fmt(data.airHockey.queueDepth);
     els.gamesToday.textContent = fmt(data.gamesToday);
-    els.inGame.textContent =
-      fmt(data.airHockey.activeRooms) + " · ≈" + fmt(data.airHockey.approxPlayers);
+    els.karatePlayers.textContent = fmt(data.karatePlayers);
+    els.karatePlayers2.textContent = fmt(data.karatePlayers);
+    els.topKarateScore.textContent = fmt(data.topKarateScore);
+    els.topKarateScore2.textContent = fmt(data.topKarateScore);
     const when = new Date(data.generatedAt);
     els.updated.textContent = "Yangilangan: " + when.toLocaleString("uz-UZ");
 
@@ -365,8 +366,7 @@ const ADMIN_JS = `
         '<span class="rank">' + row.rank + "</span>" +
         '<span class="name"></span>' +
         '<span class="pts"></span>';
-      li.querySelector(".name").textContent =
-        row.displayName + (row.username ? " @" + row.username : "");
+      li.querySelector(".name").textContent = row.displayName;
       li.querySelector(".pts").textContent = fmt(row.totalPoints) + " ball";
       els.topList.appendChild(li);
     }

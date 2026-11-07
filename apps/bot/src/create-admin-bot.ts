@@ -20,12 +20,6 @@ import { resolveWebAppUrls } from "./urls.js";
 
 export type { UserRepository };
 
-export interface LiveAdminStats {
-  onlineCount: number;
-  activeRooms: number;
-  queueDepth: number;
-}
-
 export interface CreateAdminBotOptions {
   /** BotFather token for the separate admin bot. */
   adminToken: string;
@@ -38,7 +32,6 @@ export interface CreateAdminBotOptions {
   /** Comma-separated or pre-parsed allowlist. */
   adminTelegramIds: string | Set<number>;
   webAppUrl?: string;
-  getLiveStats?: () => LiveAdminStats;
 }
 
 /** Admins waiting to send the next message as a fan-out broadcast. */
@@ -92,35 +85,17 @@ export function createAdminBot(options: CreateAdminBotOptions): Bot {
     );
   }
 
-  function live(): LiveAdminStats {
-    return (
-      options.getLiveStats?.() ?? {
-        onlineCount: 0,
-        activeRooms: 0,
-        queueDepth: 0,
-      }
-    );
-  }
-
   async function statsText(): Promise<string> {
-    const s = await options.users.getAdminStats({
-      airHockey: {
-        activeRooms: live().activeRooms,
-        queueDepth: live().queueDepth,
-      },
-      topLimit: 5,
-    });
-    const online = live().onlineCount;
+    const s = await options.users.getAdminStats({ topLimit: 5 });
     return [
       "📊 Statistika",
       "",
       `Jami foydalanuvchilar: ${s.totalUsers}`,
-      `Online (Mini App): ${online}`,
       `Bugun aktiv: ${s.activeToday}`,
       `24 soatda: ${s.active24h}`,
-      `Bugungi o‘yinlar: ${s.gamesToday}`,
-      `Air Hockey xonalari: ${s.airHockey.activeRooms}`,
-      `Navbat: ${s.airHockey.queueDepth}`,
+      `Bugungi Karate: ${s.gamesToday}`,
+      `Rekordchilar: ${s.karatePlayers}`,
+      `Eng yaxshi ball: ${s.topKarateScore}`,
       "",
       `Yangilangan: ${new Date(s.generatedAt).toLocaleString("uz-UZ")}`,
     ].join("\n");

@@ -22,7 +22,6 @@ export {
   createAdminBot,
   parseAdminTelegramIds,
   type CreateAdminBotOptions,
-  type LiveAdminStats,
 } from "./create-admin-bot.js";
 export { resolveWebAppUrls } from "./urls.js";
 export {
@@ -90,7 +89,7 @@ export function createBot(options: CreateBotOptions): Bot {
     await ctx.answerCallbackQuery();
     await upsertFromContext(ctx);
     const inline = shopApp
-      ? new InlineKeyboard().webApp("Do‘kon sahifasi", shopApp)
+      ? new InlineKeyboard().webApp("Magazin", shopApp)
       : undefined;
     await ctx.reply(shopUnavailableMessage(), {
       reply_markup: inline,

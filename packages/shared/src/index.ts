@@ -1,6 +1,6 @@
 /** Shared domain types for GAME BOT (Postgres-ready shape). */
 
-export type GameId = "rocket_bird" | "air_hockey";
+export type GameId = "karate" | "rocket_bird";
 
 export type GameMode = "solo" | "offline" | "online";
 
@@ -16,12 +16,16 @@ export interface User {
   nickname: string | null;
   /** Public path or URL for profile photo (e.g. /avatars/<id>.jpg). */
   avatarUrl: string | null;
+  /**
+   * Karate high score (best run). Never decreases when a lower run is submitted.
+   */
   totalPoints: number;
+  /** Mirror of best score for display / legacy leaderboard sorting. */
   rating: number;
   gamesPlayed: number;
   createdAt: string;
   updatedAt: string;
-  /** ISO timestamp of last /start, score, or WS join (best-effort activity). */
+  /** ISO timestamp of last /start, score, or Mini App open (best-effort activity). */
   lastSeenAt: string | null;
 }
 
@@ -36,27 +40,26 @@ export interface AdminStats {
   activeToday: number;
   active24h: number;
   gamesToday: number;
-  airHockey: {
-    activeRooms: number;
-    approxPlayers: number;
-    queueDepth: number;
-  };
+  /** Players with a Karate best score &gt; 0. */
+  karatePlayers: number;
+  /** Highest stored Karate best score. */
+  topKarateScore: number;
   topRating: LeaderboardEntry[];
   generatedAt: string;
 }
 
 /** Bot main-menu / command feature toggles (admin-controlled). */
-export type FeatureFlagKey = "air_hockey" | "rating" | "profile" | "mini_app";
+export type FeatureFlagKey = "karate" | "rating" | "profile" | "mini_app";
 
 export interface FeatureFlags {
-  air_hockey: boolean;
+  karate: boolean;
   rating: boolean;
   profile: boolean;
   mini_app: boolean;
 }
 
 export const FEATURE_FLAG_KEYS: readonly FeatureFlagKey[] = [
-  "air_hockey",
+  "karate",
   "rating",
   "profile",
   "mini_app",
@@ -64,14 +67,14 @@ export const FEATURE_FLAG_KEYS: readonly FeatureFlagKey[] = [
 
 /** Defaults: every section ON. */
 export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
-  air_hockey: true,
+  karate: true,
   rating: true,
   profile: true,
   mini_app: true,
 };
 
 export const FEATURE_FLAG_LABELS: Record<FeatureFlagKey, string> = {
-  air_hockey: "Air Hockey",
+  karate: "Karate",
   rating: "Reyting",
   profile: "Profil",
   mini_app: "Mini App",
@@ -83,14 +86,8 @@ export interface LeaderboardEntry {
   displayName: string;
   username: string | null;
   avatarUrl: string | null;
+  /** Karate best score. */
   totalPoints: number;
-  rating: number;
-}
-
-export interface OnlineUser {
-  telegramId: number;
-  displayName: string;
-  avatarUrl: string | null;
   rating: number;
 }
 
@@ -127,7 +124,11 @@ export interface SubmitScoreInput {
 export interface SubmitScoreResult {
   score: ScoreRecord;
   user: User;
+  /** Points applied to the stored best (0 if run ≤ previous best). */
   pointsAwarded: number;
+  /** True when this run set a new personal best. */
+  isNewBest: boolean;
+  previousBest: number;
 }
 
 export interface MatchRecord {
@@ -159,7 +160,6 @@ export interface FinishMatchInput {
   scoreB: number;
   winnerId: string | null;
   status?: Extract<MatchStatus, "finished" | "aborted">;
-  /** Points awarded to player A / B (rating + total_points). */
   pointsA: number;
   pointsB: number;
 }
@@ -170,28 +170,14 @@ export interface FinishMatchResult {
   playerB: User | null;
 }
 
-/** Max accepted session score (anti-cheat cap for MVP). */
+/** Anti-cheat cap for a single Karate run. */
+export const MAX_KARATE_SCORE = 10_000;
+
+/** Max accepted session score (legacy Rocket Bird). */
 export const MAX_ROCKET_BIRD_SCORE = 500;
-
-/**
- * Offline never awards rating/points (product rule).
- * Cap kept at 0 so legacy client submits are clamped to zero.
- */
-export const MAX_AIR_HOCKEY_OFFLINE_POINTS = 0;
-
-/** Online match point deltas (server-authoritative). */
-export const AIR_HOCKEY_ONLINE_WIN_POINTS = 25;
-export const AIR_HOCKEY_ONLINE_LOSS_POINTS = 8;
-export const AIR_HOCKEY_ONLINE_ABORT_POINTS = 0;
-
-/** Offline: no points (win or lose). */
-export const AIR_HOCKEY_OFFLINE_WIN_POINTS = 0;
-export const AIR_HOCKEY_OFFLINE_LOSS_POINTS = 0;
 
 /** Avatar upload hard limit (bytes) after decode. */
 export const MAX_AVATAR_BYTES = 512 * 1024;
-
-export const AIR_HOCKEY_WIN_SCORE = 5;
 
 /** Points added to total_points equal session score; rating += same for MVP. */
 export function clampRocketBirdScore(raw: number): number {
@@ -199,12 +185,12 @@ export function clampRocketBirdScore(raw: number): number {
   return Math.min(Math.floor(raw), MAX_ROCKET_BIRD_SCORE);
 }
 
-export function clampAirHockeyOfflinePoints(raw: number): number {
+export function clampKarateScore(raw: number): number {
   if (!Number.isFinite(raw) || raw < 0) return 0;
-  return Math.min(Math.floor(raw), MAX_AIR_HOCKEY_OFFLINE_POINTS);
+  return Math.min(Math.floor(raw), MAX_KARATE_SCORE);
 }
 
-export const DEFAULT_RATING = 1000;
+export const DEFAULT_RATING = 0;
 export const DEFAULT_TOTAL_POINTS = 0;
 
 export {

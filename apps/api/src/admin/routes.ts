@@ -11,7 +11,6 @@ import {
   type FeatureFlagKey,
   type FeatureFlags,
 } from "@mcee77/shared";
-import type { MatchmakingService } from "../air-hockey/matchmaking.js";
 import {
   adminConfigured,
   adminCookieHeader,
@@ -25,7 +24,6 @@ export function registerAdminRoutes(
   app: FastifyInstance,
   opts: {
     users: UserRepository;
-    matchmaking: MatchmakingService;
     /** When set, admin can broadcast /start via Telegram API. */
     bot?: Bot | null;
     webAppUrl?: string;
@@ -36,16 +34,7 @@ export function registerAdminRoutes(
 
   app.get("/api/v1/admin/stats", async (request, reply) => {
     if (!requireAdmin(request, reply)) return;
-
-    const live = opts.matchmaking.stats;
-    const stats = await opts.users.getAdminStats({
-      airHockey: {
-        activeRooms: live.activeRooms,
-        queueDepth: live.queueDepth,
-      },
-      topLimit: 5,
-    });
-    return stats;
+    return opts.users.getAdminStats({ topLimit: 5 });
   });
 
   app.get("/api/v1/admin/features", async (request, reply) => {

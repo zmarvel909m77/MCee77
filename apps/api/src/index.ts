@@ -5,7 +5,6 @@ import { fileURLToPath } from "node:url";
 import { config as loadEnv } from "dotenv";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
-import websocket from "@fastify/websocket";
 import { webhookCallback } from "grammy";
 import {
   createAdminBot,
@@ -14,15 +13,17 @@ import {
   resolveWebAppUrls,
 } from "@mcee77/bot";
 import { openDatabase, resolveAvatarDir } from "@mcee77/db";
-import { MAX_AVATAR_BYTES, publicDisplayName } from "@mcee77/shared";
+import {
+  MAX_AVATAR_BYTES,
+  clampKarateScore,
+  publicDisplayName,
+} from "@mcee77/shared";
 import { registerAdminRoutes } from "./admin/routes.js";
-import { registerAirHockeyWs } from "./air-hockey/ws.js";
 import {
   resolveTelegramIdentity,
   upsertFromIdentity,
   type IdentityBody,
 } from "./auth-identity.js";
-import { registerPresenceWs } from "./presence/ws.js";
 
 loadEnv({ path: resolve(process.cwd(), "../../.env") });
 loadEnv();
@@ -46,7 +47,7 @@ const webAppUrl =
     ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
     : "");
 
-const { miniAppUrl, airHockeyUrl } = resolveWebAppUrls(webAppUrl);
+const { miniAppUrl } = resolveWebAppUrls(webAppUrl);
 
 const botModeRaw = (process.env.BOT_MODE ?? "").trim().toLowerCase();
 const botMode: "webhook" | "long_polling" | "none" =
@@ -83,27 +84,11 @@ if (dbPersistence.warning) {
 
 const app = Fastify({ logger: true, bodyLimit: MAX_AVATAR_BYTES + 64_000 });
 
-await app.register(websocket);
-
-const matchmaking = registerAirHockeyWs(app, {
-  users,
-  botToken,
-  allowDevScoreSubmit,
-});
-
-const presence = registerPresenceWs(app, {
-  users,
-  botToken,
-  allowDevScoreSubmit,
-});
-
 app.get("/healthz", async () => ({
   ok: true,
   service: "game-bot-api",
   miniApp: "/app/",
-  airHockey: "/air-hockey/",
-  airHockeyWs: "/ws/air-hockey",
-  presenceWs: "/ws/presence",
+  karate: "/karate/",
   botMode,
   webhookPath: botMode === "webhook" ? webhookPath : null,
   adminBot: Boolean(adminBotToken && adminTelegramIds.size > 0 && botToken),
@@ -115,8 +100,6 @@ app.get("/healthz", async () => ({
   users: await users.countUsers(),
   dbPersistent: dbPersistence.persistent,
   volumeMount: dbPersistence.volumeMountPath,
-  matchmaking: matchmaking.stats,
-  online: presence.onlineCount(),
 }));
 
 app.get("/api/v1/leaderboard", async (request) => {
@@ -125,40 +108,14 @@ app.get("/api/v1/leaderboard", async (request) => {
   return { items: await users.getLeaderboard(limit) };
 });
 
-app.get("/api/v1/online", async () => ({
-  onlineCount: presence.onlineCount(),
-  users: presence.listOnline(),
-}));
-
-/**
- * HTTP presence keepalive — registers the Mini App viewer as online even when
- * the presence WebSocket has not authenticated yet (or was dropped by a WebView).
- * Returns the same peer list the WS `online` event would push.
- */
-app.post("/api/v1/presence/ping", async (request, reply) => {
-  const body = (request.body ?? {}) as IdentityBody;
-  const identity = resolveTelegramIdentity(body, {
-    botToken,
-    allowDevScoreSubmit,
-    log: request.log,
-  });
-  if (!identity.ok) {
-    return reply.code(identity.status).send({ error: identity.error });
-  }
-  const user = await upsertFromIdentity(users, identity);
-  presence.touchHttp({
-    userId: user.id,
-    telegramId: user.telegramId,
-    displayName: publicDisplayName(user),
-    avatarUrl: user.avatarUrl,
-    rating: user.rating,
-  });
+function userPayload(user: Awaited<ReturnType<typeof upsertFromIdentity>>) {
   return {
-    ok: true,
-    onlineCount: presence.onlineCount(),
-    users: presence.listOnline(user.telegramId),
+    ...user,
+    publicName: publicDisplayName(user),
+    game: "Karate",
+    karateBestScore: user.totalPoints,
   };
-});
+}
 
 /** Authenticated profile bootstrap (initData or dev). */
 app.post("/api/v1/me", async (request, reply) => {
@@ -172,13 +129,7 @@ app.post("/api/v1/me", async (request, reply) => {
     return reply.code(identity.status).send({ error: identity.error });
   }
   const user = await upsertFromIdentity(users, identity);
-  return {
-    user: {
-      ...user,
-      publicName: publicDisplayName(user),
-      game: "Air Hockey",
-    },
-  };
+  return { user: userPayload(user) };
 });
 
 /** Legacy query lookup still used by older clients. */
@@ -192,13 +143,7 @@ app.get("/api/v1/me", async (request, reply) => {
   if (!user) {
     return reply.code(404).send({ error: "user not found" });
   }
-  return {
-    user: {
-      ...user,
-      publicName: publicDisplayName(user),
-      game: "Air Hockey",
-    },
-  };
+  return { user: userPayload(user) };
 });
 
 app.patch("/api/v1/me", async (request, reply) => {
@@ -219,14 +164,7 @@ app.patch("/api/v1/me", async (request, reply) => {
     userId: user.id,
     nickname: body.nickname,
   });
-  await presence.refreshProfile(updated.telegramId);
-  return {
-    user: {
-      ...updated,
-      publicName: publicDisplayName(updated),
-      game: "Air Hockey",
-    },
-  };
+  return { user: userPayload(updated) };
 });
 
 interface AvatarBody extends IdentityBody {
@@ -263,12 +201,9 @@ app.post("/api/v1/me/avatar", async (request, reply) => {
     userId: user.id,
     avatarUrl: `/avatars/${fileName}`,
   });
-  await presence.refreshProfile(updated.telegramId);
   return {
     user: {
-      ...updated,
-      publicName: publicDisplayName(updated),
-      game: "Air Hockey",
+      ...userPayload(updated),
       avatarUrl,
     },
   };
@@ -306,10 +241,10 @@ interface ScoreBody extends IdentityBody {
 
 app.post("/api/v1/scores", async (request, reply) => {
   const body = (request.body ?? {}) as ScoreBody;
-  const game = body.game ?? "air_hockey";
-  if (game !== "air_hockey") {
+  const game = body.game ?? "karate";
+  if (game !== "karate") {
     return reply.code(400).send({
-      error: "faqat air_hockey qo‘llab-quvvatlanadi",
+      error: "faqat karate qo‘llab-quvvatlanadi",
     });
   }
 
@@ -322,32 +257,25 @@ app.post("/api/v1/scores", async (request, reply) => {
     return reply.code(identity.status).send({ error: identity.error });
   }
 
-  if (body.mode === "online") {
-    return reply.code(400).send({
-      error: "online air hockey results are server-authoritative",
-    });
-  }
-
-  // Offline never awards points (product rule) — do not mutate rating/totals.
+  const points = clampKarateScore(Number(body.points ?? 0));
   const user = await upsertFromIdentity(users, identity);
-  await users.touchLastSeen(user.id);
+  const result = await users.submitScore({
+    userId: user.id,
+    game: "karate",
+    mode: "solo",
+    points,
+    meta: body.meta ?? null,
+  });
 
   return {
     ok: true,
-    pointsAwarded: 0,
-    score: null,
-    user,
-    note: "Offline o‘yin ball bermaydi",
+    pointsAwarded: result.pointsAwarded,
+    isNewBest: result.isNewBest,
+    previousBest: result.previousBest,
+    bestScore: result.user.totalPoints,
+    score: result.score,
+    user: userPayload(result.user),
   };
-});
-
-app.get("/api/v1/matches/:id", async (request, reply) => {
-  const params = request.params as { id: string };
-  const match = await users.findMatchById(params.id);
-  if (!match) {
-    return reply.code(404).send({ error: "match not found" });
-  }
-  return { match };
 });
 
 app.get("/", async (_request, reply) => reply.redirect("/app/", 302));
@@ -355,8 +283,15 @@ app.get("/app", async (_request, reply) => reply.redirect("/app/", 302));
 app.get("/app/shop", async (_request, reply) =>
   reply.redirect("/app/shop/", 302),
 );
+app.get("/karate", async (_request, reply) =>
+  reply.redirect("/karate/", 302),
+);
+/** Legacy Air Hockey deep links → games tab. */
 app.get("/air-hockey", async (_request, reply) =>
-  reply.redirect("/air-hockey/", 302),
+  reply.redirect("/app/#oyinlar", 302),
+);
+app.get("/air-hockey/", async (_request, reply) =>
+  reply.redirect("/app/#oyinlar", 302),
 );
 
 let bot: ReturnType<typeof createBot> | null = null;
@@ -380,7 +315,7 @@ if (botMode === "webhook" && bot) {
   app.log.info(`Telegram webhook route ready at POST ${webhookPath}`);
 }
 
-registerAdminRoutes(app, { users, matchmaking, bot, webAppUrl });
+registerAdminRoutes(app, { users, bot, webAppUrl });
 
 /** Separate admin bot (long polling). Delivers to players via TELEGRAM_BOT_TOKEN. */
 let adminBot: ReturnType<typeof createAdminBot> | null = null;
@@ -391,11 +326,6 @@ if (adminBotToken && botToken && adminTelegramIds.size > 0) {
     users,
     adminTelegramIds,
     webAppUrl,
-    getLiveStats: () => ({
-      onlineCount: presence.onlineCount(),
-      activeRooms: matchmaking.stats.activeRooms,
-      queueDepth: matchmaking.stats.queueDepth,
-    }),
   });
   app.log.info(
     `Admin bot configured for ids: ${[...adminTelegramIds].join(", ")}`,
@@ -424,8 +354,6 @@ const shutdown = async () => {
   } catch {
     /* ignore */
   }
-  presence.destroy();
-  matchmaking.destroy();
   await app.close();
   await users.close();
   process.exit(0);
@@ -435,10 +363,8 @@ process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
 await app.listen({ host, port });
-app.log.info(`Mini App shell:       http://${host}:${port}/app/`);
-app.log.info(`Air Hockey Mini App:  http://${host}:${port}/air-hockey/`);
-app.log.info(`Air Hockey WS:        ws://${host}:${port}/ws/air-hockey`);
-app.log.info(`Presence WS:          ws://${host}:${port}/ws/presence`);
+app.log.info(`Mini App shell:  http://${host}:${port}/app/`);
+app.log.info(`Karate Mini App: http://${host}:${port}/karate/`);
 app.log.info(
   `DB driver=${dbPersistence.driver}` +
     (dbPersistence.absolutePath ? ` path=${dbPersistence.absolutePath}` : "") +
@@ -447,7 +373,7 @@ app.log.info(
 if (dbPersistence.warning) {
   app.log.warn(dbPersistence.warning);
 }
-app.log.info(`Avatars dir:          ${avatarRoot}`);
+app.log.info(`Avatars dir:     ${avatarRoot}`);
 
 if (bot && botMode === "webhook") {
   if (!webAppUrl) {
@@ -466,7 +392,6 @@ if (bot && botMode === "webhook") {
         `Telegram webhook set for @${me.username}: ${webhookUrl}`,
       );
       if (miniAppUrl) app.log.info(`Mini App Menu Button URL: ${miniAppUrl}`);
-      if (airHockeyUrl) app.log.info(`Air Hockey WebApp: ${airHockeyUrl}`);
     } catch (err) {
       app.log.error({ err }, `failed to setWebhook(${webhookUrl})`);
     }
