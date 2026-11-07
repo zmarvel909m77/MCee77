@@ -144,14 +144,14 @@
             <span id="onlineCount" class="badge">0</span>
           </div>
           <ul id="onlineList" class="user-list"></ul>
-          <p id="onlineEmpty" class="empty hidden">
+          <p id="onlineEmpty" class="empty">
             <span class="empty-ico" aria-hidden="true">
               <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5">
                 <circle cx="12" cy="12" r="9"/>
                 <path d="M3 12h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18Z"/>
               </svg>
             </span>
-            Hozircha onlayn o‘yinchi yo‘q
+            <span data-empty-label>Hozircha onlayn o‘yinchi yo‘q</span>
           </p>
 
           <div id="inviteBanner" class="invite-banner hidden">
@@ -216,6 +216,6 @@
         </button>
       </nav>
     </div>
-    <script src="./app.js" type="module"></script>
+    <script src="./app.js" defer></script>
   </body>
 </html>
