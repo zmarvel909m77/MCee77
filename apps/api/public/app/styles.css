@@ -643,6 +643,16 @@ button.ghost {
   place-items: center;
 }
 
+.tab-ico-ball {
+  filter: drop-shadow(0 0 5px rgba(47, 214, 200, 0.45));
+  transition: filter 160ms ease, transform 160ms ease;
+}
+
+.tab.active .tab-ico-ball {
+  filter: drop-shadow(0 0 8px rgba(126, 240, 228, 0.7));
+  transform: translateY(-0.5px);
+}
+
 .hidden {
   display: none !important;
 }

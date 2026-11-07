@@ -183,8 +183,29 @@
 
       <nav class="tabbar" aria-label="Asosiy menyu">
         <button type="button" class="tab active" data-tab="profil">
-          <span class="tab-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 12a4.5 4.5 0 1 0-4.5-4.5A4.5 4.5 0 0 0 12 12Zm0 2.25c-4 0-7.5 2-7.5 4.5V21h15v-2.25c0-2.5-3.5-4.5-7.5-4.5Z"/></svg>
+          <span class="tab-ico tab-ico-ball" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
+              <defs>
+                <radialGradient id="eBallCore" cx="38%" cy="32%" r="68%">
+                  <stop offset="0%" stop-color="#e8fbff"/>
+                  <stop offset="42%" stop-color="#7ef0e4"/>
+                  <stop offset="78%" stop-color="#2fd6c8"/>
+                  <stop offset="100%" stop-color="#0e7490"/>
+                </radialGradient>
+                <linearGradient id="eBallRing" x1="4" y1="4" x2="20" y2="20" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#a5f3fc"/>
+                  <stop offset="1" stop-color="#22d3ee"/>
+                </linearGradient>
+              </defs>
+              <circle cx="12" cy="12" r="9.2" fill="url(#eBallCore)" opacity="0.95"/>
+              <circle cx="12" cy="12" r="9.2" stroke="url(#eBallRing)" stroke-width="1.35" fill="none"/>
+              <ellipse cx="12" cy="12" rx="9.2" ry="3.4" stroke="#a5f3fc" stroke-width="0.9" opacity="0.55" fill="none"/>
+              <ellipse cx="12" cy="12" rx="3.4" ry="9.2" stroke="#67e8f9" stroke-width="0.9" opacity="0.45" fill="none"/>
+              <path d="M4.6 9.2c2.4 1.1 5.1 1.7 7.4 1.7s5-.6 7.4-1.7" stroke="#e8fbff" stroke-width="0.75" opacity="0.35" fill="none"/>
+              <circle cx="9.1" cy="8.2" r="2.1" fill="#ffffff" opacity="0.55"/>
+              <circle cx="12" cy="12" r="2.2" fill="#031216" opacity="0.35"/>
+              <circle cx="12" cy="12" r="1.15" fill="#e8fbff" opacity="0.9"/>
+            </svg>
           </span>
           <span>Profil</span>
         </button>
