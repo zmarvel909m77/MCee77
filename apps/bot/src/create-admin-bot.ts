@@ -93,7 +93,7 @@ export function createAdminBot(options: CreateAdminBotOptions): Bot {
       `Jami foydalanuvchilar: ${s.totalUsers}`,
       `Bugun aktiv: ${s.activeToday}`,
       `24 soatda: ${s.active24h}`,
-      `Bugungi Karate: ${s.gamesToday}`,
+      `Bugungi City Strike: ${s.gamesToday}`,
       `Rekordchilar: ${s.karatePlayers}`,
       `Eng yaxshi ball: ${s.topKarateScore}`,
       "",

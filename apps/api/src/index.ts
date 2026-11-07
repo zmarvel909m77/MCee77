@@ -88,7 +88,8 @@ app.get("/healthz", async () => ({
   ok: true,
   service: "game-bot-api",
   miniApp: "/app/",
-  karate: "/karate/",
+  karate: "/city-strike/",
+  cityStrike: "/city-strike/",
   botMode,
   webhookPath: botMode === "webhook" ? webhookPath : null,
   adminBot: Boolean(adminBotToken && adminTelegramIds.size > 0 && botToken),
@@ -112,7 +113,7 @@ function userPayload(user: Awaited<ReturnType<typeof upsertFromIdentity>>) {
   return {
     ...user,
     publicName: publicDisplayName(user),
-    game: "Karate",
+    game: "City Strike",
     karateBestScore: user.totalPoints,
   };
 }
@@ -242,9 +243,9 @@ interface ScoreBody extends IdentityBody {
 app.post("/api/v1/scores", async (request, reply) => {
   const body = (request.body ?? {}) as ScoreBody;
   const game = body.game ?? "karate";
-  if (game !== "karate") {
+  if (game !== "karate" && game !== "city_strike") {
     return reply.code(400).send({
-      error: "faqat karate qo‘llab-quvvatlanadi",
+      error: "faqat City Strike qo‘llab-quvvatlanadi",
     });
   }
 
@@ -283,8 +284,15 @@ app.get("/app", async (_request, reply) => reply.redirect("/app/", 302));
 app.get("/app/shop", async (_request, reply) =>
   reply.redirect("/app/shop/", 302),
 );
+app.get("/city-strike", async (_request, reply) =>
+  reply.redirect("/city-strike/", 302),
+);
+/** Legacy Karate deep links → City Strike. */
 app.get("/karate", async (_request, reply) =>
-  reply.redirect("/karate/", 302),
+  reply.redirect("/city-strike/", 302),
+);
+app.get("/karate/", async (_request, reply) =>
+  reply.redirect("/city-strike/", 302),
 );
 /** Legacy Air Hockey deep links → games tab. */
 app.get("/air-hockey", async (_request, reply) =>
@@ -364,7 +372,7 @@ process.on("SIGTERM", shutdown);
 
 await app.listen({ host, port });
 app.log.info(`Mini App shell:  http://${host}:${port}/app/`);
-app.log.info(`Karate Mini App: http://${host}:${port}/karate/`);
+app.log.info(`City Strike Mini App: http://${host}:${port}/city-strike/`);
 app.log.info(
   `DB driver=${dbPersistence.driver}` +
     (dbPersistence.absolutePath ? ` path=${dbPersistence.absolutePath}` : "") +

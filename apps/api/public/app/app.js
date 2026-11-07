@@ -34,7 +34,7 @@ const els = {
   nickStatus: document.getElementById("nickStatus"),
   profileStatus: document.getElementById("profileStatus"),
   statBest: document.getElementById("statBest"),
-  playKarateBtn: document.getElementById("playKarateBtn"),
+  playCityStrikeBtn: document.getElementById("playCityStrikeBtn"),
   leaderboard: document.getElementById("leaderboard"),
   boardEmpty: document.getElementById("boardEmpty"),
   boardStatus: document.getElementById("boardStatus"),
@@ -259,8 +259,8 @@ function readFileAsDataUrl(file) {
   });
 }
 
-els.playKarateBtn?.addEventListener("click", () => {
-  location.href = "/karate/?from=app";
+els.playCityStrikeBtn?.addEventListener("click", () => {
+  location.href = "/city-strike/?from=app";
 });
 
 async function loadLeaderboard() {

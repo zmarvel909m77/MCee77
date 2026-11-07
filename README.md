@@ -1,6 +1,6 @@
 # GAME BOT (`@mcee77bot`)
 
-Telegram Mini App — **GAMEE-style shell** + **Karate** (Timberman / Karate Kido), ball va ochiq reyting.
+Telegram Mini App — **GAMEE-style shell** + **City Strike** (urban chop arcade), ball va ochiq reyting.
 
 Primary entry = Mini App shell at `${WEBAPP_URL}/app/` (Magazin · O‘yinlar · Reyting). Account = Telegram (`telegram_id`).
 
@@ -42,7 +42,7 @@ ALLOW_DEV_SCORE_SUBMIT=true
 ```bash
 npm install
 npm run build
-npm run dev:api    # http://127.0.0.1:3000/app/  +  /karate/
+npm run dev:api    # http://127.0.0.1:3000/app/  +  /city-strike/
 npm run dev:bot    # long polling
 ```
 
@@ -54,7 +54,7 @@ Telegram Mini App uchun HTTPS kerak — lokalda `ngrok` / `cloudflared` bilan `W
 - **Pastki menyu (3):** Magazin · O‘yinlar · Reyting
 - **Ochilganda:** O‘yinlar tab
 - **Magazin:** «Resurslar yo‘q» placeholder
-- **Reyting:** Karate eng yaxshi ballari (public)
+- **Reyting:** City Strike eng yaxshi ballari (public)
 
 Vertical swipe/pull-to-close o‘chirilgan (`Telegram.WebApp.disableVerticalSwipes` + `overscroll-behavior: none`); yopish faqat Telegram header **X** orqali.
 
@@ -64,16 +64,16 @@ Vertical swipe/pull-to-close o‘chirilgan (`Telegram.WebApp.disableVerticalSwip
 2. `npm run dev:api`
 3. [http://127.0.0.1:3000/app/](http://127.0.0.1:3000/app/)
 
-## Karate
+## City Strike
 
-`/karate/` — vertical novda, chap/o‘ng chop. Noto‘g‘ri tomondagi shox = game over. Energiya/timer bosimi bor.
+`/city-strike/` — po‘lat minora, chap/o‘ng zarba. Noto‘g‘ri tomondagi to‘siq (balkon / konditsioner / iskala) = game over. Energiya/timer bosimi bor. Original canvas art (shahar skyline, quruvchi qahramon).
 
 ## Layout
 
 ```
 apps/bot/                     grammY bot + admin bot
 apps/api/public/app/          Mini App shell
-apps/api/public/karate/       Karate canvas
+apps/api/public/city-strike/  City Strike canvas
 apps/api/src/                 Fastify API
 packages/db/                  Postgres / SQLite repository
 packages/shared/              types + initData verify
@@ -83,7 +83,7 @@ packages/shared/              types + initData verify
 
 - Web: `/admin?key=ADMIN_SECRET`
 - Telegram admin bot: `@MCee_adminbot` (`ADMIN_BOT_TOKEN` + `ADMIN_TELEGRAM_IDS`)
-- Statistika: DB foydalanuvchilar, bugungi Karate runlar, top rekordlar (online presence yo‘q)
+- Statistika: DB foydalanuvchilar, bugungi City Strike runlar, top rekordlar (online presence yo‘q)
 
 ## Deploy (Railway)
 

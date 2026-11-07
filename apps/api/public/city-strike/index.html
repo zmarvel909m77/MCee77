@@ -6,7 +6,7 @@
       name="viewport"
       content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
     />
-    <title>Karate — GAME BOT</title>
+    <title>City Strike — GAME BOT</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -19,19 +19,34 @@
   <body>
     <div id="wrap">
       <header class="hud">
-        <a class="back" href="/app/#oyinlar" id="backBtn">‹</a>
-        <div class="hud-mid">
+        <a class="back" href="/app/#oyinlar" id="backBtn" aria-label="Orqaga">‹</a>
+        <div class="hud-score-block">
           <span class="label">Ball</span>
           <strong id="hudScore">0</strong>
         </div>
-        <div class="hud-right">
+        <div class="hud-best-block">
           <span class="label">Rekord</span>
           <strong id="hudBest">0</strong>
         </div>
       </header>
 
-      <div class="energy-wrap" aria-hidden="true">
-        <div id="energyBar" class="energy-bar"></div>
+      <div class="meters" aria-hidden="true">
+        <div class="meter meter-energy">
+          <span class="meter-ico energy-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+              <path d="M13 2 4 14h7l-1 8 10-14h-7l0-6z" />
+            </svg>
+          </span>
+          <div class="meter-track">
+            <div id="energyBar" class="meter-fill energy-fill"></div>
+          </div>
+        </div>
+        <div class="meter meter-multi">
+          <div class="meter-track multi-track">
+            <div id="multiBar" class="meter-fill multi-fill"></div>
+          </div>
+          <span class="multi-badge" id="multiBadge">1X</span>
+        </div>
       </div>
 
       <canvas id="game" width="360" height="560"></canvas>
@@ -40,9 +55,12 @@
 
       <div id="overlay" class="overlay">
         <div class="card">
-          <p class="eyebrow">KARATE</p>
+          <p class="eyebrow">CITY STRIKE</p>
           <h1 id="overlayTitle">Boshlash</h1>
-          <p id="overlayText">Novdani to‘g‘ri tomondan choping. Noto‘g‘ri tomon — o‘yin tugaydi.</p>
+          <p id="overlayText">
+            Minora segmentlarini chap yoki o‘ngdan uring. Xavf siz tomonda
+            bo‘lsa — ehtiyot!
+          </p>
           <p class="score-line">Ball: <strong id="overlayScore">0</strong></p>
           <p id="submitStatus" class="status"></p>
           <button type="button" id="primaryBtn">O‘ynash</button>

@@ -48,7 +48,7 @@ process.on("SIGTERM", shutdown);
 
 console.log("GAME BOT starting (long polling)…");
 if (miniAppUrl) console.log(`Mini App Menu Button URL: ${miniAppUrl}`);
-if (karateUrl) console.log(`Karate WebApp URL: ${karateUrl}`);
+if (karateUrl) console.log(`City Strike WebApp URL: ${karateUrl}`);
 if (!miniAppUrl) {
   console.log("WEBAPP_URL not set — Mini App buttons will show setup hint.");
 }
