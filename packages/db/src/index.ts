@@ -3,10 +3,14 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import Database from "better-sqlite3";
 import {
+  DEFAULT_FEATURE_FLAGS,
   DEFAULT_RATING,
   DEFAULT_TOTAL_POINTS,
+  FEATURE_FLAG_KEYS,
   type AdminStats,
   type CreateMatchInput,
+  type FeatureFlagKey,
+  type FeatureFlags,
   type FinishMatchInput,
   type FinishMatchResult,
   type GameId,
@@ -20,6 +24,10 @@ import {
   type UpsertUserInput,
   type User,
 } from "@mcee77/shared";
+
+const FEATURE_SETTING_PREFIX = "feature.";
+/** Brief in-process cache so bot keyboard builds stay cheap. */
+const FEATURE_CACHE_TTL_MS = 2000;
 
 interface UserRow {
   id: string;
@@ -105,6 +113,8 @@ function mapMatch(row: MatchRow): MatchRecord {
 
 export class UserRepository {
   private readonly db: Database.Database;
+  private featureCache: { flags: FeatureFlags; loadedAt: number } | null =
+    null;
 
   constructor(databasePath: string) {
     mkdirSync(dirname(databasePath), { recursive: true });
@@ -161,6 +171,11 @@ export class UserRepository {
 
       CREATE INDEX IF NOT EXISTS idx_matches_status_started
         ON matches(status, started_at);
+
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
     `);
 
     // Migration-safe for existing SQLite DBs created before last_seen_at.
@@ -571,6 +586,76 @@ export class UserRepository {
       topRating: this.getLeaderboard(topLimit),
       generatedAt: isoNow,
     };
+  }
+
+  /**
+   * Read bot section feature flags from `settings`. Missing keys default ON.
+   * Short in-process cache; cleared on setFeatureFlags.
+   */
+  getFeatureFlags(opts?: { bypassCache?: boolean }): FeatureFlags {
+    const now = Date.now();
+    if (
+      !opts?.bypassCache &&
+      this.featureCache &&
+      now - this.featureCache.loadedAt < FEATURE_CACHE_TTL_MS
+    ) {
+      return { ...this.featureCache.flags };
+    }
+
+    const flags: FeatureFlags = { ...DEFAULT_FEATURE_FLAGS };
+    const rows = this.db
+      .prepare(
+        `SELECT key, value FROM settings WHERE key LIKE ?`,
+      )
+      .all(`${FEATURE_SETTING_PREFIX}%`) as Array<{
+      key: string;
+      value: string;
+    }>;
+
+    for (const row of rows) {
+      const id = row.key.slice(FEATURE_SETTING_PREFIX.length) as FeatureFlagKey;
+      if (!(FEATURE_FLAG_KEYS as readonly string[]).includes(id)) continue;
+      flags[id] = row.value === "1" || row.value === "true";
+    }
+
+    this.featureCache = { flags: { ...flags }, loadedAt: now };
+    return { ...flags };
+  }
+
+  /**
+   * Persist feature flags (partial update OK). Returns the full merged flags.
+   */
+  setFeatureFlags(partial: Partial<FeatureFlags>): FeatureFlags {
+    const current = this.getFeatureFlags({ bypassCache: true });
+    const next: FeatureFlags = { ...current };
+
+    const upsert = this.db.prepare(
+      `
+      INSERT INTO settings (key, value) VALUES (?, ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    `,
+    );
+
+    const tx = this.db.transaction(() => {
+      for (const key of FEATURE_FLAG_KEYS) {
+        if (typeof partial[key] === "boolean") {
+          next[key] = partial[key]!;
+        }
+        upsert.run(
+          `${FEATURE_SETTING_PREFIX}${key}`,
+          next[key] ? "1" : "0",
+        );
+      }
+    });
+    tx();
+
+    this.featureCache = { flags: { ...next }, loadedAt: Date.now() };
+    return { ...next };
+  }
+
+  /** Drop the brief feature-flag cache (e.g. after external DB edit). */
+  invalidateFeatureFlagsCache(): void {
+    this.featureCache = null;
   }
 
   close(): void {

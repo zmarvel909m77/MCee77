@@ -147,6 +147,16 @@ Readable admin panel (Uzbek Latin UI): total users, active today/24h, live Air H
 curl -H "x-admin-secret: $ADMIN_SECRET" https://<host>/api/v1/admin/stats
 ```
 
+### Bot bo‘limlari (ON/OFF) / Feature toggles
+
+Admin paneldagi **Bot bo‘limlari** switchlari Rocket Bird, Air Hockey, Reyting va Profilni yoqadi/o‘chiradi. Holat SQLite `settings` jadvalida saqlanadi (qayta ishga tushganda ham qoladi); default — hammasi **ON**.
+
+Admin **Bot bo‘limlari** switches enable/disable Rocket Bird, Air Hockey, Reyting, and Profil. Flags persist in SQLite `settings` (survive restarts); defaults are all **ON**.
+
+- O‘chirilganda: `/start` klaviaturasida tugma yo‘q; handler qisqa “vaqtincha o‘chirilgan” deb javob beradi (o‘zbekcha lotin). Mini App URL lar deployda qolishi mumkin, lekin bot ularni reklam qilmaydi.
+- When OFF: keyboard omits the button; handlers reply briefly that the section is temporarily off. Mini App URLs may stay deployed; the bot simply does not advertise them.
+- API: `GET` / `POST /api/v1/admin/features` — body `{ "features": { "rocket_bird": true, "air_hockey": false, ... } }` (same `ADMIN_SECRET` auth).
+
 ### Railway (dashboard) — qadamma-qadam / step-by-step
 
 **O‘zbekcha**

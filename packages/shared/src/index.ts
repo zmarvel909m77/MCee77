@@ -34,6 +34,42 @@ export interface AdminStats {
   generatedAt: string;
 }
 
+/** Bot main-menu / command feature toggles (admin-controlled). */
+export type FeatureFlagKey =
+  | "rocket_bird"
+  | "air_hockey"
+  | "rating"
+  | "profile";
+
+export interface FeatureFlags {
+  rocket_bird: boolean;
+  air_hockey: boolean;
+  rating: boolean;
+  profile: boolean;
+}
+
+export const FEATURE_FLAG_KEYS: readonly FeatureFlagKey[] = [
+  "rocket_bird",
+  "air_hockey",
+  "rating",
+  "profile",
+] as const;
+
+/** Defaults: every section ON. */
+export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
+  rocket_bird: true,
+  air_hockey: true,
+  rating: true,
+  profile: true,
+};
+
+export const FEATURE_FLAG_LABELS: Record<FeatureFlagKey, string> = {
+  rocket_bird: "Rocket Bird",
+  air_hockey: "Air Hockey",
+  rating: "Reyting",
+  profile: "Profil",
+};
+
 export interface LeaderboardEntry {
   rank: number;
   telegramId: number;
