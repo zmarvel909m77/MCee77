@@ -62,13 +62,13 @@ export function renderAdminStatsPage(): string {
         <p class="hint">24 soatda: <span id="active24h">—</span></p>
       </article>
       <article class="stat accent">
-        <p class="label">Karate rekordchilar</p>
+        <p class="label">City Strike rekordchilar</p>
         <p class="num" id="karatePlayers">—</p>
         <p class="hint">eng yuqori: <span id="topKarateScore">—</span></p>
       </article>
     </section>
 
-    <section class="row" aria-label="Karate">
+    <section class="row" aria-label="City Strike">
       <article class="stat compact">
         <p class="label">Bugungi o‘yinlar</p>
         <p class="num sm" id="gamesToday">—</p>
@@ -84,7 +84,7 @@ export function renderAdminStatsPage(): string {
     </section>
 
     <section class="top" aria-label="Top reyting">
-      <h2>Top Karate</h2>
+      <h2>Top City Strike</h2>
       <ol id="topList" class="top-list"></ol>
     </section>
 

@@ -6,9 +6,9 @@ import { publicDisplayName } from "@mcee77/shared";
  */
 export function welcomeMessage(_displayName: string): string {
   return [
-    "🥋 GAME BOT ga xush kelibsiz!",
+    "🏙️ GAME BOT ga xush kelibsiz!",
     "",
-    "Karate o‘ynang, rekordingizni yangilang va reytingda yuqoriga chiqing.",
+    "City Strike o‘ynang, rekordingizni yangilang va reytingda yuqoriga chiqing.",
     "",
     "👇 Mini Appni ochish uchun tugmani bosing:",
   ].join("\n");
@@ -30,7 +30,7 @@ export function profileMessage(user: User): string {
     "👤 Profil",
     "",
     `Taxallus: ${publicDisplayName(user)}`,
-    `O‘yin: Karate`,
+    `O‘yin: City Strike`,
     `Eng yaxshi ball: ${user.totalPoints}`,
     `O‘yinlar: ${user.gamesPlayed}`,
     "",
@@ -44,7 +44,7 @@ export function leaderboardMessage(entries: LeaderboardEntry[]): string {
       "🏆 Reyting",
       "",
       "Hali hech kim rekord qo‘ymagan.",
-      "Karate o‘ynab birinchi bo‘ling!",
+      "City Strike o‘ynab birinchi bo‘ling!",
       "",
       "Reyting Mini App ichida ochiladi.",
     ].join("\n");
@@ -55,7 +55,7 @@ export function leaderboardMessage(entries: LeaderboardEntry[]): string {
   });
 
   return [
-    "🏆 Reyting (Karate)",
+    "🏆 Reyting (City Strike)",
     "",
     ...lines,
     "",
@@ -66,14 +66,14 @@ export function leaderboardMessage(entries: LeaderboardEntry[]): string {
 export function miniAppOpenMessage(hasWebApp: boolean): string {
   if (hasWebApp) {
     return [
-      "🥋 GAME BOT",
+      "🏙️ GAME BOT",
       "",
       "Mini App ochish uchun pastdagi tugmani bosing.",
       "Magazin · O‘yinlar · Reyting",
     ].join("\n");
   }
   return [
-    "🥋 GAME BOT",
+    "🏙️ GAME BOT",
     "",
     "WEBAPP_URL sozlanmagan.",
     "Serverda HTTPS Mini App URL ni `.env` ga qo‘ying.",
