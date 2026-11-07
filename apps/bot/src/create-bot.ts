@@ -9,6 +9,7 @@ import {
   shopUnavailableMessage,
 } from "./text.js";
 import { sendStartWelcome } from "./start-welcome.js";
+import { appUrl, shopUrl } from "./urls.js";
 
 export {
   broadcastStartWelcome,
@@ -17,6 +18,17 @@ export {
   type BroadcastRecipient,
   type BroadcastStartResult,
 } from "./start-welcome.js";
+export {
+  createAdminBot,
+  parseAdminTelegramIds,
+  type CreateAdminBotOptions,
+  type LiveAdminStats,
+} from "./create-admin-bot.js";
+export { resolveWebAppUrls } from "./urls.js";
+export {
+  broadcastAdminMessage,
+  type BroadcastMessageResult,
+} from "./broadcast-message.js";
 
 export type UserRepository = ReturnType<typeof createUserRepository>;
 
@@ -25,24 +37,6 @@ export interface CreateBotOptions {
   users: UserRepository;
   /** Public HTTPS origin (no trailing slash). Used for Mini App WebApp buttons. */
   webAppUrl?: string;
-}
-
-function appUrl(webAppUrl: string): string {
-  if (!webAppUrl) return "";
-  if (webAppUrl.endsWith("/app")) return `${webAppUrl}/`;
-  return `${webAppUrl}/app/`;
-}
-
-function shopUrl(webAppUrl: string): string {
-  if (!webAppUrl) return "";
-  const base = appUrl(webAppUrl);
-  return base ? `${base}shop/` : "";
-}
-
-function airHockeyGameUrl(webAppUrl: string): string {
-  if (!webAppUrl) return "";
-  if (webAppUrl.endsWith("/air-hockey")) return `${webAppUrl}/`;
-  return `${webAppUrl}/air-hockey/`;
 }
 
 /**
@@ -135,19 +129,4 @@ export function createBot(options: CreateBotOptions): Bot {
   });
 
   return bot;
-}
-
-export function resolveWebAppUrls(webAppUrlRaw: string | undefined): {
-  webAppUrl: string;
-  miniAppUrl: string;
-  airHockeyUrl: string;
-  shopUrl: string;
-} {
-  const webAppUrl = webAppUrlRaw?.trim().replace(/\/?$/, "") ?? "";
-  return {
-    webAppUrl,
-    miniAppUrl: appUrl(webAppUrl),
-    airHockeyUrl: airHockeyGameUrl(webAppUrl),
-    shopUrl: shopUrl(webAppUrl),
-  };
 }

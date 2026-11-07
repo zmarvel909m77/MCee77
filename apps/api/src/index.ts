@@ -7,7 +7,12 @@ import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 import websocket from "@fastify/websocket";
 import { webhookCallback } from "grammy";
-import { createBot, resolveWebAppUrls } from "@mcee77/bot";
+import {
+  createAdminBot,
+  createBot,
+  parseAdminTelegramIds,
+  resolveWebAppUrls,
+} from "@mcee77/bot";
 import { createUserRepository } from "@mcee77/db";
 import { MAX_AVATAR_BYTES, publicDisplayName } from "@mcee77/shared";
 import { registerAdminRoutes } from "./admin/routes.js";
@@ -29,6 +34,10 @@ const host = process.env.API_HOST ?? "0.0.0.0";
 /** Railway / Render inject PORT; fall back to API_PORT for local. */
 const port = Number(process.env.PORT ?? process.env.API_PORT ?? 3000);
 const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim() ?? "";
+const adminBotToken = process.env.ADMIN_BOT_TOKEN?.trim() ?? "";
+const adminTelegramIds = parseAdminTelegramIds(
+  process.env.ADMIN_TELEGRAM_IDS,
+);
 const allowDevScoreSubmit = process.env.ALLOW_DEV_SCORE_SUBMIT === "true";
 
 const webAppUrl =
@@ -84,6 +93,8 @@ app.get("/healthz", async () => ({
   presenceWs: "/ws/presence",
   botMode,
   webhookPath: botMode === "webhook" ? webhookPath : null,
+  adminBot: Boolean(adminBotToken && adminTelegramIds.size > 0 && botToken),
+  adminIdsConfigured: adminTelegramIds.size,
   matchmaking: matchmaking.stats,
   online: presence.listOnline().length,
 }));
@@ -320,6 +331,34 @@ if (botMode === "webhook" && bot) {
 
 registerAdminRoutes(app, { users, matchmaking, bot, webAppUrl });
 
+/** Separate admin bot (long polling). Delivers to players via TELEGRAM_BOT_TOKEN. */
+let adminBot: ReturnType<typeof createAdminBot> | null = null;
+if (adminBotToken && botToken && adminTelegramIds.size > 0) {
+  adminBot = createAdminBot({
+    adminToken: adminBotToken,
+    deliveryToken: botToken,
+    users,
+    adminTelegramIds,
+    webAppUrl,
+    getLiveStats: () => ({
+      onlineCount: presence.listOnline().length,
+      activeRooms: matchmaking.stats.activeRooms,
+      queueDepth: matchmaking.stats.queueDepth,
+    }),
+  });
+  app.log.info(
+    `Admin bot configured for ids: ${[...adminTelegramIds].join(", ")}`,
+  );
+} else if (adminBotToken && adminTelegramIds.size === 0) {
+  app.log.warn(
+    "ADMIN_BOT_TOKEN set but ADMIN_TELEGRAM_IDS empty — admin bot not started. Add your numeric Telegram id.",
+  );
+} else if (adminBotToken && !botToken) {
+  app.log.warn(
+    "ADMIN_BOT_TOKEN set but TELEGRAM_BOT_TOKEN missing — cannot deliver broadcasts.",
+  );
+}
+
 const publicRoot = resolve(__dirname, "../public");
 if (existsSync(publicRoot)) {
   await app.register(fastifyStatic, {
@@ -329,6 +368,11 @@ if (existsSync(publicRoot)) {
 }
 
 const shutdown = async () => {
+  try {
+    if (adminBot) await adminBot.stop();
+  } catch {
+    /* ignore */
+  }
   presence.destroy();
   matchmaking.destroy();
   await app.close();
@@ -368,6 +412,20 @@ if (bot && botMode === "webhook") {
       app.log.error({ err }, `failed to setWebhook(${webhookUrl})`);
     }
   }
+}
+
+if (adminBot) {
+  // Drop any stale webhook so long polling can run beside the game webhook bot.
+  try {
+    await adminBot.api.deleteWebhook({ drop_pending_updates: false });
+  } catch (err) {
+    app.log.warn({ err }, "admin bot deleteWebhook failed (continuing)");
+  }
+  void adminBot.start({
+    onStart: (info) => {
+      app.log.info(`Admin bot @${info.username} long-polling`);
+    },
+  });
 }
 
 function parseAvatarPayload(
