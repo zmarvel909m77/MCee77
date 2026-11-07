@@ -1,4 +1,5 @@
-import type { LeaderboardEntry, User } from "@mcee77/shared";
+import type { FeatureFlagKey, LeaderboardEntry, User } from "@mcee77/shared";
+import { FEATURE_FLAG_LABELS } from "@mcee77/shared";
 
 export function welcomeMessage(displayName: string): string {
   return [
@@ -8,6 +9,17 @@ export function welcomeMessage(displayName: string): string {
     "O‘yin o‘ynang, ball to‘plang, reytingda ko‘tariling.",
     "",
     "Pastdagi tugmalardan birini tanlang.",
+  ].join("\n");
+}
+
+/** Brief notice when a menu section is admin-disabled (Uzbek Latin). */
+export function sectionDisabledMessage(key: FeatureFlagKey): string {
+  const label = FEATURE_FLAG_LABELS[key];
+  return [
+    `${label}`,
+    "",
+    "Bu bo‘lim hozircha vaqtincha o‘chirilgan.",
+    "Keyinroq qayta urinib ko‘ring.",
   ].join("\n");
 }
 

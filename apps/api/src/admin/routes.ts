@@ -1,5 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import type { UserRepository } from "@mcee77/db";
+import {
+  FEATURE_FLAG_KEYS,
+  type FeatureFlagKey,
+  type FeatureFlags,
+} from "@mcee77/shared";
 import type { MatchmakingService } from "../air-hockey/matchmaking.js";
 import {
   adminConfigured,
@@ -29,6 +34,38 @@ export function registerAdminRoutes(
       topLimit: 5,
     });
     return stats;
+  });
+
+  app.get("/api/v1/admin/features", async (request, reply) => {
+    if (!requireAdmin(request, reply)) return;
+    return {
+      features: opts.users.getFeatureFlags({ bypassCache: true }),
+    };
+  });
+
+  app.post("/api/v1/admin/features", async (request, reply) => {
+    if (!requireAdmin(request, reply)) return;
+
+    const body = (request.body ?? {}) as {
+      features?: Partial<Record<FeatureFlagKey, unknown>>;
+    };
+    const incoming = body.features ?? {};
+    const partial: Partial<FeatureFlags> = {};
+
+    for (const key of FEATURE_FLAG_KEYS) {
+      if (typeof incoming[key] === "boolean") {
+        partial[key] = incoming[key];
+      }
+    }
+
+    if (Object.keys(partial).length === 0) {
+      return reply.code(400).send({
+        error: "features object with boolean flags required",
+      });
+    }
+
+    const features = opts.users.setFeatureFlags(partial);
+    return { ok: true, features };
   });
 
   app.get("/admin/", async (_request, reply) =>
