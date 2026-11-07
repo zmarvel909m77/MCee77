@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Sora:wght@600;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Figtree:wght@500;600;700;800&family=Syne:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css" />
@@ -21,7 +21,7 @@
       <header class="app-header">
         <div>
           <p class="brand">GAME BOT</p>
-          <p class="brand-sub">mini ilova</p>
+          <p class="brand-sub">Air Hockey</p>
         </div>
         <div id="connDot" class="conn" title="Aloqa" aria-label="Aloqa"></div>
       </header>
@@ -30,18 +30,33 @@
         <!-- Profil -->
         <section id="view-profil" class="view active" data-view="profil">
           <div class="profile-hero">
+            <div class="rink-glow" aria-hidden="true"></div>
             <button type="button" id="avatarBtn" class="avatar-btn" aria-label="Rasm yuklash">
               <img id="avatarImg" class="avatar-img hidden" alt="" />
               <span id="avatarFallback" class="avatar-fallback">?</span>
-              <span class="avatar-cam" aria-hidden="true">✎</span>
+              <span class="avatar-cam" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor">
+                  <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25Zm18.71-11.04a1 1 0 0 0 0-1.41l-2.51-2.51a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.99-1.66Z"/>
+                </svg>
+              </span>
             </button>
             <input id="avatarInput" type="file" accept="image/jpeg,image/png,image/webp" hidden />
 
             <div class="nick-row">
               <h1 id="nickDisplay" class="nick">…</h1>
-              <button type="button" id="editNickBtn" class="icon-btn" aria-label="Nickni tahrirlash">✎</button>
+              <button type="button" id="editNickBtn" class="icon-btn" aria-label="Taxallusni tahrirlash">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true">
+                  <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25Zm18.71-11.04a1 1 0 0 0 0-1.41l-2.51-2.51a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.99-1.66Z"/>
+                </svg>
+              </button>
             </div>
-            <p class="game-pill">🏒 Air Hockey</p>
+            <p class="game-tag">
+              <svg class="puck-ico" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                <ellipse cx="12" cy="12" rx="9" ry="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                <ellipse cx="12" cy="12" rx="4.5" ry="2.6" fill="currentColor" opacity="0.55"/>
+              </svg>
+              Air Hockey
+            </p>
             <div class="stat-row">
               <div>
                 <span class="stat-label">Ball</span>
@@ -59,8 +74,8 @@
           </div>
 
           <div id="nickEditor" class="sheet hidden">
-            <label for="nickInput">Nickname</label>
-            <input id="nickInput" maxlength="32" placeholder="Ismingiz" />
+            <label for="nickInput">Taxallus</label>
+            <input id="nickInput" maxlength="32" placeholder="Ismingizni yozing" />
             <div class="sheet-actions">
               <button type="button" id="nickCancel" class="ghost">Bekor</button>
               <button type="button" id="nickSave">Saqlash</button>
@@ -75,45 +90,74 @@
         <section id="view-oyin" class="view" data-view="oyin">
           <div class="section-head">
             <h2>O‘yin</h2>
-            <p>Online raqiblar yoki offline mashq</p>
+            <p>Raqib tanlang yoki maydonda mashq qiling</p>
           </div>
 
-          <button type="button" id="offlineBtn" class="cta-offline">
-            <span class="cta-ico" aria-hidden="true">🤖</span>
-            <span>
-              <strong>Offline o‘ynash</strong>
-              <small>AI ga qarshi · ball bermaydi</small>
+          <button type="button" id="offlineBtn" class="cta cta-offline">
+            <span class="cta-ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="4" y="7" width="16" height="12" rx="3"/>
+                <circle cx="9" cy="13" r="1.2" fill="currentColor" stroke="none"/>
+                <circle cx="15" cy="13" r="1.2" fill="currentColor" stroke="none"/>
+                <path d="M9 4h6M12 4v3"/>
+              </svg>
+            </span>
+            <span class="cta-copy">
+              <strong>Offline</strong>
+              <small>Sun’iy intelektga qarshi · ball yo‘q</small>
             </span>
           </button>
 
-          <button type="button" id="local2pBtn" class="cta-local">
-            <span class="cta-ico" aria-hidden="true">📱</span>
-            <span>
+          <button type="button" id="local2pBtn" class="cta cta-local">
+            <span class="cta-ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="7" y="2.5" width="10" height="19" rx="2.2"/>
+                <circle cx="12" cy="18.2" r="0.9" fill="currentColor" stroke="none"/>
+                <path d="M9.5 6.5h5M9.5 9.5h5"/>
+              </svg>
+            </span>
+            <span class="cta-copy">
               <strong>Bir telefonda 2 o‘yinchi</strong>
-              <small>Ikki kishi bir telefonda · ball bermaydi</small>
+              <small>Ikki kishi bitta telefonda · ball yo‘q</small>
             </span>
           </button>
 
-          <button type="button" id="randomBtn" class="cta-online">
-            <span class="cta-ico" aria-hidden="true">🎲</span>
-            <span>
+          <button type="button" id="randomBtn" class="cta cta-online">
+            <span class="cta-ico cta-ico-globe" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9"/>
+                <path d="M3 12h18"/>
+                <path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18Z"/>
+                <path d="M7.2 5.4c1.6 1.4 3.2 3.8 3.2 6.6s-1.6 5.2-3.2 6.6"/>
+                <path d="M16.8 5.4C15.2 6.8 13.6 9.2 13.6 12s1.6 5.2 3.2 6.6"/>
+              </svg>
+            </span>
+            <span class="cta-copy">
               <strong>Random online</strong>
-              <small>Tasodifiy raqib · ball hisoblanadi</small>
+              <small>Dunyo bo‘ylab raqib · ball hisoblanadi</small>
             </span>
           </button>
 
           <div class="list-head">
-            <h3>Onlinelar</h3>
+            <h3>Onlaynlar</h3>
             <span id="onlineCount" class="badge">0</span>
           </div>
           <ul id="onlineList" class="user-list"></ul>
-          <p id="onlineEmpty" class="empty hidden">Onlinelar yo‘q</p>
+          <p id="onlineEmpty" class="empty hidden">
+            <span class="empty-ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="12" cy="12" r="9"/>
+                <path d="M3 12h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18Z"/>
+              </svg>
+            </span>
+            Hozircha onlayn o‘yinchi yo‘q
+          </p>
 
           <div id="inviteBanner" class="invite-banner hidden">
             <p id="inviteText"></p>
             <div class="sheet-actions">
-              <button type="button" id="inviteDecline" class="ghost">Rad</button>
-              <button type="button" id="inviteAccept">Qabul</button>
+              <button type="button" id="inviteDecline" class="ghost">Rad etish</button>
+              <button type="button" id="inviteAccept">Qabul qilish</button>
             </div>
           </div>
         </section>
@@ -122,10 +166,17 @@
         <section id="view-reyting" class="view" data-view="reyting">
           <div class="section-head">
             <h2>Reyting</h2>
-            <p>Online o‘yinlar bo‘yicha ball</p>
+            <p>Onlayn o‘yinlar bo‘yicha eng kuchlilar</p>
           </div>
           <ol id="leaderboard" class="board"></ol>
-          <p id="boardEmpty" class="empty hidden">Hali reyting bo‘sh</p>
+          <p id="boardEmpty" class="empty hidden">
+            <span class="empty-ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
+                <path d="M5 21h4v-8H5zm5 0h4V9h-4zm5 0h4V3h-4z"/>
+              </svg>
+            </span>
+            Reyting hali shakllanmagan
+          </p>
           <p id="boardStatus" class="status center"></p>
         </section>
       </main>
@@ -139,7 +190,10 @@
         </button>
         <button type="button" class="tab" data-tab="oyin">
           <span class="tab-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M7 4h10a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3Zm5 3.5a5.5 5.5 0 1 0 5.5 5.5A5.5 5.5 0 0 0 12 7.5Zm0 2a3.5 3.5 0 1 1-3.5 3.5A3.5 3.5 0 0 1 12 9.5Z"/></svg>
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8">
+              <ellipse cx="12" cy="12" rx="8.5" ry="5.2"/>
+              <ellipse cx="12" cy="12" rx="3.8" ry="2.2" fill="currentColor" stroke="none" opacity="0.7"/>
+            </svg>
           </span>
           <span>O‘yin</span>
         </button>

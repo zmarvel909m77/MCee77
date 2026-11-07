@@ -11,8 +11,8 @@ if (tg) {
     tg.disableVerticalSwipes();
   }
   try {
-    tg.setHeaderColor("#10182a");
-    tg.setBackgroundColor("#070b14");
+    tg.setHeaderColor("#072028");
+    tg.setBackgroundColor("#031216");
   } catch {
     /* older clients */
   }
@@ -115,7 +115,7 @@ function renderProfile(user) {
 }
 
 async function bootstrapMe() {
-  els.profileStatus.textContent = "Profil yuklanmoqda…";
+  els.profileStatus.textContent = "Yuklanmoqda…";
   try {
     const res = await fetch("/api/v1/me", {
       method: "POST",
@@ -123,12 +123,12 @@ async function bootstrapMe() {
       body: JSON.stringify(authPayload()),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Profil xato");
+    if (!res.ok) throw new Error(data.error || "Profil ochilmadi");
     renderProfile(data.user);
     els.profileStatus.textContent = "";
   } catch (err) {
     els.profileStatus.textContent =
-      err instanceof Error ? err.message : "Profil yuklanmadi";
+      err instanceof Error ? err.message : "Profil ochilmadi";
     els.profileStatus.classList.add("error");
   }
 }
@@ -195,11 +195,11 @@ els.avatarInput.addEventListener("change", async () => {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Yuklash xato");
     renderProfile(data.user);
-    els.profileStatus.textContent = "Rasm saqlandi";
+    els.profileStatus.textContent = "Rasm yangilandi";
     presenceSend({ type: "refresh" });
   } catch (err) {
     els.profileStatus.textContent =
-      err instanceof Error ? err.message : "Yuklash xato";
+      err instanceof Error ? err.message : "Rasm yuklanmadi";
     els.profileStatus.classList.add("error");
   } finally {
     els.avatarInput.value = "";
@@ -248,17 +248,17 @@ function renderOnline(users) {
     const meta = document.createElement("div");
     meta.innerHTML = `<p class="u-name"></p><p class="u-meta"></p>`;
     meta.querySelector(".u-name").textContent = u.displayName;
-    meta.querySelector(".u-meta").textContent = `Reyting ${u.rating ?? "—"}`;
+    meta.querySelector(".u-meta").textContent = `Reyting · ${u.rating ?? "—"}`;
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "play-btn";
-    btn.textContent = "Taklif";
+    btn.textContent = "Chaqirish";
     btn.addEventListener("click", () => {
       presenceSend({ type: "invite", toTelegramId: u.telegramId });
       btn.textContent = "…";
       btn.disabled = true;
       setTimeout(() => {
-        btn.textContent = "Taklif";
+        btn.textContent = "Chaqirish";
         btn.disabled = false;
       }, 2500);
     });
@@ -314,7 +314,7 @@ function connectPresence() {
         break;
       case "invite":
         pendingInviteId = msg.inviteId;
-        els.inviteText.textContent = `${msg.from?.displayName || "O‘yinchi"} sizni Air Hockey ga taklif qildi`;
+        els.inviteText.textContent = `${msg.from?.displayName || "O‘yinchi"} sizni Air Hockeyga chaqirdi`;
         els.inviteBanner.classList.remove("hidden");
         setTab("oyin");
         break;
@@ -327,7 +327,7 @@ function connectPresence() {
         pendingInviteId = null;
         break;
       case "invite_error":
-        els.profileStatus.textContent = msg.message || "Taklif xato";
+        els.profileStatus.textContent = msg.message || "Chaqiriq amalga oshmadi";
         break;
       default:
         break;
@@ -376,7 +376,7 @@ async function loadLeaderboard() {
       const mid = document.createElement("div");
       mid.innerHTML = `<p class="u-name"></p><p class="u-meta"></p>`;
       mid.querySelector(".u-name").textContent = row.displayName;
-      mid.querySelector(".u-meta").textContent = `Reyting ${row.rating}`;
+      mid.querySelector(".u-meta").textContent = `Reyting · ${row.rating}`;
       const pts = document.createElement("div");
       pts.className = "points";
       pts.textContent = String(row.totalPoints);
@@ -386,7 +386,7 @@ async function loadLeaderboard() {
     els.boardStatus.textContent = "";
   } catch (err) {
     els.boardStatus.textContent =
-      err instanceof Error ? err.message : "Reyting xato";
+      err instanceof Error ? err.message : "Reyting ochilmadi";
     els.boardStatus.classList.add("error");
   }
 }
