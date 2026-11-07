@@ -6,6 +6,10 @@ const tg = window.Telegram?.WebApp;
 if (tg) {
   tg.ready();
   tg.expand();
+  // Bot API 7.7+: block pull-down sheet close; exit via Telegram header X only
+  if (typeof tg.disableVerticalSwipes === "function") {
+    tg.disableVerticalSwipes();
+  }
   try {
     tg.setHeaderColor("#10182a");
     tg.setBackgroundColor("#070b14");

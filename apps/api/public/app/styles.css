@@ -33,6 +33,7 @@ body {
     radial-gradient(80% 50% at 100% 20%, rgba(46, 211, 198, 0.12), transparent 45%),
     linear-gradient(180deg, var(--bg1) 0%, var(--bg0) 70%);
   overflow: hidden;
+  overscroll-behavior: none;
 }
 
 #app {
