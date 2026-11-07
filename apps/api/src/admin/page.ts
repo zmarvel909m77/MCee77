@@ -100,11 +100,11 @@ export function renderAdminStatsPage(): string {
       <ul class="toggle-list" id="featureList">
         <li>
           <div class="toggle-meta">
-            <span class="toggle-title">🚀 Rocket Bird</span>
-            <span class="toggle-hint">Mini App tugmasi</span>
+            <span class="toggle-title">📱 Mini App</span>
+            <span class="toggle-hint">OCHISH · /app/</span>
           </div>
           <label class="switch">
-            <input type="checkbox" data-flag="rocket_bird" checked />
+            <input type="checkbox" data-flag="mini_app" checked />
             <span class="slider" aria-hidden="true"></span>
             <span class="switch-state">ON</span>
           </label>
@@ -112,7 +112,7 @@ export function renderAdminStatsPage(): string {
         <li>
           <div class="toggle-meta">
             <span class="toggle-title">🏒 Air Hockey</span>
-            <span class="toggle-hint">Mini App tugmasi</span>
+            <span class="toggle-hint">O‘yin · online/offline</span>
           </div>
           <label class="switch">
             <input type="checkbox" data-flag="air_hockey" checked />
@@ -134,7 +134,7 @@ export function renderAdminStatsPage(): string {
         <li>
           <div class="toggle-meta">
             <span class="toggle-title">👤 Profil</span>
-            <span class="toggle-hint">Ball · /profile</span>
+            <span class="toggle-hint">Nick · avatar · /profile</span>
           </div>
           <label class="switch">
             <input type="checkbox" data-flag="profile" checked />

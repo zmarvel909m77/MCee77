@@ -33,8 +33,8 @@ ENV NODE_ENV=production \
     API_HOST=0.0.0.0 \
     DATABASE_PATH=/data/gamebot.sqlite
 
-RUN mkdir -p /data \
-  && chown node:node /data
+RUN mkdir -p /data/avatars \
+  && chown -R node:node /data
 
 COPY --from=build --chown=node:node /app/package.json /app/package-lock.json ./
 COPY --from=build --chown=node:node /app/node_modules ./node_modules

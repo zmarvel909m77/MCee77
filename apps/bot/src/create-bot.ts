@@ -1,12 +1,11 @@
 import { Bot, InlineKeyboard, type Context } from "grammy";
 import type { createUserRepository } from "@mcee77/db";
-import type { FeatureFlagKey } from "@mcee77/shared";
+import { publicDisplayName, type FeatureFlagKey } from "@mcee77/shared";
 import { BTN, mainKeyboard } from "./keyboard.js";
 import {
   airHockeyOpenMessage,
   leaderboardMessage,
   profileMessage,
-  rocketBirdOpenMessage,
   sectionDisabledMessage,
   welcomeMessage,
 } from "./text.js";
@@ -20,13 +19,16 @@ export interface CreateBotOptions {
   webAppUrl?: string;
 }
 
-function gameUrl(
-  webAppUrl: string,
-  path: "rocket-bird" | "air-hockey",
-): string {
+function appUrl(webAppUrl: string): string {
   if (!webAppUrl) return "";
-  if (webAppUrl.endsWith(`/${path}`)) return `${webAppUrl}/`;
-  return `${webAppUrl}/${path}/`;
+  if (webAppUrl.endsWith("/app")) return `${webAppUrl}/`;
+  return `${webAppUrl}/app/`;
+}
+
+function airHockeyGameUrl(webAppUrl: string): string {
+  if (!webAppUrl) return "";
+  if (webAppUrl.endsWith("/air-hockey")) return `${webAppUrl}/`;
+  return `${webAppUrl}/air-hockey/`;
 }
 
 /**
@@ -36,8 +38,7 @@ function gameUrl(
 export function createBot(options: CreateBotOptions): Bot {
   const { token, users } = options;
   const webAppUrl = options.webAppUrl?.trim().replace(/\/?$/, "") ?? "";
-  const rocketBirdUrl = gameUrl(webAppUrl, "rocket-bird");
-  const airHockeyUrl = gameUrl(webAppUrl, "air-hockey");
+  const miniApp = appUrl(webAppUrl);
 
   const bot = new Bot(token);
 
@@ -63,15 +64,12 @@ export function createBot(options: CreateBotOptions): Bot {
   }
 
   function replyMarkup() {
-    return mainKeyboard(flags());
+    return mainKeyboard({ flags: flags(), miniAppUrl: miniApp });
   }
 
-  function webAppKeyboard(
-    label: string,
-    url: string,
-  ): InlineKeyboard | undefined {
-    if (!url) return undefined;
-    return new InlineKeyboard().webApp(label, url);
+  function openAppInline(label = "OCHISH"): InlineKeyboard | undefined {
+    if (!miniApp) return undefined;
+    return new InlineKeyboard().webApp(label, miniApp);
   }
 
   async function refuseIfDisabled(
@@ -87,8 +85,13 @@ export function createBot(options: CreateBotOptions): Bot {
 
   bot.command("start", async (ctx) => {
     const user = upsertFromContext(ctx);
-    const name = user?.displayName ?? displayNameFrom(ctx);
-    await ctx.reply(welcomeMessage(name), { reply_markup: replyMarkup() });
+    const name = user ? publicDisplayName(user) : displayNameFrom(ctx);
+    const inline = openAppInline("OCHISH");
+    // Inline OCHISH for chat; also refresh reply keyboard with WebApp + shortcuts.
+    await ctx.reply(welcomeMessage(name), {
+      reply_markup: inline ?? replyMarkup(),
+    });
+    await ctx.reply("Menyu:", { reply_markup: replyMarkup() });
   });
 
   bot.command("profile", async (ctx) => {
@@ -98,7 +101,9 @@ export function createBot(options: CreateBotOptions): Bot {
       await ctx.reply("Foydalanuvchi topilmadi. /start ni bosing.");
       return;
     }
-    await ctx.reply(profileMessage(user), { reply_markup: replyMarkup() });
+    await ctx.reply(profileMessage(user), {
+      reply_markup: openAppInline("Profilni ochish") ?? replyMarkup(),
+    });
   });
 
   bot.command("rating", async (ctx) => {
@@ -106,24 +111,21 @@ export function createBot(options: CreateBotOptions): Bot {
     upsertFromContext(ctx);
     const board = users.getLeaderboard(10);
     await ctx.reply(leaderboardMessage(board), {
-      reply_markup: replyMarkup(),
+      reply_markup: openAppInline("Reytingni ochish") ?? replyMarkup(),
     });
   });
 
-  bot.hears(BTN.rocketBird, async (ctx) => {
-    if (await refuseIfDisabled(ctx, "rocket_bird")) return;
+  bot.hears(BTN.play, async (ctx) => {
+    const f = flags();
+    if (!f.mini_app && !f.air_hockey) {
+      await ctx.reply(sectionDisabledMessage("mini_app"), {
+        reply_markup: replyMarkup(),
+      });
+      return;
+    }
     upsertFromContext(ctx);
-    const inline = webAppKeyboard("🚀 O‘ynash", rocketBirdUrl);
-    await ctx.reply(rocketBirdOpenMessage(Boolean(inline)), {
-      reply_markup: inline ?? replyMarkup(),
-    });
-  });
-
-  bot.hears(BTN.airHockey, async (ctx) => {
-    if (await refuseIfDisabled(ctx, "air_hockey")) return;
-    upsertFromContext(ctx);
-    const inline = webAppKeyboard("🏒 O‘ynash", airHockeyUrl);
-    await ctx.reply(airHockeyOpenMessage(Boolean(inline)), {
+    const inline = openAppInline("O‘ynash");
+    await ctx.reply(airHockeyOpenMessage(Boolean(inline || miniApp)), {
       reply_markup: inline ?? replyMarkup(),
     });
   });
@@ -133,7 +135,7 @@ export function createBot(options: CreateBotOptions): Bot {
     upsertFromContext(ctx);
     const board = users.getLeaderboard(10);
     await ctx.reply(leaderboardMessage(board), {
-      reply_markup: replyMarkup(),
+      reply_markup: openAppInline("Reytingni ochish") ?? replyMarkup(),
     });
   });
 
@@ -144,7 +146,9 @@ export function createBot(options: CreateBotOptions): Bot {
       await ctx.reply("Foydalanuvchi topilmadi. /start ni bosing.");
       return;
     }
-    await ctx.reply(profileMessage(user), { reply_markup: replyMarkup() });
+    await ctx.reply(profileMessage(user), {
+      reply_markup: openAppInline("Profilni ochish") ?? replyMarkup(),
+    });
   });
 
   bot.catch((err) => {
@@ -156,13 +160,13 @@ export function createBot(options: CreateBotOptions): Bot {
 
 export function resolveWebAppUrls(webAppUrlRaw: string | undefined): {
   webAppUrl: string;
-  rocketBirdUrl: string;
+  miniAppUrl: string;
   airHockeyUrl: string;
 } {
   const webAppUrl = webAppUrlRaw?.trim().replace(/\/?$/, "") ?? "";
   return {
     webAppUrl,
-    rocketBirdUrl: gameUrl(webAppUrl, "rocket-bird"),
-    airHockeyUrl: gameUrl(webAppUrl, "air-hockey"),
+    miniAppUrl: appUrl(webAppUrl),
+    airHockeyUrl: airHockeyGameUrl(webAppUrl),
   };
 }

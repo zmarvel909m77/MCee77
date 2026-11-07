@@ -37,8 +37,9 @@ const MAX_PUCK_SPEED = 14;
 const WALL_BOUNCE = 0.92;
 const PADDLE_RESTITUTION = 1.05;
 const WIN_SCORE = 5;
-const OFFLINE_WIN_POINTS = 15;
-const OFFLINE_LOSS_POINTS = 5;
+const bootParams = new URLSearchParams(location.search);
+const bootMode = bootParams.get("mode");
+const bootInvite = bootParams.get("invite");
 
 /** @typedef {"menu"|"playing"|"over"|"queue"} Phase */
 /** @typedef {"ai"|"local"|"online"} Mode */
@@ -49,7 +50,6 @@ let phase = "menu";
 let mode = null;
 /** @type {0|1|null} */
 let mySeat = 0;
-let submitting = false;
 
 const state = {
   puck: { x: W / 2, y: H / 2, vx: 0, vy: 0 },
@@ -288,7 +288,7 @@ function startOffline(selected) {
   primaryBtn.textContent = "Qayta o‘ynash";
 }
 
-function startOnline() {
+function startOnline(inviteKey) {
   mode = "online";
   mySeat = null;
   roomToken = sessionStorage.getItem("ah_room_token");
@@ -296,12 +296,14 @@ function startOnline() {
   modeButtons.classList.add("hidden");
   actionButtons.classList.remove("hidden");
   phase = "queue";
-  overlayTitle.textContent = "Online";
-  overlayText.textContent = "Raqib qidirilmoqda…";
+  overlayTitle.textContent = inviteKey ? "Taklif" : "Online";
+  overlayText.textContent = inviteKey
+    ? "Raqib kutilyapti…"
+    : "Raqib qidirilmoqda…";
   overlayScore.classList.add("hidden");
   primaryBtn.textContent = "Bekor qilish";
   submitStatus.textContent = "";
-  connectWs(true);
+  connectWs(true, inviteKey || null);
 }
 
 function closeWs() {
@@ -334,7 +336,7 @@ function authPayload() {
   return { devTelegramId: id, displayName: `Dev ${id}` };
 }
 
-function connectWs(enqueue) {
+function connectWs(enqueue, inviteKey) {
   closeWs();
   ws = new WebSocket(wsUrl());
 
@@ -354,7 +356,7 @@ function connectWs(enqueue) {
     } catch {
       return;
     }
-    handleServer(msg, enqueue);
+    handleServer(msg, enqueue, inviteKey);
   };
 
   ws.onclose = () => {
@@ -365,11 +367,15 @@ function connectWs(enqueue) {
   };
 }
 
-function handleServer(msg, enqueueAfterWelcome) {
+function handleServer(msg, enqueueAfterWelcome, inviteKey) {
   switch (msg.type) {
     case "welcome":
       if (enqueueAfterWelcome && !roomToken) {
-        ws.send(JSON.stringify({ type: "queue" }));
+        if (inviteKey) {
+          ws.send(JSON.stringify({ type: "join_invite", inviteKey }));
+        } else {
+          ws.send(JSON.stringify({ type: "queue" }));
+        }
       }
       break;
     case "queued":
@@ -466,41 +472,6 @@ function startPing() {
   }, 5000);
 }
 
-async function submitOfflineScore(won) {
-  if (submitting) return;
-  submitting = true;
-  submitStatus.classList.remove("error");
-  submitStatus.textContent = "Ball yuborilmoqda…";
-  const points = won ? OFFLINE_WIN_POINTS : OFFLINE_LOSS_POINTS;
-  const body = {
-    game: "air_hockey",
-    mode: "offline",
-    points,
-    meta: {
-      scoreA: state.score[0],
-      scoreB: state.score[1],
-      vs: mode,
-      won,
-    },
-    ...authPayload(),
-  };
-  try {
-    const res = await fetch("/api/v1/scores", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "submit failed");
-    submitStatus.textContent = `+${data.pointsAwarded} ball`;
-  } catch (err) {
-    submitStatus.textContent = err instanceof Error ? err.message : "Yuborish xato";
-    submitStatus.classList.add("error");
-  } finally {
-    submitting = false;
-  }
-}
-
 function endOffline(winnerSeat) {
   const won = winnerSeat === 0;
   const title = mode === "local"
@@ -512,12 +483,10 @@ function endOffline(winnerSeat) {
       : "Mag‘lubiyat";
   showOver(
     title,
-    mode === "ai" ? "Ball reytingga qo‘shiladi." : "Lokal o‘yin — ball faqat pastki o‘yinchi uchun.",
+    "Offline o‘yin — ball bermaydi (faqat online ball beradi).",
     `Hisob: ${state.score[0]} — ${state.score[1]}`,
   );
-  if (mode === "ai" || mode === "local") {
-    void submitOfflineScore(mode === "local" ? winnerSeat === 0 : won);
-  }
+  submitStatus.textContent = "0 ball (offline)";
 }
 
 let lastTs = performance.now();
@@ -553,25 +522,32 @@ function frame(ts) {
 function draw(ts) {
   // Ice rink
   const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, "#0d4a58");
-  g.addColorStop(0.5, "#0a3a46");
-  g.addColorStop(1, "#08323c");
+  g.addColorStop(0, "#0e5262");
+  g.addColorStop(0.45, "#0a3c49");
+  g.addColorStop(1, "#072e38");
   ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  // Soft vignette
+  const vig = ctx.createRadialGradient(W / 2, H / 2, H * 0.2, W / 2, H / 2, H * 0.72);
+  vig.addColorStop(0, "rgba(255,255,255,0)");
+  vig.addColorStop(1, "rgba(0,10,16,0.28)");
+  ctx.fillStyle = vig;
   ctx.fillRect(0, 0, W, H);
 
   // Subtle moving sheen
   const sheen = ((ts / 40) % (H + 80)) - 40;
-  ctx.fillStyle = "rgba(180, 240, 255, 0.04)";
-  ctx.fillRect(0, sheen, W, 50);
+  ctx.fillStyle = "rgba(180, 240, 255, 0.045)";
+  ctx.fillRect(0, sheen, W, 56);
 
   // Boards
-  ctx.strokeStyle = "rgba(126, 240, 212, 0.45)";
-  ctx.lineWidth = 6;
-  roundRect(8, 8, W - 16, H - 16, 18);
+  ctx.strokeStyle = "rgba(126, 240, 212, 0.5)";
+  ctx.lineWidth = 7;
+  roundRect(8, 8, W - 16, H - 16, 20);
   ctx.stroke();
 
   // Center line + circle
-  ctx.strokeStyle = "rgba(120, 210, 230, 0.35)";
+  ctx.strokeStyle = "rgba(120, 210, 230, 0.38)";
   ctx.lineWidth = 2;
   ctx.setLineDash([8, 8]);
   ctx.beginPath();
@@ -580,14 +556,22 @@ function draw(ts) {
   ctx.stroke();
   ctx.setLineDash([]);
   ctx.beginPath();
-  ctx.arc(W / 2, H / 2, 48, 0, Math.PI * 2);
+  ctx.arc(W / 2, H / 2, 52, 0, Math.PI * 2);
   ctx.stroke();
-
-  // Goals
-  const goalLeft = (W - GOAL_WIDTH) / 2;
-  ctx.fillStyle = "rgba(255, 107, 74, 0.35)";
-  ctx.fillRect(goalLeft, 0, GOAL_WIDTH, 10);
+  ctx.beginPath();
+  ctx.arc(W / 2, H / 2, 8, 0, Math.PI * 2);
   ctx.fillStyle = "rgba(126, 240, 212, 0.35)";
+  ctx.fill();
+
+  // Goals with glow
+  const goalLeft = (W - GOAL_WIDTH) / 2;
+  ctx.fillStyle = "rgba(255, 107, 74, 0.22)";
+  ctx.fillRect(goalLeft - 6, 0, GOAL_WIDTH + 12, 18);
+  ctx.fillStyle = "rgba(255, 107, 74, 0.55)";
+  ctx.fillRect(goalLeft, 0, GOAL_WIDTH, 10);
+  ctx.fillStyle = "rgba(126, 240, 212, 0.22)";
+  ctx.fillRect(goalLeft - 6, H - 18, GOAL_WIDTH + 12, 18);
+  ctx.fillStyle = "rgba(126, 240, 212, 0.55)";
   ctx.fillRect(goalLeft, H - 10, GOAL_WIDTH, 10);
 
   // Seat labels (online)
@@ -656,5 +640,14 @@ function roundRect(x, y, w, h, r) {
   ctx.closePath();
 }
 
-showMenu();
+// Deep-link from Mini App shell (?mode=ai|local|online&invite=…)
+if (bootInvite) {
+  startOnline(bootInvite);
+} else if (bootMode === "ai" || bootMode === "local") {
+  startOffline(bootMode);
+} else if (bootMode === "online") {
+  startOnline();
+} else {
+  showMenu();
+}
 requestAnimationFrame(frame);

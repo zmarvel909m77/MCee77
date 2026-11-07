@@ -3,16 +3,18 @@ import type { WebSocket } from "@fastify/websocket";
 import type { UserRepository } from "@mcee77/db";
 import {
   displayNameFromTelegramUser,
+  publicDisplayName,
   verifyTelegramInitData,
 } from "@mcee77/shared";
 import { MatchmakingService } from "./matchmaking.js";
 
 interface HelloMessage {
-  type: "hello" | "queue" | "reconnect" | "cancel_queue";
+  type: "hello" | "queue" | "reconnect" | "cancel_queue" | "join_invite";
   initData?: string;
   devTelegramId?: number;
   displayName?: string;
   roomToken?: string;
+  inviteKey?: string;
 }
 
 export function registerAirHockeyWs(
@@ -60,6 +62,20 @@ export function registerAirHockeyWs(
               telegramId: authed.telegramId,
               displayName: authed.displayName,
               socket,
+            });
+            return;
+          }
+
+          if (
+            parsed?.type === "join_invite" &&
+            typeof (parsed as HelloMessage).inviteKey === "string"
+          ) {
+            matchmaking.joinInvite({
+              userId: authed.userId,
+              telegramId: authed.telegramId,
+              displayName: authed.displayName,
+              socket,
+              inviteKey: (parsed as HelloMessage).inviteKey!,
             });
             return;
           }
@@ -185,7 +201,7 @@ function authenticate(
   return {
     userId: user.id,
     telegramId,
-    displayName: user.displayName,
+    displayName: publicDisplayName(user),
   };
 }
 

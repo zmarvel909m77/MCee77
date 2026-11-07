@@ -3,34 +3,42 @@ import type { FeatureFlags } from "@mcee77/shared";
 
 /** Main reply keyboard labels (Uzbek Latin). */
 export const BTN = {
-  rocketBird: "🚀 Rocket Bird",
-  airHockey: "🏒 Air Hockey",
+  play: "🏒 O‘ynash",
+  open: "OCHISH",
   rating: "🏆 Reyting",
   profile: "👤 Profil",
 } as const;
 
+export interface MainKeyboardOptions {
+  flags?: FeatureFlags;
+  /** When set, top button opens the Mini App via Telegram WebApp. */
+  miniAppUrl?: string;
+}
+
 /**
- * Build the main reply keyboard, omitting sections that are disabled.
- * If every section is off, returns an empty resized keyboard (no ads).
+ * Compact reply keyboard — Mini App is the primary entry.
+ * Omits sections disabled by admin feature flags.
  */
-export function mainKeyboard(flags?: FeatureFlags): Keyboard {
-  const f = flags ?? {
-    rocket_bird: true,
+export function mainKeyboard(opts?: MainKeyboardOptions | FeatureFlags): Keyboard {
+  const normalized: MainKeyboardOptions =
+    opts && "air_hockey" in (opts as FeatureFlags) && !("flags" in (opts as object))
+      ? { flags: opts as FeatureFlags }
+      : ((opts as MainKeyboardOptions) ?? {});
+
+  const f = normalized.flags ?? {
     air_hockey: true,
     rating: true,
     profile: true,
+    mini_app: true,
   };
+  const miniAppUrl = normalized.miniAppUrl?.trim() ?? "";
 
   const kb = new Keyboard();
-  const games: string[] = [];
-  if (f.rocket_bird) games.push(BTN.rocketBird);
-  if (f.air_hockey) games.push(BTN.airHockey);
-  if (games.length === 1) {
-    kb.text(games[0]!);
-    kb.row();
-  } else if (games.length === 2) {
-    kb.text(games[0]!).text(games[1]!);
-    kb.row();
+  if ((f.air_hockey || f.mini_app) && miniAppUrl) {
+    kb.webApp(BTN.open, miniAppUrl).row();
+    kb.text(BTN.play).row();
+  } else if (f.air_hockey || f.mini_app) {
+    kb.text(BTN.play).row();
   }
 
   const meta: string[] = [];

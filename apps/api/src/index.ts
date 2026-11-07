@@ -1,6 +1,7 @@
-import { resolve, dirname } from "node:path";
+import { createHash } from "node:crypto";
+import { mkdirSync, writeFileSync, existsSync, createReadStream } from "node:fs";
+import { resolve, dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { existsSync } from "node:fs";
 import { config as loadEnv } from "dotenv";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
@@ -8,14 +9,15 @@ import websocket from "@fastify/websocket";
 import { webhookCallback } from "grammy";
 import { createBot, resolveWebAppUrls } from "@mcee77/bot";
 import { createUserRepository } from "@mcee77/db";
-import {
-  clampAirHockeyOfflinePoints,
-  clampRocketBirdScore,
-  displayNameFromTelegramUser,
-  verifyTelegramInitData,
-} from "@mcee77/shared";
+import { MAX_AVATAR_BYTES, publicDisplayName } from "@mcee77/shared";
 import { registerAdminRoutes } from "./admin/routes.js";
 import { registerAirHockeyWs } from "./air-hockey/ws.js";
+import {
+  resolveTelegramIdentity,
+  upsertFromIdentity,
+  type IdentityBody,
+} from "./auth-identity.js";
+import { registerPresenceWs } from "./presence/ws.js";
 
 loadEnv({ path: resolve(process.cwd(), "../../.env") });
 loadEnv();
@@ -35,14 +37,8 @@ const webAppUrl =
     ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
     : "");
 
-const { rocketBirdUrl, airHockeyUrl } = resolveWebAppUrls(webAppUrl);
+const { miniAppUrl, airHockeyUrl } = resolveWebAppUrls(webAppUrl);
 
-/**
- * Bot transport:
- * - webhook (default in production) — same HTTPS process as API
- * - long_polling — run `npm run start:bot` separately
- * - none — API only
- */
 const botModeRaw = (process.env.BOT_MODE ?? "").trim().toLowerCase();
 const botMode: "webhook" | "long_polling" | "none" =
   botModeRaw === "webhook" ||
@@ -58,7 +54,12 @@ const webhookPath =
 const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim() || undefined;
 
 const users = createUserRepository(databasePath);
-const app = Fastify({ logger: true });
+const avatarRoot =
+  process.env.AVATAR_DIR?.trim() ||
+  resolve(dirname(databasePath), "avatars");
+mkdirSync(avatarRoot, { recursive: true });
+
+const app = Fastify({ logger: true, bodyLimit: MAX_AVATAR_BYTES + 64_000 });
 
 await app.register(websocket);
 
@@ -68,15 +69,23 @@ const matchmaking = registerAirHockeyWs(app, {
   allowDevScoreSubmit,
 });
 
+const presence = registerPresenceWs(app, {
+  users,
+  botToken,
+  allowDevScoreSubmit,
+});
+
 app.get("/healthz", async () => ({
   ok: true,
   service: "game-bot-api",
-  rocketBird: "/rocket-bird/",
+  miniApp: "/app/",
   airHockey: "/air-hockey/",
   airHockeyWs: "/ws/air-hockey",
+  presenceWs: "/ws/presence",
   botMode,
   webhookPath: botMode === "webhook" ? webhookPath : null,
   matchmaking: matchmaking.stats,
+  online: presence.listOnline().length,
 }));
 
 app.get("/api/v1/leaderboard", async (request) => {
@@ -85,6 +94,32 @@ app.get("/api/v1/leaderboard", async (request) => {
   return { items: users.getLeaderboard(limit) };
 });
 
+app.get("/api/v1/online", async () => ({
+  users: presence.listOnline(),
+}));
+
+/** Authenticated profile bootstrap (initData or dev). */
+app.post("/api/v1/me", async (request, reply) => {
+  const body = (request.body ?? {}) as IdentityBody;
+  const identity = resolveTelegramIdentity(body, {
+    botToken,
+    allowDevScoreSubmit,
+    log: request.log,
+  });
+  if (!identity.ok) {
+    return reply.code(identity.status).send({ error: identity.error });
+  }
+  const user = upsertFromIdentity(users, identity);
+  return {
+    user: {
+      ...user,
+      publicName: publicDisplayName(user),
+      game: "Air Hockey",
+    },
+  };
+});
+
+/** Legacy query lookup still used by older clients. */
 app.get("/api/v1/me", async (request, reply) => {
   const query = request.query as { telegram_id?: string };
   const telegramId = Number(query.telegram_id);
@@ -95,119 +130,152 @@ app.get("/api/v1/me", async (request, reply) => {
   if (!user) {
     return reply.code(404).send({ error: "user not found" });
   }
-  return { user };
+  return {
+    user: {
+      ...user,
+      publicName: publicDisplayName(user),
+      game: "Air Hockey",
+    },
+  };
 });
 
-interface ScoreBody {
-  initData?: string;
+app.patch("/api/v1/me", async (request, reply) => {
+  const body = (request.body ?? {}) as IdentityBody & { nickname?: string };
+  const identity = resolveTelegramIdentity(body, {
+    botToken,
+    allowDevScoreSubmit,
+    log: request.log,
+  });
+  if (!identity.ok) {
+    return reply.code(identity.status).send({ error: identity.error });
+  }
+  const user = upsertFromIdentity(users, identity);
+  if (typeof body.nickname !== "string") {
+    return reply.code(400).send({ error: "nickname required" });
+  }
+  const updated = users.updateProfile({
+    userId: user.id,
+    nickname: body.nickname,
+  });
+  presence.refreshProfile(updated.telegramId);
+  return {
+    user: {
+      ...updated,
+      publicName: publicDisplayName(updated),
+      game: "Air Hockey",
+    },
+  };
+});
+
+interface AvatarBody extends IdentityBody {
+  /** data URL or raw base64 */
+  imageBase64?: string;
+  mime?: string;
+}
+
+app.post("/api/v1/me/avatar", async (request, reply) => {
+  const body = (request.body ?? {}) as AvatarBody;
+  const identity = resolveTelegramIdentity(body, {
+    botToken,
+    allowDevScoreSubmit,
+    log: request.log,
+  });
+  if (!identity.ok) {
+    return reply.code(identity.status).send({ error: identity.error });
+  }
+  if (!body.imageBase64?.trim()) {
+    return reply.code(400).send({ error: "imageBase64 required" });
+  }
+
+  const parsed = parseAvatarPayload(body.imageBase64, body.mime);
+  if (!parsed.ok) {
+    return reply.code(400).send({ error: parsed.error });
+  }
+
+  const user = upsertFromIdentity(users, identity);
+  const fileName = `${user.id}.${parsed.ext}`;
+  const abs = join(avatarRoot, fileName);
+  writeFileSync(abs, parsed.buffer);
+  const avatarUrl = `/avatars/${fileName}?v=${createHash("sha1").update(parsed.buffer).digest("hex").slice(0, 8)}`;
+  const updated = users.updateProfile({
+    userId: user.id,
+    avatarUrl: `/avatars/${fileName}`,
+  });
+  presence.refreshProfile(updated.telegramId);
+  return {
+    user: {
+      ...updated,
+      publicName: publicDisplayName(updated),
+      game: "Air Hockey",
+      avatarUrl,
+    },
+  };
+});
+
+app.get("/avatars/:file", async (request, reply) => {
+  const params = request.params as { file: string };
+  const file = params.file;
+  if (!/^[a-zA-Z0-9._-]+$/.test(file) || file.includes("..")) {
+    return reply.code(400).send({ error: "invalid file" });
+  }
+  const abs = join(avatarRoot, file);
+  if (!existsSync(abs)) {
+    return reply.code(404).send({ error: "not found" });
+  }
+  const ext = extname(file).toLowerCase();
+  const type =
+    ext === ".png"
+      ? "image/png"
+      : ext === ".webp"
+        ? "image/webp"
+        : "image/jpeg";
+  return reply
+    .type(type)
+    .header("Cache-Control", "public, max-age=86400")
+    .send(createReadStream(abs));
+});
+
+interface ScoreBody extends IdentityBody {
   points?: number;
   game?: string;
   mode?: string;
-  /** Dev-only when ALLOW_DEV_SCORE_SUBMIT=true and initData absent */
-  devTelegramId?: number;
   meta?: Record<string, unknown>;
-}
-
-function resolveTelegramIdentity(
-  body: ScoreBody,
-  log: { warn: (obj: unknown, msg?: string) => void },
-):
-  | { ok: true; telegramId: number; username: string | null; displayName: string }
-  | { ok: false; status: number; error: string } {
-  if (body.initData?.trim()) {
-    if (!botToken) {
-      return {
-        ok: false,
-        status: 503,
-        error: "TELEGRAM_BOT_TOKEN not configured; cannot verify initData",
-      };
-    }
-    try {
-      const verified = verifyTelegramInitData(body.initData, botToken);
-      return {
-        ok: true,
-        telegramId: verified.user.id,
-        username: verified.user.username ?? null,
-        displayName: displayNameFromTelegramUser(verified.user),
-      };
-    } catch (err) {
-      log.warn({ err }, "initData verification failed");
-      return { ok: false, status: 401, error: "invalid initData" };
-    }
-  }
-
-  if (allowDevScoreSubmit && body.devTelegramId) {
-    const telegramId = Number(body.devTelegramId);
-    if (!Number.isFinite(telegramId) || telegramId <= 0) {
-      return { ok: false, status: 400, error: "devTelegramId invalid" };
-    }
-    log.warn({ telegramId }, "accepting unauthenticated dev score submit");
-    return {
-      ok: true,
-      telegramId,
-      username: null,
-      displayName: `Dev ${telegramId}`,
-    };
-  }
-
-  return {
-    ok: false,
-    status: 401,
-    error: "initData required (or ALLOW_DEV_SCORE_SUBMIT with devTelegramId)",
-  };
 }
 
 app.post("/api/v1/scores", async (request, reply) => {
   const body = (request.body ?? {}) as ScoreBody;
-  const game = body.game ?? "rocket_bird";
-  if (game !== "rocket_bird" && game !== "air_hockey") {
-    return reply.code(400).send({ error: "unsupported game" });
+  const game = body.game ?? "air_hockey";
+  if (game !== "air_hockey") {
+    return reply.code(400).send({
+      error: "faqat air_hockey qo‘llab-quvvatlanadi",
+    });
   }
 
-  const identity = resolveTelegramIdentity(body, request.log);
+  const identity = resolveTelegramIdentity(body, {
+    botToken,
+    allowDevScoreSubmit,
+    log: request.log,
+  });
   if (!identity.ok) {
     return reply.code(identity.status).send({ error: identity.error });
   }
 
-  const points =
-    game === "air_hockey"
-      ? clampAirHockeyOfflinePoints(Number(body.points))
-      : clampRocketBirdScore(Number(body.points));
-
-  const user = users.upsertByTelegramId({
-    telegramId: identity.telegramId,
-    username: identity.username,
-    displayName: identity.displayName,
-  });
-
-  const mode =
-    game === "air_hockey"
-      ? body.mode === "online"
-        ? "offline" // online results are server-written via matches — reject online client claims
-        : "offline"
-      : body.mode === "offline"
-        ? "offline"
-        : "solo";
-
-  if (game === "air_hockey" && body.mode === "online") {
+  if (body.mode === "online") {
     return reply.code(400).send({
       error: "online air hockey results are server-authoritative",
     });
   }
 
-  const result = users.submitScore({
-    userId: user.id,
-    game,
-    mode,
-    points,
-    meta: body.meta ?? null,
-  });
+  // Offline never awards points (product rule) — do not mutate rating/totals.
+  const user = upsertFromIdentity(users, identity);
+  users.touchLastSeen(user.id);
 
   return {
     ok: true,
-    pointsAwarded: result.pointsAwarded,
-    score: result.score,
-    user: result.user,
+    pointsAwarded: 0,
+    score: null,
+    user,
+    note: "Offline o‘yin ball bermaydi",
   };
 });
 
@@ -220,10 +288,8 @@ app.get("/api/v1/matches/:id", async (request, reply) => {
   return { match };
 });
 
-app.get("/rocket-bird", async (_request, reply) =>
-  reply.redirect("/rocket-bird/", 302),
-);
-
+app.get("/", async (_request, reply) => reply.redirect("/app/", 302));
+app.get("/app", async (_request, reply) => reply.redirect("/app/", 302));
 app.get("/air-hockey", async (_request, reply) =>
   reply.redirect("/air-hockey/", 302),
 );
@@ -258,8 +324,8 @@ if (existsSync(publicRoot)) {
 }
 
 const shutdown = async () => {
+  presence.destroy();
   matchmaking.destroy();
-  // Keep Telegram webhook registered across rolling restarts.
   await app.close();
   users.close();
   process.exit(0);
@@ -269,9 +335,11 @@ process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
 await app.listen({ host, port });
-app.log.info(`Rocket Bird Mini App: http://${host}:${port}/rocket-bird/`);
+app.log.info(`Mini App shell:       http://${host}:${port}/app/`);
 app.log.info(`Air Hockey Mini App:  http://${host}:${port}/air-hockey/`);
 app.log.info(`Air Hockey WS:        ws://${host}:${port}/ws/air-hockey`);
+app.log.info(`Presence WS:          ws://${host}:${port}/ws/presence`);
+app.log.info(`Avatars dir:          ${avatarRoot}`);
 
 if (bot && botMode === "webhook") {
   if (!webAppUrl) {
@@ -289,10 +357,45 @@ if (bot && botMode === "webhook") {
       app.log.info(
         `Telegram webhook set for @${me.username}: ${webhookUrl}`,
       );
-      if (rocketBirdUrl) app.log.info(`Rocket Bird WebApp: ${rocketBirdUrl}`);
+      if (miniAppUrl) app.log.info(`Mini App Menu Button URL: ${miniAppUrl}`);
       if (airHockeyUrl) app.log.info(`Air Hockey WebApp: ${airHockeyUrl}`);
     } catch (err) {
       app.log.error({ err }, `failed to setWebhook(${webhookUrl})`);
     }
   }
+}
+
+function parseAvatarPayload(
+  raw: string,
+  mimeHint?: string,
+):
+  | { ok: true; buffer: Buffer; ext: string }
+  | { ok: false; error: string } {
+  let mime = mimeHint?.trim() || "image/jpeg";
+  let b64 = raw.trim();
+  const dataUrl = /^data:(image\/(?:jpeg|jpg|png|webp));base64,(.+)$/i.exec(b64);
+  if (dataUrl) {
+    mime = dataUrl[1]!.toLowerCase();
+    b64 = dataUrl[2]!;
+  }
+  let buffer: Buffer;
+  try {
+    buffer = Buffer.from(b64, "base64");
+  } catch {
+    return { ok: false, error: "base64 decode failed" };
+  }
+  if (!buffer.length) return { ok: false, error: "empty image" };
+  if (buffer.length > MAX_AVATAR_BYTES) {
+    return {
+      ok: false,
+      error: `rasm juda katta (max ${Math.floor(MAX_AVATAR_BYTES / 1024)}KB)`,
+    };
+  }
+  const ext =
+    mime.includes("png")
+      ? "png"
+      : mime.includes("webp")
+        ? "webp"
+        : "jpg";
+  return { ok: true, buffer, ext };
 }

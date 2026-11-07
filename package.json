@@ -2,7 +2,7 @@
   "name": "mcee77-game-bot",
   "version": "0.1.0",
   "private": true,
-  "description": "GAME BOT — Telegram games with rating (Rocket Bird + Air Hockey)",
+  "description": "GAME BOT — Telegram Mini App Air Hockey with rating",
   "workspaces": [
     "apps/*",
     "packages/*"

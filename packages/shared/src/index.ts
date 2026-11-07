@@ -10,7 +10,12 @@ export interface User {
   id: string;
   telegramId: number;
   username: string | null;
+  /** Telegram-derived name (first/last); may be overridden in UI by nickname. */
   displayName: string;
+  /** Editable Mini App nickname; when set, preferred over displayName. */
+  nickname: string | null;
+  /** Public path or URL for profile photo (e.g. /avatars/<id>.jpg). */
+  avatarUrl: string | null;
   totalPoints: number;
   rating: number;
   gamesPlayed: number;
@@ -18,6 +23,12 @@ export interface User {
   updatedAt: string;
   /** ISO timestamp of last /start, score, or WS join (best-effort activity). */
   lastSeenAt: string | null;
+}
+
+/** Prefer editable nickname when present. */
+export function publicDisplayName(user: Pick<User, "nickname" | "displayName">): string {
+  const nick = user.nickname?.trim();
+  return nick || user.displayName;
 }
 
 export interface AdminStats {
@@ -35,39 +46,35 @@ export interface AdminStats {
 }
 
 /** Bot main-menu / command feature toggles (admin-controlled). */
-export type FeatureFlagKey =
-  | "rocket_bird"
-  | "air_hockey"
-  | "rating"
-  | "profile";
+export type FeatureFlagKey = "air_hockey" | "rating" | "profile" | "mini_app";
 
 export interface FeatureFlags {
-  rocket_bird: boolean;
   air_hockey: boolean;
   rating: boolean;
   profile: boolean;
+  mini_app: boolean;
 }
 
 export const FEATURE_FLAG_KEYS: readonly FeatureFlagKey[] = [
-  "rocket_bird",
   "air_hockey",
   "rating",
   "profile",
+  "mini_app",
 ] as const;
 
 /** Defaults: every section ON. */
 export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
-  rocket_bird: true,
   air_hockey: true,
   rating: true,
   profile: true,
+  mini_app: true,
 };
 
 export const FEATURE_FLAG_LABELS: Record<FeatureFlagKey, string> = {
-  rocket_bird: "Rocket Bird",
   air_hockey: "Air Hockey",
   rating: "Reyting",
   profile: "Profil",
+  mini_app: "Mini App",
 };
 
 export interface LeaderboardEntry {
@@ -75,8 +82,22 @@ export interface LeaderboardEntry {
   telegramId: number;
   displayName: string;
   username: string | null;
+  avatarUrl: string | null;
   totalPoints: number;
   rating: number;
+}
+
+export interface OnlineUser {
+  telegramId: number;
+  displayName: string;
+  avatarUrl: string | null;
+  rating: number;
+}
+
+export interface UpdateProfileInput {
+  userId: string;
+  nickname?: string;
+  avatarUrl?: string | null;
 }
 
 export interface UpsertUserInput {
@@ -152,17 +173,23 @@ export interface FinishMatchResult {
 /** Max accepted session score (anti-cheat cap for MVP). */
 export const MAX_ROCKET_BIRD_SCORE = 500;
 
-/** Cap for offline Air Hockey client-submitted points. */
-export const MAX_AIR_HOCKEY_OFFLINE_POINTS = 40;
+/**
+ * Offline never awards rating/points (product rule).
+ * Cap kept at 0 so legacy client submits are clamped to zero.
+ */
+export const MAX_AIR_HOCKEY_OFFLINE_POINTS = 0;
 
 /** Online match point deltas (server-authoritative). */
 export const AIR_HOCKEY_ONLINE_WIN_POINTS = 25;
 export const AIR_HOCKEY_ONLINE_LOSS_POINTS = 8;
 export const AIR_HOCKEY_ONLINE_ABORT_POINTS = 0;
 
-/** Offline participation / win points (client reports, clamped). */
-export const AIR_HOCKEY_OFFLINE_WIN_POINTS = 15;
-export const AIR_HOCKEY_OFFLINE_LOSS_POINTS = 5;
+/** Offline: no points (win or lose). */
+export const AIR_HOCKEY_OFFLINE_WIN_POINTS = 0;
+export const AIR_HOCKEY_OFFLINE_LOSS_POINTS = 0;
+
+/** Avatar upload hard limit (bytes) after decode. */
+export const MAX_AVATAR_BYTES = 512 * 1024;
 
 export const AIR_HOCKEY_WIN_SCORE = 5;
 

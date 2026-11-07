@@ -1,14 +1,14 @@
 import type { FeatureFlagKey, LeaderboardEntry, User } from "@mcee77/shared";
-import { FEATURE_FLAG_LABELS } from "@mcee77/shared";
+import { FEATURE_FLAG_LABELS, publicDisplayName } from "@mcee77/shared";
 
 export function welcomeMessage(displayName: string): string {
   return [
     `Salom, ${displayName}! 👋`,
     "",
     "GAME BOT ga xush kelibsiz.",
-    "O‘yin o‘ynang, ball to‘plang, reytingda ko‘tariling.",
+    "Air Hockey o‘ynang, online o‘yinlarda ball to‘plang, reytingda ko‘tariling.",
     "",
-    "Pastdagi tugmalardan birini tanlang.",
+    "Pastdagi OCHISH / O‘ynash tugmasi orqali Mini App ni oching.",
   ].join("\n");
 }
 
@@ -28,8 +28,9 @@ export function profileMessage(user: User): string {
   return [
     "👤 Profil",
     "",
-    `Ism: ${user.displayName}`,
+    `Ism: ${publicDisplayName(user)}`,
     `Username: ${handle}`,
+    `O‘yin: Air Hockey`,
     `Ball: ${user.totalPoints}`,
     `Reyting: ${user.rating}`,
     `O‘yinlar: ${user.gamesPlayed}`,
@@ -42,50 +43,39 @@ export function leaderboardMessage(entries: LeaderboardEntry[]): string {
       "🏆 Reyting",
       "",
       "Hali hech kim ball yig‘magan.",
-      "Rocket Bird yoki Air Hockey o‘ynab birinchi bo‘ling!",
+      "Online Air Hockey o‘ynab birinchi bo‘ling!",
     ].join("\n");
   }
 
   const lines = entries.map((e) => {
     const name = e.username ? `@${e.username}` : e.displayName;
-    return `${e.rank}. ${name} — ${e.totalPoints} ball`;
+    return `${e.rank}. ${name} — ${e.totalPoints} ball · ${e.rating}`;
   });
 
   return ["🏆 Reyting (top)", "", ...lines].join("\n");
 }
 
-export function rocketBirdOpenMessage(hasWebApp: boolean): string {
+export function miniAppOpenMessage(hasWebApp: boolean): string {
   if (hasWebApp) {
     return [
-      "🚀 Rocket Bird",
+      "🏒 GAME BOT — Air Hockey",
       "",
       "Mini App ochish uchun pastdagi tugmani bosing.",
-      "Tegin — raketa uchadi, quvurlardan o‘ting, ball yig‘ing!",
+      "Profil · O‘yin · Reyting — barchasi ichida.",
+      "",
+      "Online g‘alaba/mag‘lubiyat ball beradi.",
+      "Offline o‘yin ball bermaydi.",
     ].join("\n");
   }
   return [
-    "🚀 Rocket Bird",
+    "🏒 GAME BOT",
     "",
     "WEBAPP_URL sozlanmagan.",
-    "Serverda HTTPS Mini App URL ni `.env` ga qo‘ying (masalan tunnel).",
-    "Lokal: API ni ishga tushirib `/rocket-bird/` ni brauzerda oching.",
+    "Serverda HTTPS Mini App URL ni `.env` ga qo‘ying.",
+    "Lokal: API ni ishga tushirib `/app/` ni brauzerda oching.",
   ].join("\n");
 }
 
 export function airHockeyOpenMessage(hasWebApp: boolean): string {
-  if (hasWebApp) {
-    return [
-      "🏒 Air Hockey",
-      "",
-      "Mini App ochish uchun pastdagi tugmani bosing.",
-      "Offline (AI / 2 o‘yinchi) yoki Online random matchmaking.",
-    ].join("\n");
-  }
-  return [
-    "🏒 Air Hockey",
-    "",
-    "WEBAPP_URL sozlanmagan.",
-    "Serverda HTTPS Mini App URL ni `.env` ga qo‘ying (masalan tunnel).",
-    "Lokal: API ni ishga tushirib `/air-hockey/` ni brauzerda oching.",
-  ].join("\n");
+  return miniAppOpenMessage(hasWebApp);
 }
