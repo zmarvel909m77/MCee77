@@ -5,6 +5,7 @@ import Database from "better-sqlite3";
 import {
   DEFAULT_RATING,
   DEFAULT_TOTAL_POINTS,
+  type AdminStats,
   type CreateMatchInput,
   type FinishMatchInput,
   type FinishMatchResult,
@@ -30,6 +31,7 @@ interface UserRow {
   games_played: number;
   created_at: string;
   updated_at: string;
+  last_seen_at: string | null;
 }
 
 interface ScoreRow {
@@ -68,6 +70,7 @@ function mapUser(row: UserRow): User {
     gamesPlayed: row.games_played,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    lastSeenAt: row.last_seen_at ?? null,
   };
 }
 
@@ -121,7 +124,8 @@ export class UserRepository {
         rating INTEGER NOT NULL DEFAULT 1000,
         games_played INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
+        updated_at TEXT NOT NULL,
+        last_seen_at TEXT
       );
 
       CREATE INDEX IF NOT EXISTS idx_users_total_points
@@ -158,6 +162,23 @@ export class UserRepository {
       CREATE INDEX IF NOT EXISTS idx_matches_status_started
         ON matches(status, started_at);
     `);
+
+    // Migration-safe for existing SQLite DBs created before last_seen_at.
+    const cols = this.db
+      .prepare(`PRAGMA table_info(users)`)
+      .all() as Array<{ name: string }>;
+    if (!cols.some((c) => c.name === "last_seen_at")) {
+      this.db.exec(`ALTER TABLE users ADD COLUMN last_seen_at TEXT`);
+      // Best-effort backfill from updated_at so active counts are not empty.
+      this.db.exec(
+        `UPDATE users SET last_seen_at = updated_at WHERE last_seen_at IS NULL`,
+      );
+    }
+
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_users_last_seen
+        ON users(last_seen_at);
+    `);
   }
 
   upsertByTelegramId(input: UpsertUserInput): User {
@@ -169,13 +190,15 @@ export class UserRepository {
         UPDATE users
         SET username = ?,
             display_name = ?,
-            updated_at = ?
+            updated_at = ?,
+            last_seen_at = ?
         WHERE telegram_id = ?
         RETURNING *
       `);
       const row = stmt.get(
         input.username ?? null,
         input.displayName,
+        now,
         now,
         input.telegramId,
       ) as UserRow;
@@ -186,8 +209,8 @@ export class UserRepository {
     const stmt = this.db.prepare(`
       INSERT INTO users (
         id, telegram_id, username, display_name,
-        total_points, rating, games_played, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
+        total_points, rating, games_played, created_at, updated_at, last_seen_at
+      ) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
       RETURNING *
     `);
     const row = stmt.get(
@@ -199,8 +222,19 @@ export class UserRepository {
       DEFAULT_RATING,
       now,
       now,
+      now,
     ) as UserRow;
     return mapUser(row);
+  }
+
+  /** Bump last_seen_at without changing profile fields. */
+  touchLastSeen(userId: string): void {
+    const now = new Date().toISOString();
+    this.db
+      .prepare(
+        `UPDATE users SET last_seen_at = ?, updated_at = ? WHERE id = ?`,
+      )
+      .run(now, now, userId);
   }
 
   findByTelegramId(telegramId: number): User | null {
@@ -284,12 +318,13 @@ export class UserRepository {
           SET total_points = total_points + ?,
               rating = rating + ?,
               games_played = games_played + 1,
-              updated_at = ?
+              updated_at = ?,
+              last_seen_at = ?
           WHERE id = ?
           RETURNING *
         `,
         )
-        .get(input.points, input.points, now, input.userId) as UserRow;
+        .get(input.points, input.points, now, now, input.userId) as UserRow;
 
       return {
         score: mapScore(scoreRow),
@@ -423,12 +458,13 @@ export class UserRepository {
             SET total_points = total_points + ?,
                 rating = rating + ?,
                 games_played = games_played + 1,
-                updated_at = ?
+                updated_at = ?,
+                last_seen_at = ?
             WHERE id = ?
             RETURNING *
           `,
           )
-          .get(points, points, now, userId) as UserRow;
+          .get(points, points, now, now, userId) as UserRow;
       };
 
       const playerARow = applyPoints(
@@ -455,6 +491,86 @@ export class UserRepository {
     });
 
     return tx();
+  }
+
+  /**
+   * Admin dashboard counters. Live Air Hockey rooms/queue come from the
+   * in-memory matchmaking service and are merged by the API layer.
+   */
+  getAdminStats(opts?: {
+    airHockey?: { activeRooms: number; queueDepth: number };
+    topLimit?: number;
+  }): AdminStats {
+    const now = new Date();
+    const isoNow = now.toISOString();
+    const dayStart = new Date(now);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayStartIso = dayStart.toISOString();
+    const ago24h = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+
+    const totalUsers = (
+      this.db.prepare(`SELECT COUNT(*) AS n FROM users`).get() as { n: number }
+    ).n;
+
+    const activeToday = (
+      this.db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM users WHERE last_seen_at IS NOT NULL AND last_seen_at >= ?`,
+        )
+        .get(dayStartIso) as { n: number }
+    ).n;
+
+    const active24h = (
+      this.db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM users WHERE last_seen_at IS NOT NULL AND last_seen_at >= ?`,
+        )
+        .get(ago24h) as { n: number }
+    ).n;
+
+    // Session-ish count: solo/offline score rows + online matches (avoid double-count;
+    // finishMatch also writes per-player score rows for online).
+    const soloOfflineToday = (
+      this.db
+        .prepare(
+          `
+          SELECT COUNT(*) AS n FROM scores
+          WHERE created_at >= ?
+            AND mode IN ('solo', 'offline')
+        `,
+        )
+        .get(dayStartIso) as { n: number }
+    ).n;
+
+    const matchesToday = (
+      this.db
+        .prepare(
+          `
+          SELECT COUNT(*) AS n FROM matches
+          WHERE status IN ('finished', 'aborted')
+            AND COALESCE(ended_at, started_at) >= ?
+        `,
+        )
+        .get(dayStartIso) as { n: number }
+    ).n;
+
+    const activeRooms = opts?.airHockey?.activeRooms ?? 0;
+    const queueDepth = opts?.airHockey?.queueDepth ?? 0;
+    const topLimit = Math.min(Math.max(opts?.topLimit ?? 5, 1), 20);
+
+    return {
+      totalUsers,
+      activeToday,
+      active24h,
+      gamesToday: soloOfflineToday + matchesToday,
+      airHockey: {
+        activeRooms,
+        approxPlayers: activeRooms * 2,
+        queueDepth,
+      },
+      topRating: this.getLeaderboard(topLimit),
+      generatedAt: isoNow,
+    };
   }
 
   close(): void {

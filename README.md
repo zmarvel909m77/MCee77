@@ -105,6 +105,7 @@ apps/api/                     Fastify REST + WS + static Mini Apps
 apps/api/public/rocket-bird/  canvas Rocket Bird
 apps/api/public/air-hockey/   canvas Air Hockey
 apps/api/src/air-hockey/      matchmaking + authoritative rooms
+apps/api/src/admin/           /admin stats panel + secret gate
 packages/db/                  SQLite users + scores + matches
 packages/shared/              types + initData verify
 data/                         Local SQLite file (gitignored)
@@ -123,11 +124,28 @@ One service runs the API + Mini Apps + WS **and** the Telegram bot (webhook on t
 | `TELEGRAM_BOT_TOKEN` | **yes** | BotFather token for `@mcee77bot` (dashboard secret — **never commit**) |
 | `WEBAPP_URL` | **yes** (after URL known) | `https://<your-app>.up.railway.app` (no trailing slash) |
 | `ALLOW_DEV_SCORE_SUBMIT` | yes | `false` |
+| `ADMIN_SECRET` | recommended | random long string for `/admin` (never commit) |
 | `PORT` | set by host | Railway/Render inject this; app binds `PORT` then `API_PORT` |
 | `BOT_MODE` | optional | `webhook` (Dockerfile default) |
 | `DATABASE_PATH` | optional | `/data/gamebot.sqlite` in Docker |
 | `TELEGRAM_WEBHOOK_SECRET` | optional | random string; also sent to `setWebhook` |
 | `NODE_ENV` | optional | `production` |
+
+## Admin statistika / Admin stats
+
+Oddiy o‘qiladigan admin panel (o‘zbekcha lotin UI): jami foydalanuvchilar, bugun/24 soat aktiv, hozir Air Hockey o‘yinida (xonalar + navbat), bugungi o‘yinlar, qisqa top reyting.
+
+Readable admin panel (Uzbek Latin UI): total users, active today/24h, live Air Hockey rooms + queue, games today, short top rating.
+
+1. Railway **Variables** ga `ADMIN_SECRET` qo‘shing (uzun tasodifiy satr; gitga yozmang).
+2. Ochish: `https://<WEBAPP_URL-host>/admin?key=SECRET` — cookie saqlanadi, keyin `/admin` yetarli.
+3. JSON: `GET /api/v1/admin/stats` — header `x-admin-secret: SECRET` yoki cookie/`?key=`.
+4. `ADMIN_SECRET` bo‘lmasa admin **404** qaytaradi.
+
+```bash
+# misol / example
+curl -H "x-admin-secret: $ADMIN_SECRET" https://<host>/api/v1/admin/stats
+```
 
 ### Railway (dashboard) — qadamma-qadam / step-by-step
 
@@ -139,6 +157,7 @@ One service runs the API + Mini Apps + WS **and** the Telegram bot (webhook on t
    - `TELEGRAM_BOT_TOKEN` = BotFather dagi token (hech qachon chat/README/git ga yozmang)
    - `ALLOW_DEV_SCORE_SUBMIT` = `false`
    - `NODE_ENV` = `production`
+   - `ADMIN_SECRET` = uzun tasodifiy satr (`/admin` paneli uchun)
 4. **Settings → Networking → Generate Domain** → public HTTPS URL chiqadi.
 5. `WEBAPP_URL` = shu URL (masalan `https://xxxx.up.railway.app`) ni Variables ga qo‘shing → redeploy.
 6. Ixtiyoriy: **Volumes** → `/data` mount (SQLite saqlansin).
@@ -148,10 +167,11 @@ One service runs the API + Mini Apps + WS **and** the Telegram bot (webhook on t
 
 1. [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub** → this repo.
 2. Builder uses `Dockerfile` / `railway.toml`.
-3. Add Variables: `TELEGRAM_BOT_TOKEN`, `ALLOW_DEV_SCORE_SUBMIT=false`, `NODE_ENV=production`.
+3. Add Variables: `TELEGRAM_BOT_TOKEN`, `ALLOW_DEV_SCORE_SUBMIT=false`, `NODE_ENV=production`, `ADMIN_SECRET=<long random>`.
 4. Generate a public domain, then set `WEBAPP_URL` to that `https://…` origin and redeploy.
 5. Optional volume at `/data` so SQLite survives restarts.
 6. Confirm logs show webhook set and `GET /healthz` returns ok.
+7. Open `/admin?key=<ADMIN_SECRET>` after deploy.
 
 ### BotFather Menu Button / Web App URL
 

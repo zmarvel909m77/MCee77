@@ -14,6 +14,7 @@ import {
   displayNameFromTelegramUser,
   verifyTelegramInitData,
 } from "@mcee77/shared";
+import { registerAdminRoutes } from "./admin/routes.js";
 import { registerAirHockeyWs } from "./air-hockey/ws.js";
 
 loadEnv({ path: resolve(process.cwd(), "../../.env") });
@@ -226,6 +227,8 @@ app.get("/rocket-bird", async (_request, reply) =>
 app.get("/air-hockey", async (_request, reply) =>
   reply.redirect("/air-hockey/", 302),
 );
+
+registerAdminRoutes(app, { users, matchmaking });
 
 let bot: ReturnType<typeof createBot> | null = null;
 

@@ -16,6 +16,22 @@ export interface User {
   gamesPlayed: number;
   createdAt: string;
   updatedAt: string;
+  /** ISO timestamp of last /start, score, or WS join (best-effort activity). */
+  lastSeenAt: string | null;
+}
+
+export interface AdminStats {
+  totalUsers: number;
+  activeToday: number;
+  active24h: number;
+  gamesToday: number;
+  airHockey: {
+    activeRooms: number;
+    approxPlayers: number;
+    queueDepth: number;
+  };
+  topRating: LeaderboardEntry[];
+  generatedAt: string;
 }
 
 export interface LeaderboardEntry {
