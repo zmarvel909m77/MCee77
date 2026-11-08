@@ -71,8 +71,11 @@ if (tg) {
 /** @typedef {"ready"|"playing"|"paused"|"dying"|"over"} Phase */
 /** @typedef {"idle"|"walk"|"kick"|"punch"|"hurt"|"defeat"} HeroPose */
 
-/** Visible queue ~6 segments — readable like refs. */
-const SEGMENTS = 6;
+/**
+ * Tall pole fills the playfield (ground → canvas top).
+ * Sparse hazards: 2–5 empty segments between branches ≈ 1.5–4× hero height.
+ */
+const SEGMENTS = 14;
 const ENERGY_MAX = 100;
 /** Base drain/sec — ramps with score so opening feels fair, later snappy. */
 const ENERGY_DRAIN = 11;
@@ -154,7 +157,10 @@ let graceLeft = 0;
 /** Alternate punch occasionally so sheet punch+stars also appear. */
 let strikeCount = 0;
 
-/** @type {{ x: number, y: number, vx: number, vy: number, rot: number, vr: number, life: number }[]} */
+/**
+ * Flying split-log chunks (bo‘linish).
+ * @type {{ x: number, y: number, vx: number, vy: number, rot: number, vr: number, life: number, w: number, h: number, branch: Side }[]}
+ */
 let debris = [];
 /** @type {{ x: number, y: number, vy: number, life: number, text: string }[]} */
 let floats = [];
@@ -187,25 +193,41 @@ async function waitForAuthPayload(maxMs = 2500) {
 }
 
 /**
+ * Count empty segments at the top of the queue (since last hazard).
+ * @param {Side[]} arr
+ * @returns {number}
+ */
+function trailingEmpties(arr) {
+  let n = 0;
+  for (let i = arr.length - 1; i >= 0; i--) {
+    if (arr[i] != null) break;
+    n++;
+  }
+  return n;
+}
+
+/**
  * Timberman / Karate rhythm:
- * - empty segments between branches (readable gaps)
+ * - wide empty stretches between branches (≈1.5–4× hero height)
  * - never both sides on one height (Side is single-valued)
  * - alternate L/R patterns that ramp with score
  * @param {number} runScore
  * @param {Side} prevSide
- * @param {boolean} lastWasBranch
+ * @param {number} emptiesSinceBranch
  * @returns {Side}
  */
-function nextBranch(runScore, prevSide, lastWasBranch) {
-  // Prefer empty after a branch — refs show clear gaps between hazards.
-  const emptyChance = Math.max(0.18, 0.72 - runScore * 0.008);
-  if (lastWasBranch && Math.random() < emptyChance) return null;
-  // Occasional second empty early — keeps queue airy.
-  if (!lastWasBranch && Math.random() < Math.max(0.08, 0.34 - runScore * 0.005)) {
-    return null;
-  }
+function nextBranch(runScore, prevSide, emptiesSinceBranch) {
+  // Hard minimum empties → ≈1.5×+ hero height after every kick
+  const minGap = runScore < 50 ? 3 : 2;
+  // Soft target — refs often show 3–5 empty trunk rings between hazards
+  const softGap = runScore < 25 ? 5 : runScore < 70 ? 4 : 3;
 
-  const switchChance = Math.min(0.88, 0.55 + runScore * 0.007);
+  if (emptiesSinceBranch < minGap) return null;
+  if (emptiesSinceBranch < softGap && Math.random() < 0.78) return null;
+  // Extra air occasionally so the pole stays sparse
+  if (Math.random() < Math.max(0.1, 0.32 - runScore * 0.0025)) return null;
+
+  const switchChance = Math.min(0.9, 0.58 + runScore * 0.006);
   if (prevSide) {
     if (Math.random() < switchChance) {
       return prevSide === "left" ? "right" : "left";
@@ -216,8 +238,23 @@ function nextBranch(runScore, prevSide, lastWasBranch) {
 }
 
 function seedTrunk() {
-  // Opening queue: empties + gentle L/R with gaps (readable Timberman rhythm)
-  trunk = [null, null, "left", null, "right", null];
+  // Sparse opening: safe start + wide gaps (ref Timberman rhythm)
+  trunk = [
+    null,
+    null,
+    null,
+    "left",
+    null,
+    null,
+    null,
+    "right",
+    null,
+    null,
+    null,
+    "left",
+    null,
+    null,
+  ];
   while (trunk.length < SEGMENTS) {
     trunk.push(null);
   }
@@ -625,25 +662,39 @@ function drawPlayer(x, y, side, now, scaleMul = 1) {
   ctx.restore();
 }
 
-function spawnDebris(cx, baseY, trunkW, segH, side) {
-  const dir = side === "left" ? -1 : 1;
+/**
+ * Spawn a trunk-width flying split log (bo‘linish) opposite the hero,
+ * down-diagonal like the GAMEE ref, plus wood chips.
+ * @param {number} cx
+ * @param {number} baseY
+ * @param {number} trunkW
+ * @param {number} segH
+ * @param {Side} side hero kick side
+ * @param {Side} [branch] branch attached to the chopped segment
+ */
+function spawnDebris(cx, baseY, trunkW, segH, side, branch = null) {
+  // Opposite the hero — right kick → chunk flies left-down
+  const dir = side === "left" ? 1 : -1;
   debris.push({
     x: cx,
-    y: baseY - segH,
-    vx: dir * (5 + Math.random() * 3.5),
-    vy: -2.5 - Math.random() * 2,
-    rot: 0,
-    vr: dir * 0.14,
-    life: 1,
+    y: baseY - segH * 0.55,
+    vx: dir * (7.5 + Math.random() * 4.5),
+    vy: 1.8 + Math.random() * 2.4,
+    rot: dir * 0.45,
+    vr: dir * (0.16 + Math.random() * 0.1),
+    life: 1.2,
+    w: trunkW,
+    h: segH * 0.95,
+    branch: branch || null,
   });
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 12; i++) {
     chips.push({
-      x: cx + (Math.random() - 0.5) * trunkW,
-      y: baseY - segH * 0.5,
-      r: 1.5 + Math.random() * 2.8,
+      x: cx + (Math.random() - 0.5) * trunkW * 1.1,
+      y: baseY - segH * (0.3 + Math.random() * 0.5),
+      r: 1.4 + Math.random() * 3.2,
       a: 1,
-      vy: -1.5 - Math.random() * 3,
-      vx: (Math.random() - 0.5) * 4,
+      vy: -0.5 + Math.random() * 4,
+      vx: dir * (2 + Math.random() * 5) + (Math.random() - 0.5) * 2,
     });
   }
 }
@@ -668,8 +719,8 @@ function layout() {
     Math.min(GROUND_MAX, Math.round(h * 0.09)),
   );
   const baseY = Math.max(groundH + 80, h - groundH);
-  const playH = Math.max(120, baseY);
-  const segH = Math.min(58, (playH * 0.72) / SEGMENTS);
+  // Continuous pole: SEGMENTS × segH == baseY → trunk reaches canvas top
+  const segH = Math.max(28, baseY / SEGMENTS);
   return { w, h, cx, trunkW, segH, baseY, groundH };
 }
 
@@ -682,12 +733,21 @@ function draw(now) {
   const shakeX = shake > 0 ? (Math.random() - 0.5) * shake : 0;
   drawAtmosphere(w, h, baseY);
 
-  // Trunk — light brown wood with vertical grain
+  // Trunk — continuous pole from ground through full playfield (to canvas top)
+  const trunkX = cx - trunkW / 2 + shakeX;
+  // Solid fill first so the pole never stops mid-screen
+  ctx.fillStyle = "#b8895a";
+  ctx.fillRect(trunkX, 0, trunkW, baseY + 1);
+  ctx.fillStyle = "rgba(255, 230, 190, 0.14)";
+  ctx.fillRect(trunkX + 3, 0, 5, baseY);
+
   for (let i = SEGMENTS - 1; i >= 0; i--) {
     const y = baseY - (i + 1) * segH + shakeX * 0.12;
-    const x = cx - trunkW / 2 + shakeX;
-    const shade = i % 2 === 0 ? "#c49a6c" : "#b8895a";
-    roundRect(x, y, trunkW, segH + 1, 4, shade);
+    const x = trunkX;
+    // Alternating ring shade (overlap avoids hairlines)
+    const shade = i % 2 === 0 ? "rgba(196, 154, 108, 0.92)" : "rgba(168, 120, 78, 0.55)";
+    ctx.fillStyle = shade;
+    ctx.fillRect(x, y, trunkW, segH + 1.5);
     // vertical grain
     ctx.strokeStyle = "rgba(90, 50, 25, 0.22)";
     ctx.lineWidth = 1.4;
@@ -698,9 +758,6 @@ function draw(now) {
       ctx.lineTo(gx + (g % 2 ? 1.5 : -1), y + segH - 4);
       ctx.stroke();
     }
-    // soft highlight
-    ctx.fillStyle = "rgba(255, 230, 190, 0.18)";
-    ctx.fillRect(x + 3, y + 2, 5, segH - 4);
     // ring
     ctx.strokeStyle = "rgba(60, 30, 12, 0.2)";
     ctx.lineWidth = 2;
@@ -739,15 +796,30 @@ function draw(now) {
   ctx.restore();
   ctx.globalAlpha = 1;
 
-  // Debris (flying wood)
+  // Debris — trunk-width flying split log (bo‘linish)
   for (const d of debris) {
+    const dw = d.w || trunkW;
+    const dh = d.h || segH * 0.9;
     ctx.save();
     ctx.translate(d.x, d.y);
     ctx.rotate(d.rot);
-    ctx.globalAlpha = Math.max(0, d.life);
-    roundRect(-trunkW / 2, 0, trunkW, segH * 0.9, 3, "#c49a6c");
-    ctx.strokeStyle = "rgba(90, 50, 25, 0.3)";
-    ctx.strokeRect(-trunkW / 2 + 2, 4, trunkW - 4, segH * 0.7);
+    ctx.globalAlpha = Math.max(0, Math.min(1, d.life));
+    roundRect(-dw / 2, -dh / 2, dw, dh, 4, "#c49a6c");
+    // grain on flying chunk
+    ctx.strokeStyle = "rgba(90, 50, 25, 0.28)";
+    ctx.lineWidth = 1.3;
+    for (let g = 0; g < 3; g++) {
+      const gx = -dw / 2 + 8 + g * ((dw - 16) / 2.5);
+      ctx.beginPath();
+      ctx.moveTo(gx, -dh / 2 + 4);
+      ctx.lineTo(gx + (g % 2 ? 1.2 : -1), dh / 2 - 4);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "rgba(255, 230, 190, 0.16)";
+    ctx.fillRect(-dw / 2 + 3, -dh / 2 + 2, 5, dh - 4);
+    if (d.branch) {
+      drawBranch(-dw / 2, -dh / 2, dw, dh, d.branch);
+    }
     ctx.restore();
   }
 
@@ -772,8 +844,8 @@ function draw(now) {
     ctx.textBaseline = "middle";
     const fontSize = Math.min(68, w * 0.17);
     ctx.font = `800 ${fontSize}px Manrope, sans-serif`;
-    // Large run score sits on upper trunk (ref rhythm)
-    const sy = baseY - SEGMENTS * segH + segH * 1.65;
+    // Large run score sits mid-upper on the tall pole (ref rhythm)
+    const sy = Math.max(segH * 2.2, baseY * 0.28);
     ctx.lineWidth = 5;
     ctx.strokeStyle = "rgba(0,0,0,0.35)";
     ctx.fillStyle = "#fff";
@@ -837,13 +909,11 @@ function chop(side) {
   }
 
   const { cx, trunkW, segH, baseY } = layout();
-  spawnDebris(cx, baseY, trunkW, segH, side);
+  // Chopped segment flies away (branch rides along if present on opposite side)
+  const choppedBranch = danger;
+  spawnDebris(cx, baseY, trunkW, segH, side, choppedBranch);
   // Visual feedback +1 — DB contract is 1 hit = 1 point
-  spawnFloat(
-    side === "left" ? cx - 44 : cx + 44,
-    baseY - segH * 1.1,
-    "+1",
-  );
+  spawnFloat(cx + (side === "left" ? -8 : 8), baseY - segH * 1.35, "+1");
 
   trunk.shift();
   /** @type {Side} */
@@ -854,8 +924,7 @@ function chop(side) {
       break;
     }
   }
-  const lastBranch = trunk[trunk.length - 1] != null;
-  trunk.push(nextBranch(score + 1, prev, lastBranch));
+  trunk.push(nextBranch(score + 1, prev, trailingEmpties(trunk)));
 
   score += 1;
   hudScore.textContent = String(score);
@@ -1053,7 +1122,7 @@ function loop(ts) {
   lastTs = ts;
   animT += dt;
 
-  if (phase === "playing") {
+  if (phase === "playing" && !shotFreeze) {
     if (graceLeft > 0) {
       graceLeft -= dt;
     } else {
@@ -1091,13 +1160,14 @@ function loop(ts) {
     }
   }
 
-  if (phase !== "paused") {
+  if (phase !== "paused" && !shotFreeze) {
     for (const d of debris) {
       d.x += d.vx;
       d.y += d.vy;
-      d.vy += 18 * dt;
+      d.vy += 22 * dt;
+      d.vx *= 0.995;
       d.rot += d.vr;
-      d.life -= dt * 1.15;
+      d.life -= dt * 0.95;
     }
     debris = debris.filter((d) => d.life > 0);
 
@@ -1148,6 +1218,8 @@ void loadBest();
 requestAnimationFrame(loop);
 
 const urlParams = new URLSearchParams(location.search);
+/** QA harness freezes VFX / energy so screenshots stay mid-kick. */
+let shotFreeze = false;
 
 // Optional smart bot for demos: /karate/?bot=1
 if (urlParams.get("bot") === "1") {
@@ -1167,14 +1239,19 @@ if (urlParams.get("bot") === "1") {
   setTimeout(botTick, 600);
 }
 
-// Screenshot / QA harness: /karate/?shot=idle|kick|defeat
+// Screenshot / QA harness: /karate/?shot=idle|kick|defeat|tree|split
 if (urlParams.has("shot")) {
   window.__karateShot = {
     ready: () => heroReady,
+    layout: () => layout(),
+    trunk: () => trunk.slice(),
+    debrisCount: () => debris.length,
+    floatsCount: () => floats.length,
     show(pose) {
       hideOverlay();
       phase = "playing";
-      score = Math.max(score, 3);
+      shotFreeze = true;
+      score = Math.max(score, 12);
       hudScore.textContent = String(score);
       playerSide = "right";
       chopping = false;
@@ -1182,7 +1259,10 @@ if (urlParams.has("shot")) {
       walkUntil = 0;
       deathStartedAt = 0;
       heroPose = "idle";
-      if (pose === "kick") {
+      debris = [];
+      floats = [];
+      chips = [];
+      if (pose === "kick" || pose === "split") {
         playerSide = "left";
         chopping = true;
         strikeKind = "kick";
@@ -1192,8 +1272,59 @@ if (urlParams.has("shot")) {
         phase = "dying";
         deathStartedAt = performance.now() - HURT_MS - 50;
         heroPose = "defeat";
+        shotFreeze = false;
       } else {
         heroPose = "idle";
+      }
+      if (pose === "tree" || pose === "split") {
+        // Sparse hazards matching Timberman gaps for visual QA
+        trunk = [
+          null,
+          null,
+          null,
+          "right",
+          null,
+          null,
+          null,
+          null,
+          "left",
+          null,
+          null,
+          null,
+          "right",
+          null,
+        ];
+        trunk.length = SEGMENTS;
+      }
+      if (pose === "split") {
+        resize();
+        const L = layout();
+        // Mid-flight split log opposite hero (hero left → chunk flies right-down)
+        spawnDebris(L.cx, L.baseY, L.trunkW, L.segH, "left", "right");
+        if (debris[0]) {
+          debris[0].x = L.cx + L.trunkW * 1.55;
+          debris[0].y = L.baseY - L.segH * 0.15;
+          debris[0].vx = 0;
+          debris[0].vy = 0;
+          debris[0].rot = 0.65;
+          debris[0].vr = 0;
+          debris[0].life = 1;
+        }
+        // Hold a few chips near the split for readability
+        chips = chips.slice(0, 5).map((c, i) => ({
+          ...c,
+          x: L.cx + 20 + i * 8,
+          y: L.baseY - L.segH * 0.4 - i * 6,
+          vx: 0,
+          vy: 0,
+          a: 1,
+        }));
+        spawnFloat(L.cx + 10, L.baseY - L.segH * 1.7, "+1");
+        if (floats[0]) {
+          floats[0].vy = 0;
+          floats[0].life = 1;
+        }
+        return;
       }
       resize();
     },
