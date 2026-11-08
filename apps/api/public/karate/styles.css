@@ -8,6 +8,8 @@
   --font: "Manrope", system-ui, sans-serif;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-top: env(safe-area-inset-top, 0px);
+  /* Telegram WebApp sets --app-height to viewportStableHeight. */
+  --app-height: 100dvh;
 }
 
 * {
@@ -18,7 +20,8 @@
 html,
 body {
   margin: 0;
-  height: 100%;
+  height: var(--app-height, 100%);
+  max-height: var(--app-height, 100%);
   overflow: hidden;
   overscroll-behavior: none;
   font-family: var(--font);
@@ -30,12 +33,17 @@ body {
 
 #wrap {
   height: 100%;
+  max-height: 100%;
   max-width: 480px;
   margin: 0 auto;
   position: relative;
   display: grid;
-  grid-template-rows: auto auto 1fr auto;
+  /* minmax(0,1fr) lets the canvas shrink — default min-height:auto
+     locked the row to the canvas intrinsic 560px and shoved ground off-screen.
+     Hint is overlaid, so the canvas reaches the safe-area bottom. */
+  grid-template-rows: auto auto minmax(0, 1fr);
   padding-bottom: var(--safe-bottom);
+  overflow: hidden;
 }
 
 .hud {
@@ -190,17 +198,27 @@ body {
 #game {
   width: 100%;
   height: 100%;
+  min-height: 0;
+  max-height: 100%;
   display: block;
   touch-action: none;
   cursor: pointer;
 }
 
 .hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  /* Sit just above the ~1cm ground strip so the plane stays readable. */
+  bottom: calc(48px + var(--safe-bottom));
+  z-index: 2;
   text-align: center;
-  padding: 8px 16px 14px;
+  padding: 0 16px;
   color: rgba(240, 200, 220, 0.9);
   font-size: 0.82rem;
   font-weight: 600;
+  pointer-events: none;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55);
 }
 
 .overlay {
