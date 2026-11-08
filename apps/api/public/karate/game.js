@@ -71,16 +71,47 @@ if (tg) {
 /** @typedef {"ready"|"playing"|"paused"|"dying"|"over"} Phase */
 /** @typedef {"idle"|"walk"|"kick"|"punch"|"hurt"|"defeat"} HeroPose */
 
+/* ── Feel / timing targets (2D side-view sprite game) ─────────────── */
+/** Target game loop rate (requestAnimationFrame + dt clamp). */
+const TARGET_FPS = 60;
+/** Max simulation step (seconds) — clamps hitches; ~2 frames @ 60 FPS. */
+const DT_MAX = 2 / TARGET_FPS;
+/** Hero atlas frame cadence (walk cycle) — mid of 30–60 FPS. */
+const SPRITE_FPS = 45;
+/** Walk cycle uses 4 atlas frames at SPRITE_FPS. */
+const WALK_MS = Math.round((4 / SPRITE_FPS) * 1000);
+/** Kick / hit pose hold — mid of 0.08–0.15 s. */
+const CHOP_MS = 120;
+/** Trunk visual height as fraction of canvas (mid of 75–90%). */
+const TREE_HEIGHT_FRAC = 0.82;
+const TREE_HEIGHT_MIN_FRAC = 0.75;
+const TREE_HEIGHT_MAX_FRAC = 0.9;
+/** Hero height as fraction of tree height (mid of 8–12%). */
+const HERO_OF_TREE_FRAC = 0.1;
+const HERO_OF_TREE_MIN = 0.08;
+const HERO_OF_TREE_MAX = 0.12;
+/** One segment settles in this many ms — mid of 0.25–0.6 s; queueable. */
+const DROP_DURATION_MS = 380;
+const DROP_DURATION_MIN_MS = 250;
+const DROP_DURATION_MAX_MS = 600;
+/** Brief lean on impact (degrees), then ease back — not random shake. */
+const TREE_BEND_DEG_MIN = 2;
+const TREE_BEND_DEG_MAX = 5;
+const TREE_BEND_DEG = 3.5;
+/** Bend settle time (seconds). */
+const TREE_BEND_SETTLE_S = 0.28;
+/** Debris spin while flying — mid of 90°–180°. */
+const DEBRIS_SPIN_DEG_MIN = 90;
+const DEBRIS_SPIN_DEG_MAX = 180;
+/** Debris gravity (px/s²). */
+const DEBRIS_GRAVITY = 980;
+/** Dark reflective ground strip ≈ 1 cm on phone (~40–48 CSS px). */
+const GROUND_MIN = 40;
+const GROUND_MAX = 48;
+
 /**
- * Hero on-screen height (idle). Each trunk segment is taller again
- * (hero + ~50px+) so blocks read long like the ref.
- */
-const HERO_DRAW_H = 70; // slightly smaller hero (salgina kichikroq)
-/** Extra height above hero for one trunk block (uzunlashsin). */
-const SEG_OVER_HERO = 60; // keep tall blocks after hero shrink
-/**
- * Live segment count — derived in layout() so tall blocks still fill
- * ground → canvas top. Starts at 5; resized when the canvas lays out.
+ * Live segment count — derived in layout() from TREE_HEIGHT_FRAC.
+ * Starts at 5; resized when the canvas lays out.
  */
 let SEGMENTS = 5;
 const ENERGY_MAX = 100;
@@ -90,10 +121,6 @@ const ENERGY_DRAIN = 11;
 const ENERGY_REFILL = 18;
 /** Score below this = easy same-side streaks + forgiving timer. */
 const DIFF_EASY_UNTIL = 20;
-/** Strike hold — long enough to read Tepish kick + swoosh. */
-const CHOP_MS = 160;
-/** Side-switch flash through walk frames before/with kick. */
-const WALK_MS = 95;
 const HURT_MS = 380;
 const DEFEAT_HOLD_MS = 520;
 const MULTI_DECAY = 0.55;
@@ -159,7 +186,6 @@ let pendingOverReason = "";
 let lastTs = 0;
 let submitting = false;
 let lastSubmitted = false;
-let shake = 0;
 let muted = false;
 let animT = 0;
 /** Grace seconds after start before timer pressure. */
@@ -171,12 +197,14 @@ let strikeCount = 0;
  * visible gap opens at the stump, then eases down (queueable on rapid taps).
  */
 let trunkDropY = 0;
-/** One segment falls in this many ms — fast for taps, still readable. */
-const DROP_DURATION_MS = 120;
+/** Brief lean toward kick side (radians); eases to 0 — tekis vertical drop. */
+let trunkBend = 0;
+/** @type {1|-1} lean direction (away from hero kick). */
+let trunkBendDir = 1;
 
 /**
  * Flying split-log chunks (bo‘linish).
- * @type {{ x: number, y: number, vx: number, vy: number, rot: number, vr: number, life: number, w: number, h: number, branch: Side }[]}
+ * @type {{ x: number, y: number, vx: number, vy: number, rot: number, vr: number, life: number, w: number, h: number, branch: Side, grounded?: boolean }[]}
  */
 let debris = [];
 /** @type {{ x: number, y: number, vy: number, life: number, text: string }[]} */
@@ -289,8 +317,9 @@ function resetRun() {
   pendingOverReason = "";
   strikeCount = 0;
   lastSubmitted = false;
-  shake = 0;
   trunkDropY = 0;
+  trunkBend = 0;
+  trunkBendDir = 1;
   graceLeft = 2.2;
   debris = [];
   floats = [];
@@ -616,9 +645,10 @@ function drawPlayer(x, y, side, now, scaleMul = 1) {
   const key = heroFrameKey(now);
   const fr = HERO_ATLAS.frames[key] || HERO_ATLAS.frames.idle;
 
-  // Target on-screen height — trunk blocks are taller (HERO_DRAW_H + SEG_OVER_HERO)
+  // Hero height = HERO_OF_TREE_FRAC × tree height (layout)
+  const { heroH } = layout();
   const targetH =
-    key === "defeat" ? 28 * scaleMul : HERO_DRAW_H * scaleMul;
+    key === "defeat" ? heroH * 0.4 * scaleMul : heroH * scaleMul;
   const scale = targetH / fr.h;
   const dw = fr.w * scale;
   const dh = fr.h * scale;
@@ -694,58 +724,51 @@ function drawPlayer(x, y, side, now, scaleMul = 1) {
  * @param {Side} side hero kick side
  * @param {Side} [branch] branch attached to the primary chunk
  */
+/**
+ * Angular velocity (rad/s) so a chunk rotates ~DEBRIS_SPIN_DEG over ~lifeSec.
+ * @param {number} dir
+ * @param {number} lifeSec
+ */
+function debrisSpinRate(dir, lifeSec) {
+  const deg =
+    DEBRIS_SPIN_DEG_MIN +
+    Math.random() * (DEBRIS_SPIN_DEG_MAX - DEBRIS_SPIN_DEG_MIN);
+  return dir * ((deg * Math.PI) / 180) / Math.max(0.35, lifeSec);
+}
+
 function spawnDebris(cx, baseY, trunkW, segH, side, branch = null) {
   // Opposite the hero — right kick → chunk flies left-down
   const dir = side === "left" ? 1 : -1;
   const chunkW = trunkW * 0.48;
   const chunkH = Math.min(26, Math.max(16, segH * 0.16));
-  // Primary compact piece (may carry a short stub branch)
-  debris.push({
-    x: cx + dir * 6,
-    y: baseY - segH * 0.35,
-    vx: dir * (8 + Math.random() * 4),
-    vy: 2 + Math.random() * 2.2,
-    rot: dir * 0.5,
-    vr: dir * (0.18 + Math.random() * 0.12),
-    life: 1.05,
-    w: chunkW,
-    h: chunkH,
-    branch: branch || null,
-  });
-  // Second smaller shard
-  debris.push({
-    x: cx + dir * 2,
-    y: baseY - segH * 0.5,
-    vx: dir * (5.5 + Math.random() * 3.5),
-    vy: 1.2 + Math.random() * 2.8,
-    rot: dir * -0.35,
-    vr: dir * -(0.2 + Math.random() * 0.1),
-    life: 0.9,
-    w: chunkW * 0.72,
-    h: chunkH * 0.7,
-    branch: null,
-  });
-  // Tiny third flake
-  debris.push({
-    x: cx + dir * 4,
-    y: baseY - segH * 0.42,
-    vx: dir * (4 + Math.random() * 5),
-    vy: 0.5 + Math.random() * 3,
-    rot: (Math.random() - 0.5) * 1.2,
-    vr: (Math.random() - 0.5) * 0.35,
-    life: 0.75,
-    w: chunkW * 0.45,
-    h: chunkH * 0.45,
-    branch: null,
-  });
+  const mk = (scale, life, withBranch) => {
+    const w = chunkW * scale;
+    const h = chunkH * scale;
+    return {
+      x: cx + dir * (4 + Math.random() * 6),
+      y: baseY - segH * (0.3 + Math.random() * 0.25),
+      vx: dir * (180 + Math.random() * 140), // px/s
+      vy: -(40 + Math.random() * 80),
+      rot: dir * 0.2,
+      vr: debrisSpinRate(dir * (Math.random() < 0.5 ? 1 : -1), life),
+      life,
+      w,
+      h,
+      branch: withBranch ? branch || null : null,
+      grounded: false,
+    };
+  };
+  debris.push(mk(1, 1.15, true));
+  debris.push(mk(0.72, 1.0, false));
+  debris.push(mk(0.45, 0.85, false));
   for (let i = 0; i < 7; i++) {
     chips.push({
       x: cx + (Math.random() - 0.5) * trunkW,
       y: baseY - segH * (0.25 + Math.random() * 0.4),
       r: 1.1 + Math.random() * 2.2,
       a: 1,
-      vy: -0.2 + Math.random() * 3.5,
-      vx: dir * (2 + Math.random() * 4.5) + (Math.random() - 0.5) * 2,
+      vy: -40 + Math.random() * 120,
+      vx: dir * (60 + Math.random() * 140) + (Math.random() - 0.5) * 40,
     });
   }
 }
@@ -753,10 +776,6 @@ function spawnDebris(cx, baseY, trunkW, segH, side, branch = null) {
 function spawnFloat(x, y, text) {
   floats.push({ x, y, vy: -1.5, life: 1, text });
 }
-
-/** Dark reflective ground strip ≈ 1 cm on phone (~40–48 CSS px). */
-const GROUND_MIN = 40;
-const GROUND_MAX = 48;
 
 function layout() {
   const w = canvas.clientWidth;
@@ -771,10 +790,26 @@ function layout() {
     Math.min(GROUND_MAX, Math.round(h * 0.09)),
   );
   const baseY = Math.max(groundH + 80, h - groundH);
-  // Even taller blocks; count fills ground → canvas top
-  const minSegH = HERO_DRAW_H + SEG_OVER_HERO;
-  const nextSegs = Math.max(4, Math.floor(baseY / minSegH));
-  const segH = baseY / nextSegs;
+  // Tree height = 75–90% of canvas (TREE_HEIGHT_FRAC), capped by baseY
+  const treeH = Math.min(
+    baseY,
+    Math.max(
+      h * TREE_HEIGHT_MIN_FRAC,
+      Math.min(h * TREE_HEIGHT_MAX_FRAC, h * TREE_HEIGHT_FRAC),
+    ),
+  );
+  // Hero = 8–12% of tree height
+  const heroH = Math.max(
+    h * TREE_HEIGHT_MIN_FRAC * HERO_OF_TREE_MIN,
+    Math.min(
+      treeH * HERO_OF_TREE_MAX,
+      treeH * HERO_OF_TREE_FRAC,
+    ),
+  );
+  // Tall blocks: each longer than the hero; count fills treeH
+  const minSegH = heroH * 1.55;
+  const nextSegs = Math.max(4, Math.floor(treeH / minSegH));
+  const segH = treeH / nextSegs;
   if (nextSegs !== SEGMENTS) {
     SEGMENTS = nextSegs;
     while (trunk.length < SEGMENTS) {
@@ -785,7 +820,18 @@ function layout() {
     }
     if (trunk.length > SEGMENTS) trunk.length = SEGMENTS;
   }
-  return { w, h, cx, trunkW, segH, baseY, groundH, segments: SEGMENTS };
+  return {
+    w,
+    h,
+    cx,
+    trunkW,
+    segH,
+    baseY,
+    groundH,
+    treeH,
+    heroH,
+    segments: SEGMENTS,
+  };
 }
 
 /** Queue one segment of fall after a successful chop (stacks if mid-drop). */
@@ -793,15 +839,33 @@ function beginTrunkDrop(segH) {
   trunkDropY -= segH;
 }
 
-/** Ease stack down into the stump gap; constant speed ≈1 segment / DROP_DURATION_MS. */
+/** Ease stack down into the stump gap @ DROP_DURATION_MS per segment. */
 function updateTrunkDrop(dt) {
   if (trunkDropY >= 0) {
     trunkDropY = 0;
     return;
   }
   const { segH } = layout();
-  const speed = segH / (DROP_DURATION_MS / 1000);
+  const dur = Math.min(
+    DROP_DURATION_MAX_MS,
+    Math.max(DROP_DURATION_MIN_MS, DROP_DURATION_MS),
+  );
+  const speed = segH / (dur / 1000);
   trunkDropY = Math.min(0, trunkDropY + speed * dt);
+}
+
+/** Brief 2–5° lean on impact, then settle (not random shake). */
+function beginTrunkBend(side) {
+  // Lean away from the kick (tree recoils opposite the hero)
+  trunkBendDir = side === "left" ? 1 : -1;
+  trunkBend = trunkBendDir * ((TREE_BEND_DEG * Math.PI) / 180);
+}
+
+function updateTrunkBend(dt) {
+  if (trunkBend === 0) return;
+  const k = 1 - Math.exp(-dt / Math.max(0.05, TREE_BEND_SETTLE_S * 0.35));
+  trunkBend *= 1 - k;
+  if (Math.abs(trunkBend) < 0.0008) trunkBend = 0;
 }
 
 function draw(now) {
@@ -812,9 +876,25 @@ function draw(now) {
 
   drawAtmosphere(w, h, baseY);
 
-  // Trunk — floating stack (dropY only: tekis pasga, no horizontal shake)
+  // Stump stays fixed (no bend / no shake)
+  roundRect(
+    cx - trunkW * 0.65,
+    baseY - 4,
+    trunkW * 1.3,
+    14,
+    4,
+    "#8a6238",
+  );
+
+  // Trunk stack: vertical drop + brief lean about the stump (tekis pasga)
   const dropY = trunkDropY;
   const trunkX = cx - trunkW / 2;
+  ctx.save();
+  if (trunkBend !== 0) {
+    ctx.translate(cx, baseY);
+    ctx.rotate(trunkBend);
+    ctx.translate(-cx, -baseY);
+  }
   const stackBottom = baseY + dropY;
   const fillTop = Math.min(0, dropY);
   const fillH = Math.max(0, stackBottom - fillTop + 1);
@@ -858,16 +938,7 @@ function draw(now) {
     const branch = trunk[i];
     if (branch) drawBranch(x, y, trunkW, segH, branch);
   }
-
-  // Stump base (no shake — stays fixed)
-  roundRect(
-    cx - trunkW * 0.65,
-    baseY - 4,
-    trunkW * 1.3,
-    14,
-    4,
-    "#8a6238",
-  );
+  ctx.restore();
 
   // Player — feet on stump ledge; close enough for kick to read as trunk hit
   const playerY = baseY + 2;
@@ -984,6 +1055,7 @@ function chop(side) {
   trunk.push(nextBranch(score + 1, prev));
   // Upper stack stays visually raised, then slides into the gap (queueable)
   beginTrunkDrop(segH);
+  beginTrunkBend(side);
 
   score += 1;
   hudScore.textContent = String(score);
@@ -993,7 +1065,6 @@ function chop(side) {
   multi = Math.min(MULTI_MAX, 1 + multiFill * (MULTI_MAX - 1));
   setEnergyUi();
   setMultiUi();
-  // No screen/trunk shake on chop — only straight vertical drop
   playChopTone();
 }
 
@@ -1026,7 +1097,6 @@ function endGame(reason) {
   phase = "dying";
   chopping = false;
   walkUntil = 0;
-  shake = 12;
   deathStartedAt = performance.now();
   heroPose = "hurt";
   pendingOverReason = reason || "Yana urinib ko‘ring!";
@@ -1178,7 +1248,8 @@ btnPause?.addEventListener("click", (ev) => {
 
 function loop(ts) {
   if (!lastTs) lastTs = ts;
-  const dt = Math.min(0.05, (ts - lastTs) / 1000);
+  // Target ~60 FPS; clamp large hitches so physics stay stable
+  const dt = Math.min(DT_MAX, (ts - lastTs) / 1000);
   lastTs = ts;
   animT += dt;
 
@@ -1222,22 +1293,40 @@ function loop(ts) {
 
   if (phase !== "paused" && !shotFreeze) {
     updateTrunkDrop(dt);
+    updateTrunkBend(dt);
 
+    const { baseY: groundY } = layout();
     for (const d of debris) {
-      d.x += d.vx;
-      d.y += d.vy;
-      d.vy += 22 * dt;
-      d.vx *= 0.995;
-      d.rot += d.vr;
-      d.life -= dt * 0.95;
+      if (!d.grounded) {
+        d.x += d.vx * dt;
+        d.y += d.vy * dt;
+        d.vy += DEBRIS_GRAVITY * dt;
+        d.vx *= Math.exp(-0.4 * dt);
+        d.rot += d.vr * dt;
+        // Simple ground collision / stop
+        const floor = groundY - d.h * 0.35;
+        if (d.y >= floor) {
+          d.y = floor;
+          d.vy = 0;
+          d.vx *= 0.35;
+          d.vr *= 0.2;
+          d.grounded = true;
+        }
+      } else {
+        d.vx *= Math.exp(-3 * dt);
+        d.vr *= Math.exp(-4 * dt);
+        d.life -= dt * 1.4;
+      }
+      d.life -= dt * 0.55;
     }
     debris = debris.filter((d) => d.life > 0);
 
     for (const c of chips) {
-      c.x += c.vx;
-      c.y += c.vy;
-      c.vy += 12 * dt;
-      c.a -= dt * 1.9;
+      c.x += c.vx * dt;
+      c.y += c.vy * dt;
+      c.vy += DEBRIS_GRAVITY * 0.85 * dt;
+      c.a -= dt * 1.6;
+      if (c.y > groundY + 8) c.a = 0;
     }
     chips = chips.filter((c) => c.a > 0);
 
@@ -1314,6 +1403,21 @@ if (urlParams.has("shot")) {
     floatsCount: () => floats.length,
     difficulty: (s) => difficultyFor(s),
     dropY: () => trunkDropY,
+    bend: () => trunkBend,
+    feel: () => ({
+      TARGET_FPS,
+      DT_MAX,
+      SPRITE_FPS,
+      CHOP_MS,
+      WALK_MS,
+      TREE_HEIGHT_FRAC,
+      HERO_OF_TREE_FRAC,
+      DROP_DURATION_MS,
+      TREE_BEND_DEG,
+      DEBRIS_SPIN_DEG_MIN,
+      DEBRIS_SPIN_DEG_MAX,
+      DEBRIS_GRAVITY,
+    }),
     show(pose) {
       hideOverlay();
       phase = "playing";
@@ -1390,8 +1494,10 @@ if (urlParams.has("shot")) {
           floats[0].life = 1;
         }
         if (pose === "drop") {
-          // Freeze mid-fall: gap ≈ half a segment above the stump
+          // Freeze mid-fall: gap ≈ half a segment above the stump + slight bend
           trunkDropY = -L.segH * 0.55;
+          trunkBend = ((TREE_BEND_DEG * Math.PI) / 180) * 0.7;
+          trunkBendDir = 1;
         }
         return;
       }
