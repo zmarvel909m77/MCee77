@@ -72,17 +72,17 @@ if (tg) {
 /** @typedef {"idle"|"walk"|"kick"|"punch"|"hurt"|"defeat"} HeroPose */
 
 /**
- * Hero on-screen height (idle). Each trunk segment is taller by ~0.7cm+
- * (≈25–35px) so blocks read like the GAMEE ref.
+ * Hero on-screen height (idle). Each trunk segment is taller again
+ * (hero + ~50px+) so blocks read long like the ref.
  */
 const HERO_DRAW_H = 78;
 /** Extra height above hero for one trunk block (uzunlashsin). */
-const SEG_OVER_HERO = 30;
+const SEG_OVER_HERO = 52;
 /**
  * Live segment count — derived in layout() so tall blocks still fill
- * ground → canvas top. Starts at 6; resized when the canvas lays out.
+ * ground → canvas top. Starts at 5; resized when the canvas lays out.
  */
-let SEGMENTS = 6;
+let SEGMENTS = 5;
 const ENERGY_MAX = 100;
 /** Base drain/sec — ramps with score so opening feels fair, later snappy. */
 const ENERGY_DRAIN = 11;
@@ -200,41 +200,17 @@ async function waitForAuthPayload(maxMs = 2500) {
 }
 
 /**
- * Count empty segments at the top of the queue (since last hazard).
- * @param {Side[]} arr
- * @returns {number}
- */
-function trailingEmpties(arr) {
-  let n = 0;
-  for (let i = arr.length - 1; i >= 0; i--) {
-    if (arr[i] != null) break;
-    n++;
-  }
-  return n;
-}
-
-/**
- * Timberman / Karate rhythm:
- * - wide empty stretches between branches (≈1.5–4× hero height)
- * - never both sides on one height (Side is single-valued)
- * - alternate L/R patterns that ramp with score
+ * Every segment carries exactly one branch (left OR right).
+ * Never both sides on one height (Side is single-valued) — always one safe side.
+ * Mix of stay / switch so the run stays fair (no forced death).
  * @param {number} runScore
  * @param {Side} prevSide
- * @param {number} emptiesSinceBranch
- * @returns {Side}
+ * @returns {"left"|"right"}
  */
-function nextBranch(runScore, prevSide, emptiesSinceBranch) {
-  // With tall blocks, 2–4 empties ≈ multi-hero gaps (sparser than #28)
-  const minGap = runScore < 40 ? 3 : 2;
-  const softGap = runScore < 20 ? 4 : runScore < 60 ? 3 : 2;
-
-  if (emptiesSinceBranch < minGap) return null;
-  if (emptiesSinceBranch < softGap && Math.random() < 0.82) return null;
-  // Extra air so the pole stays very sparse
-  if (Math.random() < Math.max(0.14, 0.4 - runScore * 0.003)) return null;
-
-  const switchChance = Math.min(0.9, 0.58 + runScore * 0.006);
-  if (prevSide) {
+function nextBranch(runScore, prevSide) {
+  // Prefer switching as score climbs; still allow same-side runs
+  const switchChance = Math.min(0.82, 0.48 + runScore * 0.007);
+  if (prevSide === "left" || prevSide === "right") {
     if (Math.random() < switchChance) {
       return prevSide === "left" ? "right" : "left";
     }
@@ -244,32 +220,22 @@ function nextBranch(runScore, prevSide, emptiesSinceBranch) {
 }
 
 /**
- * Build a sparse opening queue for the current SEGMENTS count.
- * Safe start empties, then wide gaps between the few hazards.
+ * Opening queue: every slot has a branch. Player starts on the right, so
+ * trunk[0] is "left" (safe). Then gentle L/R with occasional doubles.
  */
 function seedTrunk() {
-  trunk = [];
-  // Opening: 2 empties safe, then alternate with ≥2 empties between
+  /** @type {Side[]} */
   const pattern = [];
-  let side = /** @type {Side} */ ("left");
-  let i = 0;
-  // First two always empty (fair start)
-  pattern.push(null, null);
-  i = 2;
-  while (i < SEGMENTS) {
-    // Place a branch, then skip at least 2 empties
-    if (i < SEGMENTS) {
-      pattern.push(side);
-      i++;
+  // Fair start — bottom hazard opposite the default stand side
+  let side = /** @type {"left"|"right"} */ ("left");
+  for (let i = 0; i < SEGMENTS; i++) {
+    pattern.push(side);
+    // Early: often switch; sprinkle a same-side beat for readability
+    if (i === 0 || Math.random() < 0.65) {
       side = side === "left" ? "right" : "left";
     }
-    const gap = 2 + (i < SEGMENTS / 2 ? 1 : 0);
-    for (let g = 0; g < gap && i < SEGMENTS; g++, i++) {
-      pattern.push(null);
-    }
   }
-  trunk = pattern.slice(0, SEGMENTS);
-  while (trunk.length < SEGMENTS) trunk.push(null);
+  trunk = pattern;
   trunk.length = SEGMENTS;
 }
 
@@ -553,7 +519,7 @@ function drawBranch(x, y, trunkW, segH, side) {
   // Top-aligned: plank flush with the upper seam of the block (ref)
   const bh = Math.min(18, Math.max(12, segH * 0.12));
   const by = y; // exact top edge
-  const bw = trunkW * 1.75;
+  const bw = trunkW * 2.15; // longer plank so thin trunk still reads
   const left = side === "left";
   const hx = left ? x - bw + 4 : x + trunkW - 4;
   // Wooden plank — same family as trunk
@@ -732,8 +698,8 @@ function layout() {
   const w = canvas.clientWidth;
   const h = canvas.clientHeight;
   const cx = w * 0.5;
-  // Slightly wider pole (ref)
-  const trunkW = Math.min(72, Math.max(64, w * 0.2));
+  // Thinner pole (ingichkaroq) — branches still top-mounted on each block
+  const trunkW = Math.min(46, Math.max(40, w * 0.115));
   // Keep ~1cm ground visible above the canvas bottom (shell already clears
   // safe-area / home indicator via padding-bottom + --app-height).
   const groundH = Math.max(
@@ -741,13 +707,18 @@ function layout() {
     Math.min(GROUND_MAX, Math.round(h * 0.09)),
   );
   const baseY = Math.max(groundH + 80, h - groundH);
-  // Tall blocks: each ≥ hero + ~0.7cm; count fills ground → canvas top
+  // Even taller blocks; count fills ground → canvas top
   const minSegH = HERO_DRAW_H + SEG_OVER_HERO;
-  const nextSegs = Math.max(5, Math.floor(baseY / minSegH));
+  const nextSegs = Math.max(4, Math.floor(baseY / minSegH));
   const segH = baseY / nextSegs;
   if (nextSegs !== SEGMENTS) {
     SEGMENTS = nextSegs;
-    while (trunk.length < SEGMENTS) trunk.push(null);
+    while (trunk.length < SEGMENTS) {
+      const prev = trunk[trunk.length - 1];
+      trunk.push(
+        prev === "left" ? "right" : prev === "right" ? "left" : "left",
+      );
+    }
     if (trunk.length > SEGMENTS) trunk.length = SEGMENTS;
   }
   return { w, h, cx, trunkW, segH, baseY, groundH, segments: SEGMENTS };
@@ -952,14 +923,8 @@ function chop(side) {
 
   trunk.shift();
   /** @type {Side} */
-  let prev = null;
-  for (let i = trunk.length - 1; i >= 0; i--) {
-    if (trunk[i]) {
-      prev = trunk[i];
-      break;
-    }
-  }
-  trunk.push(nextBranch(score + 1, prev, trailingEmpties(trunk)));
+  const prev = trunk[trunk.length - 1] ?? "left";
+  trunk.push(nextBranch(score + 1, prev));
 
   score += 1;
   hudScore.textContent = String(score);
@@ -1317,12 +1282,20 @@ if (urlParams.has("shot")) {
       if (pose === "tree" || pose === "split") {
         resize();
         const L0 = layout(); // sync SEGMENTS to tall-block count
-        // Sparse QA queue: wide empties, branch on top of its block
+        // Every segment has a top-mounted branch (L/R alternate)
         const n = L0.segments;
-        trunk = Array(n).fill(null);
-        // Sparse: branch near base (idx 1), then ≥2 empties, then upper branch
-        if (n >= 2) trunk[1] = "right";
-        if (n >= 5) trunk[n - 2] = "left";
+        trunk = [];
+        // Bottom opposite the hero stand side (fair / readable)
+        const bottom = pose === "split" ? "right" : "left";
+        for (let i = 0; i < n; i++) {
+          trunk.push(
+            i % 2 === 0
+              ? bottom
+              : bottom === "left"
+                ? "right"
+                : "left",
+          );
+        }
       }
       if (pose === "split") {
         resize();
