@@ -166,6 +166,13 @@ let animT = 0;
 let graceLeft = 0;
 /** Alternate punch occasionally so sheet punch+stars also appear. */
 let strikeCount = 0;
+/**
+ * Trunk drop after chop: ≤0 px. Stack is drawn raised by this amount so a
+ * visible gap opens at the stump, then eases down (queueable on rapid taps).
+ */
+let trunkDropY = 0;
+/** One segment falls in this many ms — fast for taps, still readable. */
+const DROP_DURATION_MS = 120;
 
 /**
  * Flying split-log chunks (bo‘linish).
@@ -283,6 +290,7 @@ function resetRun() {
   strikeCount = 0;
   lastSubmitted = false;
   shake = 0;
+  trunkDropY = 0;
   graceLeft = 2.2;
   debris = [];
   floats = [];
@@ -751,6 +759,22 @@ function layout() {
   return { w, h, cx, trunkW, segH, baseY, groundH, segments: SEGMENTS };
 }
 
+/** Queue one segment of fall after a successful chop (stacks if mid-drop). */
+function beginTrunkDrop(segH) {
+  trunkDropY -= segH;
+}
+
+/** Ease stack down into the stump gap; constant speed ≈1 segment / DROP_DURATION_MS. */
+function updateTrunkDrop(dt) {
+  if (trunkDropY >= 0) {
+    trunkDropY = 0;
+    return;
+  }
+  const { segH } = layout();
+  const speed = segH / (DROP_DURATION_MS / 1000);
+  trunkDropY = Math.min(0, trunkDropY + speed * dt);
+}
+
 function draw(now) {
   const { w, h, cx, trunkW, segH, baseY } = layout();
   ctx.clearRect(0, 0, w, h);
@@ -760,21 +784,25 @@ function draw(now) {
   const shakeX = shake > 0 ? (Math.random() - 0.5) * shake : 0;
   drawAtmosphere(w, h, baseY);
 
-  // Trunk — continuous pole (ground → canvas top), ref-like cylindrical wood
+  // Trunk — floating stack (dropY leaves a readable gap above the stump)
+  const dropY = trunkDropY;
   const trunkX = cx - trunkW / 2 + shakeX;
-  // Base fill so the pole never stops mid-screen
-  ctx.fillStyle = "#c49a6c";
-  ctx.fillRect(trunkX, 0, trunkW, baseY + 1);
-  // Cylindrical side shading (darker outer edges)
-  ctx.fillStyle = "rgba(90, 50, 22, 0.22)";
-  ctx.fillRect(trunkX, 0, 7, baseY + 1);
-  ctx.fillRect(trunkX + trunkW - 8, 0, 8, baseY + 1);
-  // Soft left highlight strip
-  ctx.fillStyle = "rgba(255, 230, 190, 0.2)";
-  ctx.fillRect(trunkX + 8, 0, 5, baseY);
+  const stackBottom = baseY + dropY;
+  const fillTop = Math.min(0, dropY);
+  const fillH = Math.max(0, stackBottom - fillTop + 1);
+  // Wood fill only where the stack is — gap shows sky (ref mid-drop)
+  if (fillH > 0) {
+    ctx.fillStyle = "#c49a6c";
+    ctx.fillRect(trunkX, fillTop, trunkW, fillH);
+    ctx.fillStyle = "rgba(90, 50, 22, 0.22)";
+    ctx.fillRect(trunkX, fillTop, 7, fillH);
+    ctx.fillRect(trunkX + trunkW - 8, fillTop, 8, fillH);
+    ctx.fillStyle = "rgba(255, 230, 190, 0.2)";
+    ctx.fillRect(trunkX + 8, fillTop, 5, fillH);
+  }
 
   for (let i = SEGMENTS - 1; i >= 0; i--) {
-    const y = baseY - (i + 1) * segH + shakeX * 0.12;
+    const y = baseY - (i + 1) * segH + dropY + shakeX * 0.12;
     const x = trunkX;
     // Subtle alternating block shade
     if (i % 2 === 0) {
@@ -877,8 +905,8 @@ function draw(now) {
     ctx.textBaseline = "middle";
     const fontSize = Math.min(68, w * 0.17);
     ctx.font = `800 ${fontSize}px Manrope, sans-serif`;
-    // Large run score sits mid-upper on the tall pole (ref rhythm)
-    const sy = Math.max(segH * 2.2, baseY * 0.28);
+    // Large run score rides with the dropping stack
+    const sy = Math.max(segH * 2.2, baseY * 0.28) + dropY;
     ctx.lineWidth = 5;
     ctx.strokeStyle = "rgba(0,0,0,0.35)";
     ctx.fillStyle = "#fff";
@@ -952,6 +980,8 @@ function chop(side) {
   /** @type {Side} */
   const prev = trunk[trunk.length - 1] ?? "left";
   trunk.push(nextBranch(score + 1, prev));
+  // Upper stack stays visually raised, then slides into the gap (queueable)
+  beginTrunkDrop(segH);
 
   score += 1;
   hudScore.textContent = String(score);
@@ -1189,6 +1219,8 @@ function loop(ts) {
   }
 
   if (phase !== "paused" && !shotFreeze) {
+    updateTrunkDrop(dt);
+
     for (const d of debris) {
       d.x += d.vx;
       d.y += d.vy;
@@ -1270,7 +1302,7 @@ if (urlParams.get("bot") === "1") {
   setTimeout(botTick, 600);
 }
 
-// Screenshot / QA harness: /karate/?shot=idle|kick|defeat|tree|split
+// Screenshot / QA harness: /karate/?shot=idle|kick|defeat|tree|split|drop
 if (urlParams.has("shot")) {
   window.__karateShot = {
     ready: () => heroReady,
@@ -1279,6 +1311,7 @@ if (urlParams.has("shot")) {
     debrisCount: () => debris.length,
     floatsCount: () => floats.length,
     difficulty: (s) => difficultyFor(s),
+    dropY: () => trunkDropY,
     show(pose) {
       hideOverlay();
       phase = "playing";
@@ -1294,7 +1327,8 @@ if (urlParams.has("shot")) {
       debris = [];
       floats = [];
       chips = [];
-      if (pose === "kick" || pose === "split") {
+      trunkDropY = 0;
+      if (pose === "kick" || pose === "split" || pose === "drop") {
         playerSide = "left";
         chopping = true;
         strikeKind = "kick";
@@ -1308,19 +1342,16 @@ if (urlParams.has("shot")) {
       } else {
         heroPose = "idle";
       }
-      if (pose === "tree" || pose === "split") {
+      if (pose === "tree" || pose === "split" || pose === "drop") {
         resize();
         const L0 = layout(); // sync SEGMENTS to tall-block count
-        // Every segment branched; tree shot shows early same-side streaks
         const n = L0.segments;
         trunk = [];
-        if (pose === "split") {
-          // Kick on left → bottom hazard on right (safe)
+        if (pose === "split" || pose === "drop") {
           for (let i = 0; i < n; i++) {
             trunk.push(i % 2 === 0 ? "right" : "left");
           }
         } else {
-          // Early-game style: long same-side runs (bir tomondan)
           let side = /** @type {"left"|"right"} */ ("left");
           for (let i = 0; i < n; i++) {
             trunk.push(side);
@@ -1330,10 +1361,9 @@ if (urlParams.has("shot")) {
           }
         }
       }
-      if (pose === "split") {
+      if (pose === "split" || pose === "drop") {
         resize();
         const L = layout();
-        // Mid-flight split log opposite hero (hero left → chunk flies right-down)
         spawnDebris(L.cx, L.baseY, L.trunkW, L.segH, "left", "right");
         if (debris[0]) {
           debris[0].x = L.cx + L.trunkW * 1.45;
@@ -1356,6 +1386,10 @@ if (urlParams.has("shot")) {
         if (floats[0]) {
           floats[0].vy = 0;
           floats[0].life = 1;
+        }
+        if (pose === "drop") {
+          // Freeze mid-fall: gap ≈ half a segment above the stump
+          trunkDropY = -L.segH * 0.55;
         }
         return;
       }
