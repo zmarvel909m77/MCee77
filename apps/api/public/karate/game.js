@@ -75,9 +75,9 @@ if (tg) {
  * Hero on-screen height (idle). Each trunk segment is taller again
  * (hero + ~50px+) so blocks read long like the ref.
  */
-const HERO_DRAW_H = 78;
+const HERO_DRAW_H = 70; // slightly smaller hero (salgina kichikroq)
 /** Extra height above hero for one trunk block (uzunlashsin). */
-const SEG_OVER_HERO = 52;
+const SEG_OVER_HERO = 60; // keep tall blocks after hero shrink
 /**
  * Live segment count — derived in layout() so tall blocks still fill
  * ground → canvas top. Starts at 5; resized when the canvas lays out.
@@ -685,38 +685,67 @@ function drawPlayer(x, y, side, now, scaleMul = 1) {
 }
 
 /**
- * Spawn a trunk-width flying split log (bo‘linish) opposite the hero,
- * down-diagonal like the GAMEE ref, plus wood chips.
+ * Spawn compact flying wood chunks (ixcham) opposite the hero — not
+ * full trunk-width slabs — plus a few chips.
  * @param {number} cx
  * @param {number} baseY
  * @param {number} trunkW
  * @param {number} segH
  * @param {Side} side hero kick side
- * @param {Side} [branch] branch attached to the chopped segment
+ * @param {Side} [branch] branch attached to the primary chunk
  */
 function spawnDebris(cx, baseY, trunkW, segH, side, branch = null) {
   // Opposite the hero — right kick → chunk flies left-down
   const dir = side === "left" ? 1 : -1;
+  const chunkW = trunkW * 0.48;
+  const chunkH = Math.min(26, Math.max(16, segH * 0.16));
+  // Primary compact piece (may carry a short stub branch)
   debris.push({
-    x: cx,
-    y: baseY - segH * 0.55,
-    vx: dir * (7.5 + Math.random() * 4.5),
-    vy: 1.8 + Math.random() * 2.4,
-    rot: dir * 0.45,
-    vr: dir * (0.16 + Math.random() * 0.1),
-    life: 1.2,
-    w: trunkW,
-    h: segH,
+    x: cx + dir * 6,
+    y: baseY - segH * 0.35,
+    vx: dir * (8 + Math.random() * 4),
+    vy: 2 + Math.random() * 2.2,
+    rot: dir * 0.5,
+    vr: dir * (0.18 + Math.random() * 0.12),
+    life: 1.05,
+    w: chunkW,
+    h: chunkH,
     branch: branch || null,
   });
-  for (let i = 0; i < 12; i++) {
+  // Second smaller shard
+  debris.push({
+    x: cx + dir * 2,
+    y: baseY - segH * 0.5,
+    vx: dir * (5.5 + Math.random() * 3.5),
+    vy: 1.2 + Math.random() * 2.8,
+    rot: dir * -0.35,
+    vr: dir * -(0.2 + Math.random() * 0.1),
+    life: 0.9,
+    w: chunkW * 0.72,
+    h: chunkH * 0.7,
+    branch: null,
+  });
+  // Tiny third flake
+  debris.push({
+    x: cx + dir * 4,
+    y: baseY - segH * 0.42,
+    vx: dir * (4 + Math.random() * 5),
+    vy: 0.5 + Math.random() * 3,
+    rot: (Math.random() - 0.5) * 1.2,
+    vr: (Math.random() - 0.5) * 0.35,
+    life: 0.75,
+    w: chunkW * 0.45,
+    h: chunkH * 0.45,
+    branch: null,
+  });
+  for (let i = 0; i < 7; i++) {
     chips.push({
-      x: cx + (Math.random() - 0.5) * trunkW * 1.1,
-      y: baseY - segH * (0.3 + Math.random() * 0.5),
-      r: 1.4 + Math.random() * 3.2,
+      x: cx + (Math.random() - 0.5) * trunkW,
+      y: baseY - segH * (0.25 + Math.random() * 0.4),
+      r: 1.1 + Math.random() * 2.2,
       a: 1,
-      vy: -0.5 + Math.random() * 4,
-      vx: dir * (2 + Math.random() * 5) + (Math.random() - 0.5) * 2,
+      vy: -0.2 + Math.random() * 3.5,
+      vx: dir * (2 + Math.random() * 4.5) + (Math.random() - 0.5) * 2,
     });
   }
 }
@@ -781,12 +810,11 @@ function draw(now) {
 
   if (petals.length === 0) seedPetals(w, h);
 
-  const shakeX = shake > 0 ? (Math.random() - 0.5) * shake : 0;
   drawAtmosphere(w, h, baseY);
 
-  // Trunk — floating stack (dropY leaves a readable gap above the stump)
+  // Trunk — floating stack (dropY only: tekis pasga, no horizontal shake)
   const dropY = trunkDropY;
-  const trunkX = cx - trunkW / 2 + shakeX;
+  const trunkX = cx - trunkW / 2;
   const stackBottom = baseY + dropY;
   const fillTop = Math.min(0, dropY);
   const fillH = Math.max(0, stackBottom - fillTop + 1);
@@ -802,7 +830,7 @@ function draw(now) {
   }
 
   for (let i = SEGMENTS - 1; i >= 0; i--) {
-    const y = baseY - (i + 1) * segH + dropY + shakeX * 0.12;
+    const y = baseY - (i + 1) * segH + dropY;
     const x = trunkX;
     // Subtle alternating block shade
     if (i % 2 === 0) {
@@ -831,9 +859,9 @@ function draw(now) {
     if (branch) drawBranch(x, y, trunkW, segH, branch);
   }
 
-  // Stump base
+  // Stump base (no shake — stays fixed)
   roundRect(
-    cx - trunkW * 0.65 + shakeX,
+    cx - trunkW * 0.65,
     baseY - 4,
     trunkW * 1.3,
     14,
@@ -846,40 +874,39 @@ function draw(now) {
   const sideGap = Math.max(32, trunkW * 0.52 + 10);
   const px =
     playerSide === "left" ? cx - trunkW / 2 - sideGap : cx + trunkW / 2 + sideGap;
-  drawPlayer(px + shakeX * 0.35, playerY, playerSide, now);
+  drawPlayer(px, playerY, playerSide, now);
 
   // Soft reflection of player
   ctx.save();
   ctx.globalAlpha = 0.14;
   ctx.translate(0, baseY + 6);
   ctx.scale(1, -0.3);
-  drawPlayer(px + shakeX * 0.35, -(playerY - baseY) + 4, playerSide, now, 0.92);
+  drawPlayer(px, -(playerY - baseY) + 4, playerSide, now, 0.92);
   ctx.restore();
   ctx.globalAlpha = 1;
 
-  // Debris — trunk-width flying split log (bo‘linish)
+  // Debris — compact flying wood chunks (ixcham)
   for (const d of debris) {
-    const dw = d.w || trunkW;
-    const dh = d.h || segH * 0.9;
+    const dw = d.w || trunkW * 0.48;
+    const dh = d.h || Math.min(26, segH * 0.16);
     ctx.save();
     ctx.translate(d.x, d.y);
     ctx.rotate(d.rot);
     ctx.globalAlpha = Math.max(0, Math.min(1, d.life));
-    roundRect(-dw / 2, -dh / 2, dw, dh, 4, "#c49a6c");
-    // grain on flying chunk
+    roundRect(-dw / 2, -dh / 2, dw, dh, 2.5, "#c49a6c");
     ctx.strokeStyle = "rgba(90, 50, 25, 0.28)";
-    ctx.lineWidth = 1.3;
-    for (let g = 0; g < 3; g++) {
-      const gx = -dw / 2 + 8 + g * ((dw - 16) / 2.5);
-      ctx.beginPath();
-      ctx.moveTo(gx, -dh / 2 + 4);
-      ctx.lineTo(gx + (g % 2 ? 1.2 : -1), dh / 2 - 4);
-      ctx.stroke();
-    }
-    ctx.fillStyle = "rgba(255, 230, 190, 0.16)";
-    ctx.fillRect(-dw / 2 + 3, -dh / 2 + 2, 5, dh - 4);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(-dw / 2 + 4, 0);
+    ctx.lineTo(dw / 2 - 4, 0.5);
+    ctx.stroke();
     if (d.branch) {
-      drawBranch(-dw / 2, -dh / 2, dw, dh, d.branch);
+      // Short stub plank (not a full-size branch)
+      const bh = Math.min(8, dh * 0.4);
+      const bw = dw * 1.55;
+      const left = d.branch === "left";
+      const hx = left ? -dw / 2 - bw + 3 : dw / 2 - 3;
+      roundRect(hx, -dh / 2, bw, bh, 2, "#a67c52");
     }
     ctx.restore();
   }
@@ -893,33 +920,11 @@ function draw(now) {
   }
   ctx.globalAlpha = 1;
 
-  // Large score on trunk (ref style)
-  if (
-    phase === "playing" ||
-    phase === "paused" ||
-    phase === "dying" ||
-    phase === "over"
-  ) {
-    ctx.save();
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    const fontSize = Math.min(68, w * 0.17);
-    ctx.font = `800 ${fontSize}px Manrope, sans-serif`;
-    // Large run score rides with the dropping stack
-    const sy = Math.max(segH * 2.2, baseY * 0.28) + dropY;
-    ctx.lineWidth = 5;
-    ctx.strokeStyle = "rgba(0,0,0,0.35)";
-    ctx.fillStyle = "#fff";
-    ctx.strokeText(String(score), cx + shakeX, sy);
-    ctx.fillText(String(score), cx + shakeX, sy);
-    ctx.restore();
-  }
-
-  // Floating +N
+  // Floating +N near kick (HUD Ball/Rekord stays — no mid-trunk score)
   for (const f of floats) {
     ctx.globalAlpha = Math.max(0, f.life);
     ctx.fillStyle = "#fff";
-    ctx.font = "800 24px Manrope, sans-serif";
+    ctx.font = "800 22px Manrope, sans-serif";
     ctx.textAlign = "center";
     ctx.strokeStyle = "rgba(0,0,0,0.35)";
     ctx.lineWidth = 3;
@@ -936,9 +941,6 @@ function draw(now) {
     ctx.textAlign = "center";
     ctx.fillText("Pauza", cx, h * 0.45);
   }
-
-  if (shake > 0) shake *= 0.85;
-  if (shake < 0.4) shake = 0;
 }
 
 /**
@@ -991,7 +993,7 @@ function chop(side) {
   multi = Math.min(MULTI_MAX, 1 + multiFill * (MULTI_MAX - 1));
   setEnergyUi();
   setMultiUi();
-  shake = 7;
+  // No screen/trunk shake on chop — only straight vertical drop
   playChopTone();
 }
 
@@ -1365,24 +1367,24 @@ if (urlParams.has("shot")) {
         resize();
         const L = layout();
         spawnDebris(L.cx, L.baseY, L.trunkW, L.segH, "left", "right");
-        if (debris[0]) {
-          debris[0].x = L.cx + L.trunkW * 1.45;
-          debris[0].y = L.baseY - L.segH * 0.35;
-          debris[0].vx = 0;
-          debris[0].vy = 0;
-          debris[0].rot = 0.55;
-          debris[0].vr = 0;
-          debris[0].life = 1;
-        }
-        chips = chips.slice(0, 5).map((c, i) => ({
+        debris.forEach((d, i) => {
+          d.x = L.cx + L.trunkW * (1.2 + i * 0.55);
+          d.y = L.baseY - L.segH * (0.28 + i * 0.12);
+          d.vx = 0;
+          d.vy = 0;
+          d.rot = 0.45 + i * 0.25;
+          d.vr = 0;
+          d.life = 1;
+        });
+        chips = chips.slice(0, 4).map((c, i) => ({
           ...c,
-          x: L.cx + 22 + i * 9,
-          y: L.baseY - L.segH * 0.35 - i * 7,
+          x: L.cx + 18 + i * 8,
+          y: L.baseY - L.segH * 0.3 - i * 5,
           vx: 0,
           vy: 0,
           a: 1,
         }));
-        spawnFloat(L.cx + 10, L.baseY - L.segH * 0.85, "+1");
+        spawnFloat(L.cx + 10, L.baseY - L.segH * 0.7, "+1");
         if (floats[0]) {
           floats[0].vy = 0;
           floats[0].life = 1;
