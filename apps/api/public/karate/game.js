@@ -71,16 +71,47 @@ if (tg) {
 /** @typedef {"ready"|"playing"|"paused"|"dying"|"over"} Phase */
 /** @typedef {"idle"|"walk"|"kick"|"punch"|"hurt"|"defeat"} HeroPose */
 
+/* ── Feel / timing targets (2D side-view sprite game) ─────────────── */
+/** Target game loop rate (requestAnimationFrame + dt clamp). */
+const TARGET_FPS = 60;
+/** Max simulation step (seconds) — clamps hitches; ~2 frames @ 60 FPS. */
+const DT_MAX = 2 / TARGET_FPS;
+/** Hero atlas frame cadence (walk cycle) — mid of 30–60 FPS. */
+const SPRITE_FPS = 45;
+/** Walk cycle uses 4 atlas frames at SPRITE_FPS. */
+const WALK_MS = Math.round((4 / SPRITE_FPS) * 1000);
+/** Kick / hit pose hold — mid of 0.08–0.15 s. */
+const CHOP_MS = 120;
+/** Trunk visual height as fraction of canvas (mid of 75–90%). */
+const TREE_HEIGHT_FRAC = 0.82;
+const TREE_HEIGHT_MIN_FRAC = 0.75;
+const TREE_HEIGHT_MAX_FRAC = 0.9;
+/** Hero height as fraction of tree height (mid of 8–12%). */
+const HERO_OF_TREE_FRAC = 0.1;
+const HERO_OF_TREE_MIN = 0.08;
+const HERO_OF_TREE_MAX = 0.12;
+/** One segment settles in this many ms — mid of 0.25–0.6 s; queueable. */
+const DROP_DURATION_MS = 380;
+const DROP_DURATION_MIN_MS = 250;
+const DROP_DURATION_MAX_MS = 600;
+/** Brief lean on impact (degrees), then ease back — not random shake. */
+const TREE_BEND_DEG_MIN = 2;
+const TREE_BEND_DEG_MAX = 5;
+const TREE_BEND_DEG = 3.5;
+/** Bend settle time (seconds). */
+const TREE_BEND_SETTLE_S = 0.28;
+/** Debris spin while flying — mid of 90°–180°. */
+const DEBRIS_SPIN_DEG_MIN = 90;
+const DEBRIS_SPIN_DEG_MAX = 180;
+/** Debris gravity (px/s²). */
+const DEBRIS_GRAVITY = 980;
+/** Dark reflective ground strip ≈ 1 cm on phone (~40–48 CSS px). */
+const GROUND_MIN = 40;
+const GROUND_MAX = 48;
+
 /**
- * Hero on-screen height (idle). Each trunk segment is taller again
- * (hero + ~50px+) so blocks read long like the ref.
- */
-const HERO_DRAW_H = 70; // slightly smaller hero (salgina kichikroq)
-/** Extra height above hero for one trunk block (uzunlashsin). */
-const SEG_OVER_HERO = 60; // keep tall blocks after hero shrink
-/**
- * Live segment count — derived in layout() so tall blocks still fill
- * ground → canvas top. Starts at 5; resized when the canvas lays out.
+ * Live segment count — derived in layout() from TREE_HEIGHT_FRAC.
+ * Starts at 5; resized when the canvas lays out.
  */
 let SEGMENTS = 5;
 const ENERGY_MAX = 100;
@@ -90,10 +121,6 @@ const ENERGY_DRAIN = 11;
 const ENERGY_REFILL = 18;
 /** Score below this = easy same-side streaks + forgiving timer. */
 const DIFF_EASY_UNTIL = 20;
-/** Strike hold — long enough to read Tepish kick + swoosh. */
-const CHOP_MS = 160;
-/** Side-switch flash through walk frames before/with kick. */
-const WALK_MS = 95;
 const HURT_MS = 380;
 const DEFEAT_HOLD_MS = 520;
 const MULTI_DECAY = 0.55;
@@ -159,7 +186,6 @@ let pendingOverReason = "";
 let lastTs = 0;
 let submitting = false;
 let lastSubmitted = false;
-let shake = 0;
 let muted = false;
 let animT = 0;
 /** Grace seconds after start before timer pressure. */
@@ -171,12 +197,14 @@ let strikeCount = 0;
  * visible gap opens at the stump, then eases down (queueable on rapid taps).
  */
 let trunkDropY = 0;
-/** One segment falls in this many ms — fast for taps, still readable. */
-const DROP_DURATION_MS = 120;
+/** Brief lean toward kick side (radians); eases to 0 — tekis vertical drop. */
+let trunkBend = 0;
+/** @type {1|-1} lean direction (away from hero kick). */
+let trunkBendDir = 1;
 
 /**
  * Flying split-log chunks (bo‘linish).
- * @type {{ x: number, y: number, vx: number, vy: number, rot: number, vr: number, life: number, w: number, h: number, branch: Side }[]}
+ * @type {{ x: number, y: number, vx: number, vy: number, rot: number, vr: number, life: number, w: number, h: number, branch: Side, grounded?: boolean }[]}
  */
 let debris = [];
 /** @type {{ x: number, y: number, vy: number, life: number, text: string }[]} */
@@ -210,66 +238,257 @@ async function waitForAuthPayload(maxMs = 2500) {
 }
 
 /**
- * Difficulty ramp for patterns + timer.
- * Early (&lt;20): long same-side streaks, slow drain, fat refill.
- * Late (20+): frequent L↔R switches, tighter timer.
+ * Mulberry32 — deterministic stream from a per-run seed.
+ * @param {number} seed
+ * @returns {() => number} in [0, 1)
+ */
+function createRng(seed) {
+  let s = seed >>> 0;
+  return function rand() {
+    s = (s + 0x6d2b79f5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * TreeBranchController — random fair branch combos with empty gaps.
+ *
+ * Empty segments ARE allowed (not every block has a branch).
+ * Combos of 1–3 consecutive same-side branches; random L/R; random
+ * gaps between groups; no back-to-back identical combo; new seed each run.
+ * Never both sides on one height (always one safe side at the player).
+ */
+const TreeBranchController = {
+  seed: 0,
+  /** @type {() => number} */
+  rand: Math.random,
+  /** @type {"EASY"|"MEDIUM"|"HARD"|"EXTREME"} */
+  tier: "EASY",
+  gapLeft: 0,
+  comboLeft: 0,
+  /** @type {"left"|"right"|null} */
+  comboSide: null,
+  /** Last finished combo key e.g. "left:2" */
+  lastComboKey: "",
+  /** @type {"left"|"right"|null} */
+  pendingSide: null,
+  pendingLen: 0,
+  pendingComboKey: "",
+
+  /**
+   * @param {number} [seed]
+   */
+  reset(seed) {
+    this.seed =
+      seed != null
+        ? seed >>> 0
+        : (Date.now() ^ ((Math.random() * 0x100000000) >>> 0)) >>> 0;
+    this.rand = createRng(this.seed);
+    this.tier = "EASY";
+    this.gapLeft = 0;
+    this.comboLeft = 0;
+    this.comboSide = null;
+    this.lastComboKey = "";
+    this.pendingSide = null;
+    this.pendingLen = 0;
+    this.pendingComboKey = "";
+    this._planNext(0);
+  },
+
+  /**
+   * Map score → difficulty tier.
+   * @param {number} score
+   * @returns {"EASY"|"MEDIUM"|"HARD"|"EXTREME"}
+   */
+  tierFor(score) {
+    if (score < 15) return "EASY";
+    if (score < 40) return "MEDIUM";
+    if (score < 80) return "HARD";
+    return "EXTREME";
+  },
+
+  /**
+   * Gap + combo-length weights by tier.
+   * @param {"EASY"|"MEDIUM"|"HARD"|"EXTREME"} tier
+   */
+  params(tier) {
+    switch (tier) {
+      case "EASY":
+        // Few branches, large gaps, mostly 1-branch combos
+        return {
+          gapMin: 2,
+          gapMax: 5,
+          comboWeights: [0.78, 0.2, 0.02],
+          switchBias: 0.55,
+        };
+      case "MEDIUM":
+        return {
+          gapMin: 1,
+          gapMax: 3,
+          comboWeights: [0.42, 0.48, 0.1],
+          switchBias: 0.62,
+        };
+      case "HARD":
+        return {
+          gapMin: 0,
+          gapMax: 2,
+          comboWeights: [0.22, 0.48, 0.3],
+          switchBias: 0.7,
+        };
+      default:
+        // EXTREME — dense, 1–3 streaks, small gaps
+        return {
+          gapMin: 0,
+          gapMax: 1,
+          comboWeights: [0.18, 0.37, 0.45],
+          switchBias: 0.78,
+        };
+    }
+  },
+
+  /**
+   * @param {number[]} weights length 3 → combo lens 1..3
+   * @returns {number}
+   */
+  _pickComboLen(weights) {
+    const r = this.rand();
+    let acc = 0;
+    for (let i = 0; i < weights.length; i++) {
+      acc += weights[i];
+      if (r < acc) return i + 1;
+    }
+    return 1;
+  },
+
+  /**
+   * Plan the next empty gap + upcoming combo (not yet started).
+   * Avoids repeating the same combo key back-to-back.
+   * @param {number} score
+   */
+  _planNext(score) {
+    this.tier = this.tierFor(score);
+    const p = this.params(this.tier);
+    this.gapLeft =
+      p.gapMin + Math.floor(this.rand() * (p.gapMax - p.gapMin + 1));
+
+    const lastSide = this.lastComboKey.startsWith("left")
+      ? "left"
+      : this.lastComboKey.startsWith("right")
+        ? "right"
+        : null;
+
+    // Gap 0 + same side would merge into a streak > 3 — force a switch
+    if (this.gapLeft === 0 && lastSide) {
+      // Will force opposite side below
+    }
+
+    let tries = 0;
+    let side = /** @type {"left"|"right"} */ ("left");
+    let len = 1;
+    let key = "";
+    do {
+      len = this._pickComboLen(p.comboWeights);
+      if (this.gapLeft === 0 && lastSide) {
+        side = lastSide === "left" ? "right" : "left";
+      } else if (lastSide && this.rand() < p.switchBias) {
+        side = lastSide === "left" ? "right" : "left";
+      } else {
+        side = this.rand() < 0.5 ? "left" : "right";
+      }
+      key = `${side}:${len}`;
+      tries += 1;
+    } while (key === this.lastComboKey && tries < 10);
+
+    this.pendingSide = side;
+    this.pendingLen = len;
+    this.pendingComboKey = key;
+  },
+
+  /**
+   * Emit the next trunk segment (null | left | right).
+   * @param {number} score
+   * @returns {Side}
+   */
+  next(score) {
+    this.tier = this.tierFor(score);
+
+    if (this.gapLeft > 0) {
+      this.gapLeft -= 1;
+      return null;
+    }
+
+    if (this.comboLeft <= 0) {
+      // Begin the pending combo
+      this.comboSide = this.pendingSide;
+      this.comboLeft = this.pendingLen;
+      this.lastComboKey = this.pendingComboKey;
+    }
+
+    const out = this.comboSide;
+    this.comboLeft -= 1;
+    if (this.comboLeft <= 0) {
+      this.comboSide = null;
+      this._planNext(score);
+    }
+    return out;
+  },
+
+  /**
+   * Build opening queue. Fair: player starts on the right → bottom
+   * must not be a right-side hazard (empty or left only).
+   * @param {number} count
+   * @param {number} [score]
+   * @returns {Side[]}
+   */
+  seedQueue(count, score = 0) {
+    // Soft opening: at least one empty at the stump
+    this.gapLeft = Math.max(this.gapLeft, 1 + Math.floor(this.rand() * 2));
+    // First combo prefers left (safe vs default stand-right)
+    this.pendingSide = "left";
+    this.pendingLen = 1;
+    this.pendingComboKey = "left:1";
+
+    /** @type {Side[]} */
+    const out = [];
+    for (let i = 0; i < count; i++) {
+      out.push(this.next(score));
+    }
+    if (out[0] === "right") out[0] = null;
+    return out;
+  },
+};
+
+/**
+ * Timer / energy scale from the same score tiers as TreeBranchController.
  * @param {number} runScore
  */
 function difficultyFor(runScore) {
-  const easy = runScore < DIFF_EASY_UNTIL;
+  const tier = TreeBranchController.tierFor(runScore);
+  const easy = tier === "EASY";
   const t = Math.max(0, runScore - DIFF_EASY_UNTIL);
-  // Chance to flip side when generating the next segment
-  const switchChance = easy
-    ? 0.1 + runScore * 0.008 // ~0.10 → ~0.25 — rare flips, long streaks
-    : Math.min(0.9, 0.58 + t * 0.014); // ~0.58 → 0.90 — choppy L↔R
-  const drainScale = easy
-    ? 0.32 + runScore * 0.01 // forgiving early
-    : Math.min(1.75, 0.88 + t * 0.024); // snappy after 20
-  const refill = easy
-    ? 28 - runScore * 0.2 // ~28 → ~24
-    : Math.max(11, 18 - t * 0.18); // ~18 → 11
-  return { easy, switchChance, drainScale, refill };
+  const drainScale =
+    tier === "EASY"
+      ? 0.32 + runScore * 0.01
+      : tier === "MEDIUM"
+        ? 0.7 + (runScore - 15) * 0.012
+        : tier === "HARD"
+          ? Math.min(1.45, 1.0 + (runScore - 40) * 0.012)
+          : Math.min(1.75, 1.25 + (runScore - 80) * 0.01);
+  const refill =
+    tier === "EASY"
+      ? 28 - runScore * 0.2
+      : tier === "MEDIUM"
+        ? 22 - (runScore - 15) * 0.12
+        : tier === "HARD"
+          ? Math.max(13, 18 - (runScore - 40) * 0.1)
+          : Math.max(11, 14 - (runScore - 80) * 0.08);
+  return { easy, tier, drainScale, refill };
 }
 
-/**
- * Every segment carries exactly one branch (left OR right).
- * Never both sides on one height — always one safe side.
- * Early runs prefer same-side streaks; later flips more often.
- * @param {number} runScore
- * @param {Side} prevSide
- * @returns {"left"|"right"}
- */
-function nextBranch(runScore, prevSide) {
-  const { switchChance } = difficultyFor(runScore);
-  if (prevSide === "left" || prevSide === "right") {
-    if (Math.random() < switchChance) {
-      return prevSide === "left" ? "right" : "left";
-    }
-    return prevSide;
-  }
-  return Math.random() < 0.5 ? "left" : "right";
-}
-
-/**
- * Opening queue: every slot branched. Player starts on the right →
- * trunk[0] is "left" (safe). Early = long same-side streaks.
- */
 function seedTrunk() {
-  /** @type {Side[]} */
-  const pattern = [];
-  let side = /** @type {"left"|"right"} */ ("left");
-  let streak = 0;
-  // Easy opening: aim for 3–4 same-side before a flip
-  const streakTarget = 3 + Math.floor(Math.random() * 2);
-  for (let i = 0; i < SEGMENTS; i++) {
-    pattern.push(side);
-    streak += 1;
-    if (streak >= streakTarget) {
-      side = side === "left" ? "right" : "left";
-      streak = 0;
-    }
-  }
-  trunk = pattern;
+  trunk = TreeBranchController.seedQueue(SEGMENTS, score);
   trunk.length = SEGMENTS;
 }
 
@@ -289,12 +508,15 @@ function resetRun() {
   pendingOverReason = "";
   strikeCount = 0;
   lastSubmitted = false;
-  shake = 0;
   trunkDropY = 0;
+  trunkBend = 0;
+  trunkBendDir = 1;
   graceLeft = 2.2;
   debris = [];
   floats = [];
   chips = [];
+  // New random seed each run → new branch combination plan
+  TreeBranchController.reset();
   seedTrunk();
   hudScore.textContent = "0";
   setEnergyUi();
@@ -616,9 +838,10 @@ function drawPlayer(x, y, side, now, scaleMul = 1) {
   const key = heroFrameKey(now);
   const fr = HERO_ATLAS.frames[key] || HERO_ATLAS.frames.idle;
 
-  // Target on-screen height — trunk blocks are taller (HERO_DRAW_H + SEG_OVER_HERO)
+  // Hero height = HERO_OF_TREE_FRAC × tree height (layout)
+  const { heroH } = layout();
   const targetH =
-    key === "defeat" ? 28 * scaleMul : HERO_DRAW_H * scaleMul;
+    key === "defeat" ? heroH * 0.4 * scaleMul : heroH * scaleMul;
   const scale = targetH / fr.h;
   const dw = fr.w * scale;
   const dh = fr.h * scale;
@@ -694,58 +917,51 @@ function drawPlayer(x, y, side, now, scaleMul = 1) {
  * @param {Side} side hero kick side
  * @param {Side} [branch] branch attached to the primary chunk
  */
+/**
+ * Angular velocity (rad/s) so a chunk rotates ~DEBRIS_SPIN_DEG over ~lifeSec.
+ * @param {number} dir
+ * @param {number} lifeSec
+ */
+function debrisSpinRate(dir, lifeSec) {
+  const deg =
+    DEBRIS_SPIN_DEG_MIN +
+    Math.random() * (DEBRIS_SPIN_DEG_MAX - DEBRIS_SPIN_DEG_MIN);
+  return dir * ((deg * Math.PI) / 180) / Math.max(0.35, lifeSec);
+}
+
 function spawnDebris(cx, baseY, trunkW, segH, side, branch = null) {
   // Opposite the hero — right kick → chunk flies left-down
   const dir = side === "left" ? 1 : -1;
   const chunkW = trunkW * 0.48;
   const chunkH = Math.min(26, Math.max(16, segH * 0.16));
-  // Primary compact piece (may carry a short stub branch)
-  debris.push({
-    x: cx + dir * 6,
-    y: baseY - segH * 0.35,
-    vx: dir * (8 + Math.random() * 4),
-    vy: 2 + Math.random() * 2.2,
-    rot: dir * 0.5,
-    vr: dir * (0.18 + Math.random() * 0.12),
-    life: 1.05,
-    w: chunkW,
-    h: chunkH,
-    branch: branch || null,
-  });
-  // Second smaller shard
-  debris.push({
-    x: cx + dir * 2,
-    y: baseY - segH * 0.5,
-    vx: dir * (5.5 + Math.random() * 3.5),
-    vy: 1.2 + Math.random() * 2.8,
-    rot: dir * -0.35,
-    vr: dir * -(0.2 + Math.random() * 0.1),
-    life: 0.9,
-    w: chunkW * 0.72,
-    h: chunkH * 0.7,
-    branch: null,
-  });
-  // Tiny third flake
-  debris.push({
-    x: cx + dir * 4,
-    y: baseY - segH * 0.42,
-    vx: dir * (4 + Math.random() * 5),
-    vy: 0.5 + Math.random() * 3,
-    rot: (Math.random() - 0.5) * 1.2,
-    vr: (Math.random() - 0.5) * 0.35,
-    life: 0.75,
-    w: chunkW * 0.45,
-    h: chunkH * 0.45,
-    branch: null,
-  });
+  const mk = (scale, life, withBranch) => {
+    const w = chunkW * scale;
+    const h = chunkH * scale;
+    return {
+      x: cx + dir * (4 + Math.random() * 6),
+      y: baseY - segH * (0.3 + Math.random() * 0.25),
+      vx: dir * (180 + Math.random() * 140), // px/s
+      vy: -(40 + Math.random() * 80),
+      rot: dir * 0.2,
+      vr: debrisSpinRate(dir * (Math.random() < 0.5 ? 1 : -1), life),
+      life,
+      w,
+      h,
+      branch: withBranch ? branch || null : null,
+      grounded: false,
+    };
+  };
+  debris.push(mk(1, 1.15, true));
+  debris.push(mk(0.72, 1.0, false));
+  debris.push(mk(0.45, 0.85, false));
   for (let i = 0; i < 7; i++) {
     chips.push({
       x: cx + (Math.random() - 0.5) * trunkW,
       y: baseY - segH * (0.25 + Math.random() * 0.4),
       r: 1.1 + Math.random() * 2.2,
       a: 1,
-      vy: -0.2 + Math.random() * 3.5,
-      vx: dir * (2 + Math.random() * 4.5) + (Math.random() - 0.5) * 2,
+      vy: -40 + Math.random() * 120,
+      vx: dir * (60 + Math.random() * 140) + (Math.random() - 0.5) * 40,
     });
   }
 }
@@ -753,10 +969,6 @@ function spawnDebris(cx, baseY, trunkW, segH, side, branch = null) {
 function spawnFloat(x, y, text) {
   floats.push({ x, y, vy: -1.5, life: 1, text });
 }
-
-/** Dark reflective ground strip ≈ 1 cm on phone (~40–48 CSS px). */
-const GROUND_MIN = 40;
-const GROUND_MAX = 48;
 
 function layout() {
   const w = canvas.clientWidth;
@@ -771,21 +983,45 @@ function layout() {
     Math.min(GROUND_MAX, Math.round(h * 0.09)),
   );
   const baseY = Math.max(groundH + 80, h - groundH);
-  // Even taller blocks; count fills ground → canvas top
-  const minSegH = HERO_DRAW_H + SEG_OVER_HERO;
-  const nextSegs = Math.max(4, Math.floor(baseY / minSegH));
-  const segH = baseY / nextSegs;
+  // Tree height = 75–90% of canvas (TREE_HEIGHT_FRAC), capped by baseY
+  const treeH = Math.min(
+    baseY,
+    Math.max(
+      h * TREE_HEIGHT_MIN_FRAC,
+      Math.min(h * TREE_HEIGHT_MAX_FRAC, h * TREE_HEIGHT_FRAC),
+    ),
+  );
+  // Hero = 8–12% of tree height
+  const heroH = Math.max(
+    h * TREE_HEIGHT_MIN_FRAC * HERO_OF_TREE_MIN,
+    Math.min(
+      treeH * HERO_OF_TREE_MAX,
+      treeH * HERO_OF_TREE_FRAC,
+    ),
+  );
+  // Tall blocks: each longer than the hero; count fills treeH
+  const minSegH = heroH * 1.55;
+  const nextSegs = Math.max(4, Math.floor(treeH / minSegH));
+  const segH = treeH / nextSegs;
   if (nextSegs !== SEGMENTS) {
     SEGMENTS = nextSegs;
     while (trunk.length < SEGMENTS) {
-      const prev = trunk[trunk.length - 1];
-      trunk.push(
-        prev === "left" ? "right" : prev === "right" ? "left" : "left",
-      );
+      trunk.push(TreeBranchController.next(score));
     }
     if (trunk.length > SEGMENTS) trunk.length = SEGMENTS;
   }
-  return { w, h, cx, trunkW, segH, baseY, groundH, segments: SEGMENTS };
+  return {
+    w,
+    h,
+    cx,
+    trunkW,
+    segH,
+    baseY,
+    groundH,
+    treeH,
+    heroH,
+    segments: SEGMENTS,
+  };
 }
 
 /** Queue one segment of fall after a successful chop (stacks if mid-drop). */
@@ -793,15 +1029,33 @@ function beginTrunkDrop(segH) {
   trunkDropY -= segH;
 }
 
-/** Ease stack down into the stump gap; constant speed ≈1 segment / DROP_DURATION_MS. */
+/** Ease stack down into the stump gap @ DROP_DURATION_MS per segment. */
 function updateTrunkDrop(dt) {
   if (trunkDropY >= 0) {
     trunkDropY = 0;
     return;
   }
   const { segH } = layout();
-  const speed = segH / (DROP_DURATION_MS / 1000);
+  const dur = Math.min(
+    DROP_DURATION_MAX_MS,
+    Math.max(DROP_DURATION_MIN_MS, DROP_DURATION_MS),
+  );
+  const speed = segH / (dur / 1000);
   trunkDropY = Math.min(0, trunkDropY + speed * dt);
+}
+
+/** Brief 2–5° lean on impact, then settle (not random shake). */
+function beginTrunkBend(side) {
+  // Lean away from the kick (tree recoils opposite the hero)
+  trunkBendDir = side === "left" ? 1 : -1;
+  trunkBend = trunkBendDir * ((TREE_BEND_DEG * Math.PI) / 180);
+}
+
+function updateTrunkBend(dt) {
+  if (trunkBend === 0) return;
+  const k = 1 - Math.exp(-dt / Math.max(0.05, TREE_BEND_SETTLE_S * 0.35));
+  trunkBend *= 1 - k;
+  if (Math.abs(trunkBend) < 0.0008) trunkBend = 0;
 }
 
 function draw(now) {
@@ -812,9 +1066,25 @@ function draw(now) {
 
   drawAtmosphere(w, h, baseY);
 
-  // Trunk — floating stack (dropY only: tekis pasga, no horizontal shake)
+  // Stump stays fixed (no bend / no shake)
+  roundRect(
+    cx - trunkW * 0.65,
+    baseY - 4,
+    trunkW * 1.3,
+    14,
+    4,
+    "#8a6238",
+  );
+
+  // Trunk stack: vertical drop + brief lean about the stump (tekis pasga)
   const dropY = trunkDropY;
   const trunkX = cx - trunkW / 2;
+  ctx.save();
+  if (trunkBend !== 0) {
+    ctx.translate(cx, baseY);
+    ctx.rotate(trunkBend);
+    ctx.translate(-cx, -baseY);
+  }
   const stackBottom = baseY + dropY;
   const fillTop = Math.min(0, dropY);
   const fillH = Math.max(0, stackBottom - fillTop + 1);
@@ -858,16 +1128,7 @@ function draw(now) {
     const branch = trunk[i];
     if (branch) drawBranch(x, y, trunkW, segH, branch);
   }
-
-  // Stump base (no shake — stays fixed)
-  roundRect(
-    cx - trunkW * 0.65,
-    baseY - 4,
-    trunkW * 1.3,
-    14,
-    4,
-    "#8a6238",
-  );
+  ctx.restore();
 
   // Player — feet on stump ledge; close enough for kick to read as trunk hit
   const playerY = baseY + 2;
@@ -979,11 +1240,10 @@ function chop(side) {
   spawnFloat(cx + (side === "left" ? -8 : 8), baseY - segH * 1.35, "+1");
 
   trunk.shift();
-  /** @type {Side} */
-  const prev = trunk[trunk.length - 1] ?? "left";
-  trunk.push(nextBranch(score + 1, prev));
+  trunk.push(TreeBranchController.next(score + 1));
   // Upper stack stays visually raised, then slides into the gap (queueable)
   beginTrunkDrop(segH);
+  beginTrunkBend(side);
 
   score += 1;
   hudScore.textContent = String(score);
@@ -993,7 +1253,6 @@ function chop(side) {
   multi = Math.min(MULTI_MAX, 1 + multiFill * (MULTI_MAX - 1));
   setEnergyUi();
   setMultiUi();
-  // No screen/trunk shake on chop — only straight vertical drop
   playChopTone();
 }
 
@@ -1026,7 +1285,6 @@ function endGame(reason) {
   phase = "dying";
   chopping = false;
   walkUntil = 0;
-  shake = 12;
   deathStartedAt = performance.now();
   heroPose = "hurt";
   pendingOverReason = reason || "Yana urinib ko‘ring!";
@@ -1178,7 +1436,8 @@ btnPause?.addEventListener("click", (ev) => {
 
 function loop(ts) {
   if (!lastTs) lastTs = ts;
-  const dt = Math.min(0.05, (ts - lastTs) / 1000);
+  // Target ~60 FPS; clamp large hitches so physics stay stable
+  const dt = Math.min(DT_MAX, (ts - lastTs) / 1000);
   lastTs = ts;
   animT += dt;
 
@@ -1222,22 +1481,40 @@ function loop(ts) {
 
   if (phase !== "paused" && !shotFreeze) {
     updateTrunkDrop(dt);
+    updateTrunkBend(dt);
 
+    const { baseY: groundY } = layout();
     for (const d of debris) {
-      d.x += d.vx;
-      d.y += d.vy;
-      d.vy += 22 * dt;
-      d.vx *= 0.995;
-      d.rot += d.vr;
-      d.life -= dt * 0.95;
+      if (!d.grounded) {
+        d.x += d.vx * dt;
+        d.y += d.vy * dt;
+        d.vy += DEBRIS_GRAVITY * dt;
+        d.vx *= Math.exp(-0.4 * dt);
+        d.rot += d.vr * dt;
+        // Simple ground collision / stop
+        const floor = groundY - d.h * 0.35;
+        if (d.y >= floor) {
+          d.y = floor;
+          d.vy = 0;
+          d.vx *= 0.35;
+          d.vr *= 0.2;
+          d.grounded = true;
+        }
+      } else {
+        d.vx *= Math.exp(-3 * dt);
+        d.vr *= Math.exp(-4 * dt);
+        d.life -= dt * 1.4;
+      }
+      d.life -= dt * 0.55;
     }
     debris = debris.filter((d) => d.life > 0);
 
     for (const c of chips) {
-      c.x += c.vx;
-      c.y += c.vy;
-      c.vy += 12 * dt;
-      c.a -= dt * 1.9;
+      c.x += c.vx * dt;
+      c.y += c.vy * dt;
+      c.vy += DEBRIS_GRAVITY * 0.85 * dt;
+      c.a -= dt * 1.6;
+      if (c.y > groundY + 8) c.a = 0;
     }
     chips = chips.filter((c) => c.a > 0);
 
@@ -1270,9 +1547,11 @@ resize();
 requestAnimationFrame(() => {
   resize();
   layout(); // sync SEGMENTS before seeding
+  TreeBranchController.reset();
   seedTrunk();
 });
 layout();
+TreeBranchController.reset();
 seedTrunk();
 showOverlay(
   "Karate Strike",
@@ -1314,6 +1593,26 @@ if (urlParams.has("shot")) {
     floatsCount: () => floats.length,
     difficulty: (s) => difficultyFor(s),
     dropY: () => trunkDropY,
+    bend: () => trunkBend,
+    feel: () => ({
+      TARGET_FPS,
+      DT_MAX,
+      SPRITE_FPS,
+      CHOP_MS,
+      WALK_MS,
+      TREE_HEIGHT_FRAC,
+      HERO_OF_TREE_FRAC,
+      DROP_DURATION_MS,
+      TREE_BEND_DEG,
+      DEBRIS_SPIN_DEG_MIN,
+      DEBRIS_SPIN_DEG_MAX,
+      DEBRIS_GRAVITY,
+    }),
+    branchController: () => ({
+      seed: TreeBranchController.seed,
+      tier: TreeBranchController.tier,
+      lastComboKey: TreeBranchController.lastComboKey,
+    }),
     show(pose) {
       hideOverlay();
       phase = "playing";
@@ -1348,18 +1647,19 @@ if (urlParams.has("shot")) {
         resize();
         const L0 = layout(); // sync SEGMENTS to tall-block count
         const n = L0.segments;
-        trunk = [];
-        if (pose === "split" || pose === "drop") {
-          for (let i = 0; i < n; i++) {
-            trunk.push(i % 2 === 0 ? "right" : "left");
-          }
+        if (pose === "tree") {
+          // Demo: gaps + clusters (not every segment branched)
+          TreeBranchController.reset(0xc0ffee);
+          trunk = TreeBranchController.seedQueue(n, 25); // MEDIUM density sample
         } else {
-          let side = /** @type {"left"|"right"} */ ("left");
+          // Kick/drop shots: sparse-ish for readability
+          trunk = [];
           for (let i = 0; i < n; i++) {
-            trunk.push(side);
-            if (i === Math.floor(n * 0.6)) {
-              side = side === "left" ? "right" : "left";
-            }
+            // empty, right, empty, left-left cluster pattern-ish
+            if (i === 1) trunk.push("right");
+            else if (i === 3 || i === 4) trunk.push("left");
+            else if (i === n - 2) trunk.push("right");
+            else trunk.push(null);
           }
         }
       }
@@ -1390,8 +1690,10 @@ if (urlParams.has("shot")) {
           floats[0].life = 1;
         }
         if (pose === "drop") {
-          // Freeze mid-fall: gap ≈ half a segment above the stump
+          // Freeze mid-fall: gap ≈ half a segment above the stump + slight bend
           trunkDropY = -L.segH * 0.55;
+          trunkBend = ((TREE_BEND_DEG * Math.PI) / 180) * 0.7;
+          trunkBendDir = 1;
         }
         return;
       }
