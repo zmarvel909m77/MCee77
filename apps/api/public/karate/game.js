@@ -84,9 +84,12 @@ const SEG_OVER_HERO = 52;
  */
 let SEGMENTS = 5;
 const ENERGY_MAX = 100;
-/** Base drain/sec — ramps with score so opening feels fair, later snappy. */
+/** Base drain/sec — scaled by difficultyFor(score). */
 const ENERGY_DRAIN = 11;
+/** Base refill per hit — scaled by difficultyFor(score). */
 const ENERGY_REFILL = 18;
+/** Score below this = easy same-side streaks + forgiving timer. */
+const DIFF_EASY_UNTIL = 20;
 /** Strike hold — long enough to read Tepish kick + swoosh. */
 const CHOP_MS = 160;
 /** Side-switch flash through walk frames before/with kick. */
@@ -200,16 +203,37 @@ async function waitForAuthPayload(maxMs = 2500) {
 }
 
 /**
+ * Difficulty ramp for patterns + timer.
+ * Early (&lt;20): long same-side streaks, slow drain, fat refill.
+ * Late (20+): frequent L↔R switches, tighter timer.
+ * @param {number} runScore
+ */
+function difficultyFor(runScore) {
+  const easy = runScore < DIFF_EASY_UNTIL;
+  const t = Math.max(0, runScore - DIFF_EASY_UNTIL);
+  // Chance to flip side when generating the next segment
+  const switchChance = easy
+    ? 0.1 + runScore * 0.008 // ~0.10 → ~0.25 — rare flips, long streaks
+    : Math.min(0.9, 0.58 + t * 0.014); // ~0.58 → 0.90 — choppy L↔R
+  const drainScale = easy
+    ? 0.32 + runScore * 0.01 // forgiving early
+    : Math.min(1.75, 0.88 + t * 0.024); // snappy after 20
+  const refill = easy
+    ? 28 - runScore * 0.2 // ~28 → ~24
+    : Math.max(11, 18 - t * 0.18); // ~18 → 11
+  return { easy, switchChance, drainScale, refill };
+}
+
+/**
  * Every segment carries exactly one branch (left OR right).
- * Never both sides on one height (Side is single-valued) — always one safe side.
- * Mix of stay / switch so the run stays fair (no forced death).
+ * Never both sides on one height — always one safe side.
+ * Early runs prefer same-side streaks; later flips more often.
  * @param {number} runScore
  * @param {Side} prevSide
  * @returns {"left"|"right"}
  */
 function nextBranch(runScore, prevSide) {
-  // Prefer switching as score climbs; still allow same-side runs
-  const switchChance = Math.min(0.82, 0.48 + runScore * 0.007);
+  const { switchChance } = difficultyFor(runScore);
   if (prevSide === "left" || prevSide === "right") {
     if (Math.random() < switchChance) {
       return prevSide === "left" ? "right" : "left";
@@ -220,19 +244,22 @@ function nextBranch(runScore, prevSide) {
 }
 
 /**
- * Opening queue: every slot has a branch. Player starts on the right, so
- * trunk[0] is "left" (safe). Then gentle L/R with occasional doubles.
+ * Opening queue: every slot branched. Player starts on the right →
+ * trunk[0] is "left" (safe). Early = long same-side streaks.
  */
 function seedTrunk() {
   /** @type {Side[]} */
   const pattern = [];
-  // Fair start — bottom hazard opposite the default stand side
   let side = /** @type {"left"|"right"} */ ("left");
+  let streak = 0;
+  // Easy opening: aim for 3–4 same-side before a flip
+  const streakTarget = 3 + Math.floor(Math.random() * 2);
   for (let i = 0; i < SEGMENTS; i++) {
     pattern.push(side);
-    // Early: often switch; sprinkle a same-side beat for readability
-    if (i === 0 || Math.random() < 0.65) {
+    streak += 1;
+    if (streak >= streakTarget) {
       side = side === "left" ? "right" : "left";
+      streak = 0;
     }
   }
   trunk = pattern;
@@ -928,7 +955,8 @@ function chop(side) {
 
   score += 1;
   hudScore.textContent = String(score);
-  energy = Math.min(ENERGY_MAX, energy + ENERGY_REFILL);
+  const { refill } = difficultyFor(score);
+  energy = Math.min(ENERGY_MAX, energy + refill);
   multiFill = Math.min(1, multiFill + MULTI_GAIN);
   multi = Math.min(MULTI_MAX, 1 + multiFill * (MULTI_MAX - 1));
   setEnergyUi();
@@ -1126,7 +1154,7 @@ function loop(ts) {
     if (graceLeft > 0) {
       graceLeft -= dt;
     } else {
-      const drainScale = Math.min(1.55, 0.62 + score * 0.014);
+      const { drainScale } = difficultyFor(score);
       energy -= ENERGY_DRAIN * drainScale * dt;
     }
     multiFill = Math.max(0, multiFill - MULTI_DECAY * dt * 0.35);
@@ -1250,6 +1278,7 @@ if (urlParams.has("shot")) {
     trunk: () => trunk.slice(),
     debrisCount: () => debris.length,
     floatsCount: () => floats.length,
+    difficulty: (s) => difficultyFor(s),
     show(pose) {
       hideOverlay();
       phase = "playing";
@@ -1282,19 +1311,23 @@ if (urlParams.has("shot")) {
       if (pose === "tree" || pose === "split") {
         resize();
         const L0 = layout(); // sync SEGMENTS to tall-block count
-        // Every segment has a top-mounted branch (L/R alternate)
+        // Every segment branched; tree shot shows early same-side streaks
         const n = L0.segments;
         trunk = [];
-        // Bottom opposite the hero stand side (fair / readable)
-        const bottom = pose === "split" ? "right" : "left";
-        for (let i = 0; i < n; i++) {
-          trunk.push(
-            i % 2 === 0
-              ? bottom
-              : bottom === "left"
-                ? "right"
-                : "left",
-          );
+        if (pose === "split") {
+          // Kick on left → bottom hazard on right (safe)
+          for (let i = 0; i < n; i++) {
+            trunk.push(i % 2 === 0 ? "right" : "left");
+          }
+        } else {
+          // Early-game style: long same-side runs (bir tomondan)
+          let side = /** @type {"left"|"right"} */ ("left");
+          for (let i = 0; i < n; i++) {
+            trunk.push(side);
+            if (i === Math.floor(n * 0.6)) {
+              side = side === "left" ? "right" : "left";
+            }
+          }
         }
       }
       if (pose === "split") {
