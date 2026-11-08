@@ -72,10 +72,17 @@ if (tg) {
 /** @typedef {"idle"|"walk"|"kick"|"punch"|"hurt"|"defeat"} HeroPose */
 
 /**
- * Tall pole fills the playfield (ground → canvas top).
- * Sparse hazards: 2–5 empty segments between branches ≈ 1.5–4× hero height.
+ * Hero on-screen height (idle). Each trunk segment is taller by ~0.7cm+
+ * (≈25–35px) so blocks read like the GAMEE ref.
  */
-const SEGMENTS = 14;
+const HERO_DRAW_H = 78;
+/** Extra height above hero for one trunk block (uzunlashsin). */
+const SEG_OVER_HERO = 30;
+/**
+ * Live segment count — derived in layout() so tall blocks still fill
+ * ground → canvas top. Starts at 6; resized when the canvas lays out.
+ */
+let SEGMENTS = 6;
 const ENERGY_MAX = 100;
 /** Base drain/sec — ramps with score so opening feels fair, later snappy. */
 const ENERGY_DRAIN = 11;
@@ -217,15 +224,14 @@ function trailingEmpties(arr) {
  * @returns {Side}
  */
 function nextBranch(runScore, prevSide, emptiesSinceBranch) {
-  // Hard minimum empties → ≈1.5×+ hero height after every kick
-  const minGap = runScore < 50 ? 3 : 2;
-  // Soft target — refs often show 3–5 empty trunk rings between hazards
-  const softGap = runScore < 25 ? 5 : runScore < 70 ? 4 : 3;
+  // With tall blocks, 2–4 empties ≈ multi-hero gaps (sparser than #28)
+  const minGap = runScore < 40 ? 3 : 2;
+  const softGap = runScore < 20 ? 4 : runScore < 60 ? 3 : 2;
 
   if (emptiesSinceBranch < minGap) return null;
-  if (emptiesSinceBranch < softGap && Math.random() < 0.78) return null;
-  // Extra air occasionally so the pole stays sparse
-  if (Math.random() < Math.max(0.1, 0.32 - runScore * 0.0025)) return null;
+  if (emptiesSinceBranch < softGap && Math.random() < 0.82) return null;
+  // Extra air so the pole stays very sparse
+  if (Math.random() < Math.max(0.14, 0.4 - runScore * 0.003)) return null;
 
   const switchChance = Math.min(0.9, 0.58 + runScore * 0.006);
   if (prevSide) {
@@ -237,27 +243,33 @@ function nextBranch(runScore, prevSide, emptiesSinceBranch) {
   return Math.random() < 0.5 ? "left" : "right";
 }
 
+/**
+ * Build a sparse opening queue for the current SEGMENTS count.
+ * Safe start empties, then wide gaps between the few hazards.
+ */
 function seedTrunk() {
-  // Sparse opening: safe start + wide gaps (ref Timberman rhythm)
-  trunk = [
-    null,
-    null,
-    null,
-    "left",
-    null,
-    null,
-    null,
-    "right",
-    null,
-    null,
-    null,
-    "left",
-    null,
-    null,
-  ];
-  while (trunk.length < SEGMENTS) {
-    trunk.push(null);
+  trunk = [];
+  // Opening: 2 empties safe, then alternate with ≥2 empties between
+  const pattern = [];
+  let side = /** @type {Side} */ ("left");
+  let i = 0;
+  // First two always empty (fair start)
+  pattern.push(null, null);
+  i = 2;
+  while (i < SEGMENTS) {
+    // Place a branch, then skip at least 2 empties
+    if (i < SEGMENTS) {
+      pattern.push(side);
+      i++;
+      side = side === "left" ? "right" : "left";
+    }
+    const gap = 2 + (i < SEGMENTS / 2 ? 1 : 0);
+    for (let g = 0; g < gap && i < SEGMENTS; g++, i++) {
+      pattern.push(null);
+    }
   }
+  trunk = pattern.slice(0, SEGMENTS);
+  while (trunk.length < SEGMENTS) trunk.push(null);
   trunk.length = SEGMENTS;
 }
 
@@ -529,26 +541,35 @@ function drawBush(cx, baseY, r) {
  * @param {number} segH
  * @param {Side} side
  */
+/**
+ * Branch plank flush with the TOP seam of its segment (ref).
+ * @param {number} x segment left
+ * @param {number} y segment top
+ * @param {number} trunkW
+ * @param {number} segH
+ * @param {Side} side
+ */
 function drawBranch(x, y, trunkW, segH, side) {
-  const by = y + segH * 0.32;
-  const bw = trunkW * 1.55;
-  const bh = segH * 0.36;
+  // Top-aligned: plank flush with the upper seam of the block (ref)
+  const bh = Math.min(18, Math.max(12, segH * 0.12));
+  const by = y; // exact top edge
+  const bw = trunkW * 1.75;
   const left = side === "left";
-  const hx = left ? x - bw + 3 : x + trunkW - 3;
+  const hx = left ? x - bw + 4 : x + trunkW - 4;
   // Wooden plank — same family as trunk
-  roundRect(hx, by, bw, bh, 5, "#a67c52");
+  roundRect(hx, by, bw, bh, 4, "#a67c52");
   // grain
   ctx.strokeStyle = "rgba(70, 40, 20, 0.28)";
   ctx.lineWidth = 1.2;
-  for (let i = 0; i < 3; i++) {
-    const gy = by + 5 + i * (bh / 3.2);
+  for (let i = 0; i < 2; i++) {
+    const gy = by + 4 + i * (bh / 2.4);
     ctx.beginPath();
     ctx.moveTo(hx + 6, gy);
     ctx.lineTo(hx + bw - 6, gy + (i % 2));
     ctx.stroke();
   }
   // dark edge near trunk
-  ctx.fillStyle = "rgba(60, 30, 15, 0.25)";
+  ctx.fillStyle = "rgba(60, 30, 15, 0.28)";
   if (left) ctx.fillRect(hx + bw - 8, by, 8, bh);
   else ctx.fillRect(hx, by, 8, bh);
 }
@@ -594,9 +615,9 @@ function drawPlayer(x, y, side, now, scaleMul = 1) {
   const key = heroFrameKey(now);
   const fr = HERO_ATLAS.frames[key] || HERO_ATLAS.frames.idle;
 
-  // Target on-screen height sits next to ~58px trunk segments
+  // Target on-screen height — trunk blocks are taller (HERO_DRAW_H + SEG_OVER_HERO)
   const targetH =
-    key === "defeat" ? 28 * scaleMul : 78 * scaleMul;
+    key === "defeat" ? 28 * scaleMul : HERO_DRAW_H * scaleMul;
   const scale = targetH / fr.h;
   const dw = fr.w * scale;
   const dh = fr.h * scale;
@@ -684,7 +705,7 @@ function spawnDebris(cx, baseY, trunkW, segH, side, branch = null) {
     vr: dir * (0.16 + Math.random() * 0.1),
     life: 1.2,
     w: trunkW,
-    h: segH * 0.95,
+    h: segH,
     branch: branch || null,
   });
   for (let i = 0; i < 12; i++) {
@@ -711,7 +732,8 @@ function layout() {
   const w = canvas.clientWidth;
   const h = canvas.clientHeight;
   const cx = w * 0.5;
-  const trunkW = Math.min(58, w * 0.17);
+  // Slightly wider pole (ref)
+  const trunkW = Math.min(72, Math.max(64, w * 0.2));
   // Keep ~1cm ground visible above the canvas bottom (shell already clears
   // safe-area / home indicator via padding-bottom + --app-height).
   const groundH = Math.max(
@@ -719,9 +741,16 @@ function layout() {
     Math.min(GROUND_MAX, Math.round(h * 0.09)),
   );
   const baseY = Math.max(groundH + 80, h - groundH);
-  // Continuous pole: SEGMENTS × segH == baseY → trunk reaches canvas top
-  const segH = Math.max(28, baseY / SEGMENTS);
-  return { w, h, cx, trunkW, segH, baseY, groundH };
+  // Tall blocks: each ≥ hero + ~0.7cm; count fills ground → canvas top
+  const minSegH = HERO_DRAW_H + SEG_OVER_HERO;
+  const nextSegs = Math.max(5, Math.floor(baseY / minSegH));
+  const segH = baseY / nextSegs;
+  if (nextSegs !== SEGMENTS) {
+    SEGMENTS = nextSegs;
+    while (trunk.length < SEGMENTS) trunk.push(null);
+    if (trunk.length > SEGMENTS) trunk.length = SEGMENTS;
+  }
+  return { w, h, cx, trunkW, segH, baseY, groundH, segments: SEGMENTS };
 }
 
 function draw(now) {
@@ -733,37 +762,43 @@ function draw(now) {
   const shakeX = shake > 0 ? (Math.random() - 0.5) * shake : 0;
   drawAtmosphere(w, h, baseY);
 
-  // Trunk — continuous pole from ground through full playfield (to canvas top)
+  // Trunk — continuous pole (ground → canvas top), ref-like cylindrical wood
   const trunkX = cx - trunkW / 2 + shakeX;
-  // Solid fill first so the pole never stops mid-screen
-  ctx.fillStyle = "#b8895a";
+  // Base fill so the pole never stops mid-screen
+  ctx.fillStyle = "#c49a6c";
   ctx.fillRect(trunkX, 0, trunkW, baseY + 1);
-  ctx.fillStyle = "rgba(255, 230, 190, 0.14)";
-  ctx.fillRect(trunkX + 3, 0, 5, baseY);
+  // Cylindrical side shading (darker outer edges)
+  ctx.fillStyle = "rgba(90, 50, 22, 0.22)";
+  ctx.fillRect(trunkX, 0, 7, baseY + 1);
+  ctx.fillRect(trunkX + trunkW - 8, 0, 8, baseY + 1);
+  // Soft left highlight strip
+  ctx.fillStyle = "rgba(255, 230, 190, 0.2)";
+  ctx.fillRect(trunkX + 8, 0, 5, baseY);
 
   for (let i = SEGMENTS - 1; i >= 0; i--) {
     const y = baseY - (i + 1) * segH + shakeX * 0.12;
     const x = trunkX;
-    // Alternating ring shade (overlap avoids hairlines)
-    const shade = i % 2 === 0 ? "rgba(196, 154, 108, 0.92)" : "rgba(168, 120, 78, 0.55)";
-    ctx.fillStyle = shade;
-    ctx.fillRect(x, y, trunkW, segH + 1.5);
-    // vertical grain
-    ctx.strokeStyle = "rgba(90, 50, 25, 0.22)";
-    ctx.lineWidth = 1.4;
+    // Subtle alternating block shade
+    if (i % 2 === 0) {
+      ctx.fillStyle = "rgba(196, 154, 108, 0.35)";
+      ctx.fillRect(x, y, trunkW, segH + 1.5);
+    }
+    // Vertical grain
+    ctx.strokeStyle = "rgba(90, 50, 25, 0.2)";
+    ctx.lineWidth = 1.35;
     for (let g = 0; g < 4; g++) {
-      const gx = x + 8 + g * ((trunkW - 16) / 3.2);
+      const gx = x + 10 + g * ((trunkW - 20) / 3.2);
       ctx.beginPath();
-      ctx.moveTo(gx, y + 4);
-      ctx.lineTo(gx + (g % 2 ? 1.5 : -1), y + segH - 4);
+      ctx.moveTo(gx, y + 6);
+      ctx.lineTo(gx + (g % 2 ? 1.4 : -1), y + segH - 4);
       ctx.stroke();
     }
-    // ring
-    ctx.strokeStyle = "rgba(60, 30, 12, 0.2)";
-    ctx.lineWidth = 2;
+    // Top seam of this block — branch attaches here (ref)
+    ctx.strokeStyle = "rgba(55, 28, 10, 0.38)";
+    ctx.lineWidth = 2.2;
     ctx.beginPath();
-    ctx.moveTo(x + 6, y + segH * 0.55);
-    ctx.lineTo(x + trunkW - 6, y + segH * 0.55);
+    ctx.moveTo(x + 3, y + 1);
+    ctx.lineTo(x + trunkW - 3, y + 1);
     ctx.stroke();
 
     const branch = trunk[i];
@@ -1207,7 +1242,10 @@ resize();
 // Second pass after first layout — clientHeight can be 0 on the first tick.
 requestAnimationFrame(() => {
   resize();
+  layout(); // sync SEGMENTS before seeding
+  seedTrunk();
 });
+layout();
 seedTrunk();
 showOverlay(
   "Karate Strike",
@@ -1277,24 +1315,14 @@ if (urlParams.has("shot")) {
         heroPose = "idle";
       }
       if (pose === "tree" || pose === "split") {
-        // Sparse hazards matching Timberman gaps for visual QA
-        trunk = [
-          null,
-          null,
-          null,
-          "right",
-          null,
-          null,
-          null,
-          null,
-          "left",
-          null,
-          null,
-          null,
-          "right",
-          null,
-        ];
-        trunk.length = SEGMENTS;
+        resize();
+        const L0 = layout(); // sync SEGMENTS to tall-block count
+        // Sparse QA queue: wide empties, branch on top of its block
+        const n = L0.segments;
+        trunk = Array(n).fill(null);
+        // Sparse: branch near base (idx 1), then ≥2 empties, then upper branch
+        if (n >= 2) trunk[1] = "right";
+        if (n >= 5) trunk[n - 2] = "left";
       }
       if (pose === "split") {
         resize();
@@ -1302,24 +1330,23 @@ if (urlParams.has("shot")) {
         // Mid-flight split log opposite hero (hero left → chunk flies right-down)
         spawnDebris(L.cx, L.baseY, L.trunkW, L.segH, "left", "right");
         if (debris[0]) {
-          debris[0].x = L.cx + L.trunkW * 1.55;
-          debris[0].y = L.baseY - L.segH * 0.15;
+          debris[0].x = L.cx + L.trunkW * 1.45;
+          debris[0].y = L.baseY - L.segH * 0.35;
           debris[0].vx = 0;
           debris[0].vy = 0;
-          debris[0].rot = 0.65;
+          debris[0].rot = 0.55;
           debris[0].vr = 0;
           debris[0].life = 1;
         }
-        // Hold a few chips near the split for readability
         chips = chips.slice(0, 5).map((c, i) => ({
           ...c,
-          x: L.cx + 20 + i * 8,
-          y: L.baseY - L.segH * 0.4 - i * 6,
+          x: L.cx + 22 + i * 9,
+          y: L.baseY - L.segH * 0.35 - i * 7,
           vx: 0,
           vy: 0,
           a: 1,
         }));
-        spawnFloat(L.cx + 10, L.baseY - L.segH * 1.7, "+1");
+        spawnFloat(L.cx + 10, L.baseY - L.segH * 0.85, "+1");
         if (floats[0]) {
           floats[0].vy = 0;
           floats[0].life = 1;
