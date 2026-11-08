@@ -24,6 +24,32 @@ const btnMute = document.getElementById("btnMute");
 const btnPause = document.getElementById("btnPause");
 
 const tg = window.Telegram?.WebApp;
+
+/**
+ * Sync CSS --app-height to Telegram's stable viewport (avoids 100vh drift)
+ * and prefer WebApp safe-area insets when CSS env() reports 0.
+ */
+function syncAppHeight() {
+  const px =
+    (tg && (tg.viewportStableHeight || tg.viewportHeight)) ||
+    window.visualViewport?.height ||
+    window.innerHeight ||
+    document.documentElement.clientHeight;
+  if (px > 0) {
+    document.documentElement.style.setProperty("--app-height", `${Math.round(px)}px`);
+  }
+  const insetBottom = Math.max(
+    Number(tg?.safeAreaInset?.bottom) || 0,
+    Number(tg?.contentSafeAreaInset?.bottom) || 0,
+  );
+  if (insetBottom > 0) {
+    document.documentElement.style.setProperty(
+      "--safe-bottom",
+      `${Math.round(insetBottom)}px`,
+    );
+  }
+}
+
 if (tg) {
   tg.ready();
   tg.expand();
@@ -36,6 +62,9 @@ if (tg) {
   } catch {
     /* older clients */
   }
+  syncAppHeight();
+} else {
+  syncAppHeight();
 }
 
 /** @typedef {"left"|"right"|null} Side */
@@ -252,14 +281,20 @@ function hideOverlay() {
 }
 
 function resize() {
-  const parent = canvas.parentElement;
-  const w = parent.clientWidth;
-  const h = Math.max(280, parent.clientHeight);
+  syncAppHeight();
+  // CSS grid owns the box (100% of minmax(0,1fr) cell). Do NOT size the
+  // canvas to #wrap — that overflowed HUD+hint and hid the ground strip.
+  canvas.style.width = "100%";
+  canvas.style.height = "100%";
+  const w = Math.max(1, Math.floor(canvas.clientWidth));
+  const h = Math.max(1, Math.floor(canvas.clientHeight));
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  canvas.width = Math.floor(w * dpr);
-  canvas.height = Math.floor(h * dpr);
-  canvas.style.width = `${w}px`;
-  canvas.style.height = `${h}px`;
+  const bw = Math.floor(w * dpr);
+  const bh = Math.floor(h * dpr);
+  if (canvas.width !== bw || canvas.height !== bh) {
+    canvas.width = bw;
+    canvas.height = bh;
+  }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
@@ -344,29 +379,39 @@ function drawAtmosphere(w, h, baseY) {
     ctx.restore();
   }
 
-  // Dark reflective ground strip
+  // Dark reflective ground strip (~1 cm / 40–48 CSS px above canvas bottom)
   const ground = ctx.createLinearGradient(0, baseY, 0, h);
-  ground.addColorStop(0, "#12081c");
-  ground.addColorStop(0.35, "#0a0612");
-  ground.addColorStop(1, "#050308");
+  ground.addColorStop(0, "#2a1438");
+  ground.addColorStop(0.2, "#1a0c24");
+  ground.addColorStop(0.55, "#100818");
+  ground.addColorStop(1, "#07040c");
   ctx.fillStyle = ground;
-  ctx.fillRect(0, baseY, w, h - baseY);
+  ctx.fillRect(0, baseY, w, Math.max(0, h - baseY));
+
+  // Horizon rim — makes the ground plane readable against pink sky
+  ctx.fillStyle = "rgba(255, 200, 220, 0.28)";
+  ctx.fillRect(0, baseY - 1, w, 3);
+  ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+  ctx.fillRect(0, baseY + 2, w, 4);
 
   // Reflection streaks
-  ctx.strokeStyle = "rgba(255, 200, 220, 0.08)";
+  ctx.strokeStyle = "rgba(255, 200, 220, 0.1)";
   ctx.lineWidth = 1.5;
-  for (let i = 0; i < 6; i++) {
-    const gy = baseY + 10 + i * 11;
+  const groundSpan = Math.max(8, h - baseY);
+  for (let i = 0; i < 5; i++) {
+    const gy = baseY + 8 + i * Math.min(11, groundSpan / 5);
+    if (gy >= h - 2) break;
     ctx.beginPath();
     ctx.moveTo(w * 0.08, gy);
     ctx.lineTo(w * 0.92, gy + (i % 2) * 2);
     ctx.stroke();
   }
 
-  // Foreground bush silhouettes
+  // Foreground bush silhouettes — rooted on the ground plane (not past the fold)
   ctx.fillStyle = "#0c0614";
-  drawBush(w * 0.12, h, 50);
-  drawBush(w * 0.88, h, 56);
+  const bushY = Math.min(h, baseY + Math.max(10, (h - baseY) * 0.55));
+  drawBush(w * 0.12, bushY, 50);
+  drawBush(w * 0.88, bushY, 56);
 }
 
 function drawCloud(cx, cy, r) {
@@ -607,14 +652,25 @@ function spawnFloat(x, y, text) {
   floats.push({ x, y, vy: -1.5, life: 1, text });
 }
 
+/** Dark reflective ground strip ≈ 1 cm on phone (~40–48 CSS px). */
+const GROUND_MIN = 40;
+const GROUND_MAX = 48;
+
 function layout() {
   const w = canvas.clientWidth;
   const h = canvas.clientHeight;
   const cx = w * 0.5;
   const trunkW = Math.min(58, w * 0.17);
-  const segH = Math.min(58, (h * 0.58) / SEGMENTS);
-  const baseY = h * 0.8;
-  return { w, h, cx, trunkW, segH, baseY };
+  // Keep ~1cm ground visible above the canvas bottom (shell already clears
+  // safe-area / home indicator via padding-bottom + --app-height).
+  const groundH = Math.max(
+    GROUND_MIN,
+    Math.min(GROUND_MAX, Math.round(h * 0.09)),
+  );
+  const baseY = Math.max(groundH + 80, h - groundH);
+  const playH = Math.max(120, baseY);
+  const segH = Math.min(58, (playH * 0.72) / SEGMENTS);
+  return { w, h, cx, trunkW, segH, baseY, groundH };
 }
 
 function draw(now) {
@@ -1064,11 +1120,24 @@ function loop(ts) {
   requestAnimationFrame(loop);
 }
 
-window.addEventListener("resize", () => {
+function onViewportResize() {
+  syncAppHeight();
   resize();
   petals = [];
-});
+}
+
+window.addEventListener("resize", onViewportResize);
+window.visualViewport?.addEventListener("resize", onViewportResize);
+if (tg && typeof tg.onEvent === "function") {
+  tg.onEvent("viewportChanged", onViewportResize);
+}
+
+syncAppHeight();
 resize();
+// Second pass after first layout — clientHeight can be 0 on the first tick.
+requestAnimationFrame(() => {
+  resize();
+});
 seedTrunk();
 showOverlay(
   "Karate Strike",
