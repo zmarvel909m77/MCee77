@@ -238,66 +238,257 @@ async function waitForAuthPayload(maxMs = 2500) {
 }
 
 /**
- * Difficulty ramp for patterns + timer.
- * Early (&lt;20): long same-side streaks, slow drain, fat refill.
- * Late (20+): frequent L↔R switches, tighter timer.
+ * Mulberry32 — deterministic stream from a per-run seed.
+ * @param {number} seed
+ * @returns {() => number} in [0, 1)
+ */
+function createRng(seed) {
+  let s = seed >>> 0;
+  return function rand() {
+    s = (s + 0x6d2b79f5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * TreeBranchController — random fair branch combos with empty gaps.
+ *
+ * Empty segments ARE allowed (not every block has a branch).
+ * Combos of 1–3 consecutive same-side branches; random L/R; random
+ * gaps between groups; no back-to-back identical combo; new seed each run.
+ * Never both sides on one height (always one safe side at the player).
+ */
+const TreeBranchController = {
+  seed: 0,
+  /** @type {() => number} */
+  rand: Math.random,
+  /** @type {"EASY"|"MEDIUM"|"HARD"|"EXTREME"} */
+  tier: "EASY",
+  gapLeft: 0,
+  comboLeft: 0,
+  /** @type {"left"|"right"|null} */
+  comboSide: null,
+  /** Last finished combo key e.g. "left:2" */
+  lastComboKey: "",
+  /** @type {"left"|"right"|null} */
+  pendingSide: null,
+  pendingLen: 0,
+  pendingComboKey: "",
+
+  /**
+   * @param {number} [seed]
+   */
+  reset(seed) {
+    this.seed =
+      seed != null
+        ? seed >>> 0
+        : (Date.now() ^ ((Math.random() * 0x100000000) >>> 0)) >>> 0;
+    this.rand = createRng(this.seed);
+    this.tier = "EASY";
+    this.gapLeft = 0;
+    this.comboLeft = 0;
+    this.comboSide = null;
+    this.lastComboKey = "";
+    this.pendingSide = null;
+    this.pendingLen = 0;
+    this.pendingComboKey = "";
+    this._planNext(0);
+  },
+
+  /**
+   * Map score → difficulty tier.
+   * @param {number} score
+   * @returns {"EASY"|"MEDIUM"|"HARD"|"EXTREME"}
+   */
+  tierFor(score) {
+    if (score < 15) return "EASY";
+    if (score < 40) return "MEDIUM";
+    if (score < 80) return "HARD";
+    return "EXTREME";
+  },
+
+  /**
+   * Gap + combo-length weights by tier.
+   * @param {"EASY"|"MEDIUM"|"HARD"|"EXTREME"} tier
+   */
+  params(tier) {
+    switch (tier) {
+      case "EASY":
+        // Few branches, large gaps, mostly 1-branch combos
+        return {
+          gapMin: 2,
+          gapMax: 5,
+          comboWeights: [0.78, 0.2, 0.02],
+          switchBias: 0.55,
+        };
+      case "MEDIUM":
+        return {
+          gapMin: 1,
+          gapMax: 3,
+          comboWeights: [0.42, 0.48, 0.1],
+          switchBias: 0.62,
+        };
+      case "HARD":
+        return {
+          gapMin: 0,
+          gapMax: 2,
+          comboWeights: [0.22, 0.48, 0.3],
+          switchBias: 0.7,
+        };
+      default:
+        // EXTREME — dense, 1–3 streaks, small gaps
+        return {
+          gapMin: 0,
+          gapMax: 1,
+          comboWeights: [0.18, 0.37, 0.45],
+          switchBias: 0.78,
+        };
+    }
+  },
+
+  /**
+   * @param {number[]} weights length 3 → combo lens 1..3
+   * @returns {number}
+   */
+  _pickComboLen(weights) {
+    const r = this.rand();
+    let acc = 0;
+    for (let i = 0; i < weights.length; i++) {
+      acc += weights[i];
+      if (r < acc) return i + 1;
+    }
+    return 1;
+  },
+
+  /**
+   * Plan the next empty gap + upcoming combo (not yet started).
+   * Avoids repeating the same combo key back-to-back.
+   * @param {number} score
+   */
+  _planNext(score) {
+    this.tier = this.tierFor(score);
+    const p = this.params(this.tier);
+    this.gapLeft =
+      p.gapMin + Math.floor(this.rand() * (p.gapMax - p.gapMin + 1));
+
+    const lastSide = this.lastComboKey.startsWith("left")
+      ? "left"
+      : this.lastComboKey.startsWith("right")
+        ? "right"
+        : null;
+
+    // Gap 0 + same side would merge into a streak > 3 — force a switch
+    if (this.gapLeft === 0 && lastSide) {
+      // Will force opposite side below
+    }
+
+    let tries = 0;
+    let side = /** @type {"left"|"right"} */ ("left");
+    let len = 1;
+    let key = "";
+    do {
+      len = this._pickComboLen(p.comboWeights);
+      if (this.gapLeft === 0 && lastSide) {
+        side = lastSide === "left" ? "right" : "left";
+      } else if (lastSide && this.rand() < p.switchBias) {
+        side = lastSide === "left" ? "right" : "left";
+      } else {
+        side = this.rand() < 0.5 ? "left" : "right";
+      }
+      key = `${side}:${len}`;
+      tries += 1;
+    } while (key === this.lastComboKey && tries < 10);
+
+    this.pendingSide = side;
+    this.pendingLen = len;
+    this.pendingComboKey = key;
+  },
+
+  /**
+   * Emit the next trunk segment (null | left | right).
+   * @param {number} score
+   * @returns {Side}
+   */
+  next(score) {
+    this.tier = this.tierFor(score);
+
+    if (this.gapLeft > 0) {
+      this.gapLeft -= 1;
+      return null;
+    }
+
+    if (this.comboLeft <= 0) {
+      // Begin the pending combo
+      this.comboSide = this.pendingSide;
+      this.comboLeft = this.pendingLen;
+      this.lastComboKey = this.pendingComboKey;
+    }
+
+    const out = this.comboSide;
+    this.comboLeft -= 1;
+    if (this.comboLeft <= 0) {
+      this.comboSide = null;
+      this._planNext(score);
+    }
+    return out;
+  },
+
+  /**
+   * Build opening queue. Fair: player starts on the right → bottom
+   * must not be a right-side hazard (empty or left only).
+   * @param {number} count
+   * @param {number} [score]
+   * @returns {Side[]}
+   */
+  seedQueue(count, score = 0) {
+    // Soft opening: at least one empty at the stump
+    this.gapLeft = Math.max(this.gapLeft, 1 + Math.floor(this.rand() * 2));
+    // First combo prefers left (safe vs default stand-right)
+    this.pendingSide = "left";
+    this.pendingLen = 1;
+    this.pendingComboKey = "left:1";
+
+    /** @type {Side[]} */
+    const out = [];
+    for (let i = 0; i < count; i++) {
+      out.push(this.next(score));
+    }
+    if (out[0] === "right") out[0] = null;
+    return out;
+  },
+};
+
+/**
+ * Timer / energy scale from the same score tiers as TreeBranchController.
  * @param {number} runScore
  */
 function difficultyFor(runScore) {
-  const easy = runScore < DIFF_EASY_UNTIL;
+  const tier = TreeBranchController.tierFor(runScore);
+  const easy = tier === "EASY";
   const t = Math.max(0, runScore - DIFF_EASY_UNTIL);
-  // Chance to flip side when generating the next segment
-  const switchChance = easy
-    ? 0.1 + runScore * 0.008 // ~0.10 → ~0.25 — rare flips, long streaks
-    : Math.min(0.9, 0.58 + t * 0.014); // ~0.58 → 0.90 — choppy L↔R
-  const drainScale = easy
-    ? 0.32 + runScore * 0.01 // forgiving early
-    : Math.min(1.75, 0.88 + t * 0.024); // snappy after 20
-  const refill = easy
-    ? 28 - runScore * 0.2 // ~28 → ~24
-    : Math.max(11, 18 - t * 0.18); // ~18 → 11
-  return { easy, switchChance, drainScale, refill };
+  const drainScale =
+    tier === "EASY"
+      ? 0.32 + runScore * 0.01
+      : tier === "MEDIUM"
+        ? 0.7 + (runScore - 15) * 0.012
+        : tier === "HARD"
+          ? Math.min(1.45, 1.0 + (runScore - 40) * 0.012)
+          : Math.min(1.75, 1.25 + (runScore - 80) * 0.01);
+  const refill =
+    tier === "EASY"
+      ? 28 - runScore * 0.2
+      : tier === "MEDIUM"
+        ? 22 - (runScore - 15) * 0.12
+        : tier === "HARD"
+          ? Math.max(13, 18 - (runScore - 40) * 0.1)
+          : Math.max(11, 14 - (runScore - 80) * 0.08);
+  return { easy, tier, drainScale, refill };
 }
 
-/**
- * Every segment carries exactly one branch (left OR right).
- * Never both sides on one height — always one safe side.
- * Early runs prefer same-side streaks; later flips more often.
- * @param {number} runScore
- * @param {Side} prevSide
- * @returns {"left"|"right"}
- */
-function nextBranch(runScore, prevSide) {
-  const { switchChance } = difficultyFor(runScore);
-  if (prevSide === "left" || prevSide === "right") {
-    if (Math.random() < switchChance) {
-      return prevSide === "left" ? "right" : "left";
-    }
-    return prevSide;
-  }
-  return Math.random() < 0.5 ? "left" : "right";
-}
-
-/**
- * Opening queue: every slot branched. Player starts on the right →
- * trunk[0] is "left" (safe). Early = long same-side streaks.
- */
 function seedTrunk() {
-  /** @type {Side[]} */
-  const pattern = [];
-  let side = /** @type {"left"|"right"} */ ("left");
-  let streak = 0;
-  // Easy opening: aim for 3–4 same-side before a flip
-  const streakTarget = 3 + Math.floor(Math.random() * 2);
-  for (let i = 0; i < SEGMENTS; i++) {
-    pattern.push(side);
-    streak += 1;
-    if (streak >= streakTarget) {
-      side = side === "left" ? "right" : "left";
-      streak = 0;
-    }
-  }
-  trunk = pattern;
+  trunk = TreeBranchController.seedQueue(SEGMENTS, score);
   trunk.length = SEGMENTS;
 }
 
@@ -324,6 +515,8 @@ function resetRun() {
   debris = [];
   floats = [];
   chips = [];
+  // New random seed each run → new branch combination plan
+  TreeBranchController.reset();
   seedTrunk();
   hudScore.textContent = "0";
   setEnergyUi();
@@ -813,10 +1006,7 @@ function layout() {
   if (nextSegs !== SEGMENTS) {
     SEGMENTS = nextSegs;
     while (trunk.length < SEGMENTS) {
-      const prev = trunk[trunk.length - 1];
-      trunk.push(
-        prev === "left" ? "right" : prev === "right" ? "left" : "left",
-      );
+      trunk.push(TreeBranchController.next(score));
     }
     if (trunk.length > SEGMENTS) trunk.length = SEGMENTS;
   }
@@ -1050,9 +1240,7 @@ function chop(side) {
   spawnFloat(cx + (side === "left" ? -8 : 8), baseY - segH * 1.35, "+1");
 
   trunk.shift();
-  /** @type {Side} */
-  const prev = trunk[trunk.length - 1] ?? "left";
-  trunk.push(nextBranch(score + 1, prev));
+  trunk.push(TreeBranchController.next(score + 1));
   // Upper stack stays visually raised, then slides into the gap (queueable)
   beginTrunkDrop(segH);
   beginTrunkBend(side);
@@ -1359,9 +1547,11 @@ resize();
 requestAnimationFrame(() => {
   resize();
   layout(); // sync SEGMENTS before seeding
+  TreeBranchController.reset();
   seedTrunk();
 });
 layout();
+TreeBranchController.reset();
 seedTrunk();
 showOverlay(
   "Karate Strike",
@@ -1418,6 +1608,11 @@ if (urlParams.has("shot")) {
       DEBRIS_SPIN_DEG_MAX,
       DEBRIS_GRAVITY,
     }),
+    branchController: () => ({
+      seed: TreeBranchController.seed,
+      tier: TreeBranchController.tier,
+      lastComboKey: TreeBranchController.lastComboKey,
+    }),
     show(pose) {
       hideOverlay();
       phase = "playing";
@@ -1452,18 +1647,19 @@ if (urlParams.has("shot")) {
         resize();
         const L0 = layout(); // sync SEGMENTS to tall-block count
         const n = L0.segments;
-        trunk = [];
-        if (pose === "split" || pose === "drop") {
-          for (let i = 0; i < n; i++) {
-            trunk.push(i % 2 === 0 ? "right" : "left");
-          }
+        if (pose === "tree") {
+          // Demo: gaps + clusters (not every segment branched)
+          TreeBranchController.reset(0xc0ffee);
+          trunk = TreeBranchController.seedQueue(n, 25); // MEDIUM density sample
         } else {
-          let side = /** @type {"left"|"right"} */ ("left");
+          // Kick/drop shots: sparse-ish for readability
+          trunk = [];
           for (let i = 0; i < n; i++) {
-            trunk.push(side);
-            if (i === Math.floor(n * 0.6)) {
-              side = side === "left" ? "right" : "left";
-            }
+            // empty, right, empty, left-left cluster pattern-ish
+            if (i === 1) trunk.push("right");
+            else if (i === 3 || i === 4) trunk.push("left");
+            else if (i === n - 2) trunk.push("right");
+            else trunk.push(null);
           }
         }
       }
