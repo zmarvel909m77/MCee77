@@ -71,12 +71,25 @@ if (tg) {
 /** @typedef {"ready"|"playing"|"paused"|"dying"|"over"} Phase */
 /** @typedef {"idle"|"walk"|"kick"|"punch"|"hurt"|"defeat"} HeroPose */
 
-/** Visible queue ~6 segments — readable like refs. */
-const SEGMENTS = 6;
+/**
+ * Hero on-screen height (idle). Each trunk segment is taller again
+ * (hero + ~50px+) so blocks read long like the ref.
+ */
+const HERO_DRAW_H = 78;
+/** Extra height above hero for one trunk block (uzunlashsin). */
+const SEG_OVER_HERO = 52;
+/**
+ * Live segment count — derived in layout() so tall blocks still fill
+ * ground → canvas top. Starts at 5; resized when the canvas lays out.
+ */
+let SEGMENTS = 5;
 const ENERGY_MAX = 100;
-/** Base drain/sec — ramps with score so opening feels fair, later snappy. */
+/** Base drain/sec — scaled by difficultyFor(score). */
 const ENERGY_DRAIN = 11;
+/** Base refill per hit — scaled by difficultyFor(score). */
 const ENERGY_REFILL = 18;
+/** Score below this = easy same-side streaks + forgiving timer. */
+const DIFF_EASY_UNTIL = 20;
 /** Strike hold — long enough to read Tepish kick + swoosh. */
 const CHOP_MS = 160;
 /** Side-switch flash through walk frames before/with kick. */
@@ -154,7 +167,10 @@ let graceLeft = 0;
 /** Alternate punch occasionally so sheet punch+stars also appear. */
 let strikeCount = 0;
 
-/** @type {{ x: number, y: number, vx: number, vy: number, rot: number, vr: number, life: number }[]} */
+/**
+ * Flying split-log chunks (bo‘linish).
+ * @type {{ x: number, y: number, vx: number, vy: number, rot: number, vr: number, life: number, w: number, h: number, branch: Side }[]}
+ */
 let debris = [];
 /** @type {{ x: number, y: number, vy: number, life: number, text: string }[]} */
 let floats = [];
@@ -187,26 +203,38 @@ async function waitForAuthPayload(maxMs = 2500) {
 }
 
 /**
- * Timberman / Karate rhythm:
- * - empty segments between branches (readable gaps)
- * - never both sides on one height (Side is single-valued)
- * - alternate L/R patterns that ramp with score
+ * Difficulty ramp for patterns + timer.
+ * Early (&lt;20): long same-side streaks, slow drain, fat refill.
+ * Late (20+): frequent L↔R switches, tighter timer.
+ * @param {number} runScore
+ */
+function difficultyFor(runScore) {
+  const easy = runScore < DIFF_EASY_UNTIL;
+  const t = Math.max(0, runScore - DIFF_EASY_UNTIL);
+  // Chance to flip side when generating the next segment
+  const switchChance = easy
+    ? 0.1 + runScore * 0.008 // ~0.10 → ~0.25 — rare flips, long streaks
+    : Math.min(0.9, 0.58 + t * 0.014); // ~0.58 → 0.90 — choppy L↔R
+  const drainScale = easy
+    ? 0.32 + runScore * 0.01 // forgiving early
+    : Math.min(1.75, 0.88 + t * 0.024); // snappy after 20
+  const refill = easy
+    ? 28 - runScore * 0.2 // ~28 → ~24
+    : Math.max(11, 18 - t * 0.18); // ~18 → 11
+  return { easy, switchChance, drainScale, refill };
+}
+
+/**
+ * Every segment carries exactly one branch (left OR right).
+ * Never both sides on one height — always one safe side.
+ * Early runs prefer same-side streaks; later flips more often.
  * @param {number} runScore
  * @param {Side} prevSide
- * @param {boolean} lastWasBranch
- * @returns {Side}
+ * @returns {"left"|"right"}
  */
-function nextBranch(runScore, prevSide, lastWasBranch) {
-  // Prefer empty after a branch — refs show clear gaps between hazards.
-  const emptyChance = Math.max(0.18, 0.72 - runScore * 0.008);
-  if (lastWasBranch && Math.random() < emptyChance) return null;
-  // Occasional second empty early — keeps queue airy.
-  if (!lastWasBranch && Math.random() < Math.max(0.08, 0.34 - runScore * 0.005)) {
-    return null;
-  }
-
-  const switchChance = Math.min(0.88, 0.55 + runScore * 0.007);
-  if (prevSide) {
+function nextBranch(runScore, prevSide) {
+  const { switchChance } = difficultyFor(runScore);
+  if (prevSide === "left" || prevSide === "right") {
     if (Math.random() < switchChance) {
       return prevSide === "left" ? "right" : "left";
     }
@@ -215,12 +243,26 @@ function nextBranch(runScore, prevSide, lastWasBranch) {
   return Math.random() < 0.5 ? "left" : "right";
 }
 
+/**
+ * Opening queue: every slot branched. Player starts on the right →
+ * trunk[0] is "left" (safe). Early = long same-side streaks.
+ */
 function seedTrunk() {
-  // Opening queue: empties + gentle L/R with gaps (readable Timberman rhythm)
-  trunk = [null, null, "left", null, "right", null];
-  while (trunk.length < SEGMENTS) {
-    trunk.push(null);
+  /** @type {Side[]} */
+  const pattern = [];
+  let side = /** @type {"left"|"right"} */ ("left");
+  let streak = 0;
+  // Easy opening: aim for 3–4 same-side before a flip
+  const streakTarget = 3 + Math.floor(Math.random() * 2);
+  for (let i = 0; i < SEGMENTS; i++) {
+    pattern.push(side);
+    streak += 1;
+    if (streak >= streakTarget) {
+      side = side === "left" ? "right" : "left";
+      streak = 0;
+    }
   }
+  trunk = pattern;
   trunk.length = SEGMENTS;
 }
 
@@ -492,26 +534,35 @@ function drawBush(cx, baseY, r) {
  * @param {number} segH
  * @param {Side} side
  */
+/**
+ * Branch plank flush with the TOP seam of its segment (ref).
+ * @param {number} x segment left
+ * @param {number} y segment top
+ * @param {number} trunkW
+ * @param {number} segH
+ * @param {Side} side
+ */
 function drawBranch(x, y, trunkW, segH, side) {
-  const by = y + segH * 0.32;
-  const bw = trunkW * 1.55;
-  const bh = segH * 0.36;
+  // Top-aligned: plank flush with the upper seam of the block (ref)
+  const bh = Math.min(18, Math.max(12, segH * 0.12));
+  const by = y; // exact top edge
+  const bw = trunkW * 2.15; // longer plank so thin trunk still reads
   const left = side === "left";
-  const hx = left ? x - bw + 3 : x + trunkW - 3;
+  const hx = left ? x - bw + 4 : x + trunkW - 4;
   // Wooden plank — same family as trunk
-  roundRect(hx, by, bw, bh, 5, "#a67c52");
+  roundRect(hx, by, bw, bh, 4, "#a67c52");
   // grain
   ctx.strokeStyle = "rgba(70, 40, 20, 0.28)";
   ctx.lineWidth = 1.2;
-  for (let i = 0; i < 3; i++) {
-    const gy = by + 5 + i * (bh / 3.2);
+  for (let i = 0; i < 2; i++) {
+    const gy = by + 4 + i * (bh / 2.4);
     ctx.beginPath();
     ctx.moveTo(hx + 6, gy);
     ctx.lineTo(hx + bw - 6, gy + (i % 2));
     ctx.stroke();
   }
   // dark edge near trunk
-  ctx.fillStyle = "rgba(60, 30, 15, 0.25)";
+  ctx.fillStyle = "rgba(60, 30, 15, 0.28)";
   if (left) ctx.fillRect(hx + bw - 8, by, 8, bh);
   else ctx.fillRect(hx, by, 8, bh);
 }
@@ -557,9 +608,9 @@ function drawPlayer(x, y, side, now, scaleMul = 1) {
   const key = heroFrameKey(now);
   const fr = HERO_ATLAS.frames[key] || HERO_ATLAS.frames.idle;
 
-  // Target on-screen height sits next to ~58px trunk segments
+  // Target on-screen height — trunk blocks are taller (HERO_DRAW_H + SEG_OVER_HERO)
   const targetH =
-    key === "defeat" ? 28 * scaleMul : 78 * scaleMul;
+    key === "defeat" ? 28 * scaleMul : HERO_DRAW_H * scaleMul;
   const scale = targetH / fr.h;
   const dw = fr.w * scale;
   const dh = fr.h * scale;
@@ -625,25 +676,39 @@ function drawPlayer(x, y, side, now, scaleMul = 1) {
   ctx.restore();
 }
 
-function spawnDebris(cx, baseY, trunkW, segH, side) {
-  const dir = side === "left" ? -1 : 1;
+/**
+ * Spawn a trunk-width flying split log (bo‘linish) opposite the hero,
+ * down-diagonal like the GAMEE ref, plus wood chips.
+ * @param {number} cx
+ * @param {number} baseY
+ * @param {number} trunkW
+ * @param {number} segH
+ * @param {Side} side hero kick side
+ * @param {Side} [branch] branch attached to the chopped segment
+ */
+function spawnDebris(cx, baseY, trunkW, segH, side, branch = null) {
+  // Opposite the hero — right kick → chunk flies left-down
+  const dir = side === "left" ? 1 : -1;
   debris.push({
     x: cx,
-    y: baseY - segH,
-    vx: dir * (5 + Math.random() * 3.5),
-    vy: -2.5 - Math.random() * 2,
-    rot: 0,
-    vr: dir * 0.14,
-    life: 1,
+    y: baseY - segH * 0.55,
+    vx: dir * (7.5 + Math.random() * 4.5),
+    vy: 1.8 + Math.random() * 2.4,
+    rot: dir * 0.45,
+    vr: dir * (0.16 + Math.random() * 0.1),
+    life: 1.2,
+    w: trunkW,
+    h: segH,
+    branch: branch || null,
   });
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 12; i++) {
     chips.push({
-      x: cx + (Math.random() - 0.5) * trunkW,
-      y: baseY - segH * 0.5,
-      r: 1.5 + Math.random() * 2.8,
+      x: cx + (Math.random() - 0.5) * trunkW * 1.1,
+      y: baseY - segH * (0.3 + Math.random() * 0.5),
+      r: 1.4 + Math.random() * 3.2,
       a: 1,
-      vy: -1.5 - Math.random() * 3,
-      vx: (Math.random() - 0.5) * 4,
+      vy: -0.5 + Math.random() * 4,
+      vx: dir * (2 + Math.random() * 5) + (Math.random() - 0.5) * 2,
     });
   }
 }
@@ -660,7 +725,8 @@ function layout() {
   const w = canvas.clientWidth;
   const h = canvas.clientHeight;
   const cx = w * 0.5;
-  const trunkW = Math.min(58, w * 0.17);
+  // Thinner pole (ingichkaroq) — branches still top-mounted on each block
+  const trunkW = Math.min(46, Math.max(40, w * 0.115));
   // Keep ~1cm ground visible above the canvas bottom (shell already clears
   // safe-area / home indicator via padding-bottom + --app-height).
   const groundH = Math.max(
@@ -668,9 +734,21 @@ function layout() {
     Math.min(GROUND_MAX, Math.round(h * 0.09)),
   );
   const baseY = Math.max(groundH + 80, h - groundH);
-  const playH = Math.max(120, baseY);
-  const segH = Math.min(58, (playH * 0.72) / SEGMENTS);
-  return { w, h, cx, trunkW, segH, baseY, groundH };
+  // Even taller blocks; count fills ground → canvas top
+  const minSegH = HERO_DRAW_H + SEG_OVER_HERO;
+  const nextSegs = Math.max(4, Math.floor(baseY / minSegH));
+  const segH = baseY / nextSegs;
+  if (nextSegs !== SEGMENTS) {
+    SEGMENTS = nextSegs;
+    while (trunk.length < SEGMENTS) {
+      const prev = trunk[trunk.length - 1];
+      trunk.push(
+        prev === "left" ? "right" : prev === "right" ? "left" : "left",
+      );
+    }
+    if (trunk.length > SEGMENTS) trunk.length = SEGMENTS;
+  }
+  return { w, h, cx, trunkW, segH, baseY, groundH, segments: SEGMENTS };
 }
 
 function draw(now) {
@@ -682,31 +760,43 @@ function draw(now) {
   const shakeX = shake > 0 ? (Math.random() - 0.5) * shake : 0;
   drawAtmosphere(w, h, baseY);
 
-  // Trunk — light brown wood with vertical grain
+  // Trunk — continuous pole (ground → canvas top), ref-like cylindrical wood
+  const trunkX = cx - trunkW / 2 + shakeX;
+  // Base fill so the pole never stops mid-screen
+  ctx.fillStyle = "#c49a6c";
+  ctx.fillRect(trunkX, 0, trunkW, baseY + 1);
+  // Cylindrical side shading (darker outer edges)
+  ctx.fillStyle = "rgba(90, 50, 22, 0.22)";
+  ctx.fillRect(trunkX, 0, 7, baseY + 1);
+  ctx.fillRect(trunkX + trunkW - 8, 0, 8, baseY + 1);
+  // Soft left highlight strip
+  ctx.fillStyle = "rgba(255, 230, 190, 0.2)";
+  ctx.fillRect(trunkX + 8, 0, 5, baseY);
+
   for (let i = SEGMENTS - 1; i >= 0; i--) {
     const y = baseY - (i + 1) * segH + shakeX * 0.12;
-    const x = cx - trunkW / 2 + shakeX;
-    const shade = i % 2 === 0 ? "#c49a6c" : "#b8895a";
-    roundRect(x, y, trunkW, segH + 1, 4, shade);
-    // vertical grain
-    ctx.strokeStyle = "rgba(90, 50, 25, 0.22)";
-    ctx.lineWidth = 1.4;
+    const x = trunkX;
+    // Subtle alternating block shade
+    if (i % 2 === 0) {
+      ctx.fillStyle = "rgba(196, 154, 108, 0.35)";
+      ctx.fillRect(x, y, trunkW, segH + 1.5);
+    }
+    // Vertical grain
+    ctx.strokeStyle = "rgba(90, 50, 25, 0.2)";
+    ctx.lineWidth = 1.35;
     for (let g = 0; g < 4; g++) {
-      const gx = x + 8 + g * ((trunkW - 16) / 3.2);
+      const gx = x + 10 + g * ((trunkW - 20) / 3.2);
       ctx.beginPath();
-      ctx.moveTo(gx, y + 4);
-      ctx.lineTo(gx + (g % 2 ? 1.5 : -1), y + segH - 4);
+      ctx.moveTo(gx, y + 6);
+      ctx.lineTo(gx + (g % 2 ? 1.4 : -1), y + segH - 4);
       ctx.stroke();
     }
-    // soft highlight
-    ctx.fillStyle = "rgba(255, 230, 190, 0.18)";
-    ctx.fillRect(x + 3, y + 2, 5, segH - 4);
-    // ring
-    ctx.strokeStyle = "rgba(60, 30, 12, 0.2)";
-    ctx.lineWidth = 2;
+    // Top seam of this block — branch attaches here (ref)
+    ctx.strokeStyle = "rgba(55, 28, 10, 0.38)";
+    ctx.lineWidth = 2.2;
     ctx.beginPath();
-    ctx.moveTo(x + 6, y + segH * 0.55);
-    ctx.lineTo(x + trunkW - 6, y + segH * 0.55);
+    ctx.moveTo(x + 3, y + 1);
+    ctx.lineTo(x + trunkW - 3, y + 1);
     ctx.stroke();
 
     const branch = trunk[i];
@@ -739,15 +829,30 @@ function draw(now) {
   ctx.restore();
   ctx.globalAlpha = 1;
 
-  // Debris (flying wood)
+  // Debris — trunk-width flying split log (bo‘linish)
   for (const d of debris) {
+    const dw = d.w || trunkW;
+    const dh = d.h || segH * 0.9;
     ctx.save();
     ctx.translate(d.x, d.y);
     ctx.rotate(d.rot);
-    ctx.globalAlpha = Math.max(0, d.life);
-    roundRect(-trunkW / 2, 0, trunkW, segH * 0.9, 3, "#c49a6c");
-    ctx.strokeStyle = "rgba(90, 50, 25, 0.3)";
-    ctx.strokeRect(-trunkW / 2 + 2, 4, trunkW - 4, segH * 0.7);
+    ctx.globalAlpha = Math.max(0, Math.min(1, d.life));
+    roundRect(-dw / 2, -dh / 2, dw, dh, 4, "#c49a6c");
+    // grain on flying chunk
+    ctx.strokeStyle = "rgba(90, 50, 25, 0.28)";
+    ctx.lineWidth = 1.3;
+    for (let g = 0; g < 3; g++) {
+      const gx = -dw / 2 + 8 + g * ((dw - 16) / 2.5);
+      ctx.beginPath();
+      ctx.moveTo(gx, -dh / 2 + 4);
+      ctx.lineTo(gx + (g % 2 ? 1.2 : -1), dh / 2 - 4);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "rgba(255, 230, 190, 0.16)";
+    ctx.fillRect(-dw / 2 + 3, -dh / 2 + 2, 5, dh - 4);
+    if (d.branch) {
+      drawBranch(-dw / 2, -dh / 2, dw, dh, d.branch);
+    }
     ctx.restore();
   }
 
@@ -772,8 +877,8 @@ function draw(now) {
     ctx.textBaseline = "middle";
     const fontSize = Math.min(68, w * 0.17);
     ctx.font = `800 ${fontSize}px Manrope, sans-serif`;
-    // Large run score sits on upper trunk (ref rhythm)
-    const sy = baseY - SEGMENTS * segH + segH * 1.65;
+    // Large run score sits mid-upper on the tall pole (ref rhythm)
+    const sy = Math.max(segH * 2.2, baseY * 0.28);
     ctx.lineWidth = 5;
     ctx.strokeStyle = "rgba(0,0,0,0.35)";
     ctx.fillStyle = "#fff";
@@ -837,29 +942,21 @@ function chop(side) {
   }
 
   const { cx, trunkW, segH, baseY } = layout();
-  spawnDebris(cx, baseY, trunkW, segH, side);
+  // Chopped segment flies away (branch rides along if present on opposite side)
+  const choppedBranch = danger;
+  spawnDebris(cx, baseY, trunkW, segH, side, choppedBranch);
   // Visual feedback +1 — DB contract is 1 hit = 1 point
-  spawnFloat(
-    side === "left" ? cx - 44 : cx + 44,
-    baseY - segH * 1.1,
-    "+1",
-  );
+  spawnFloat(cx + (side === "left" ? -8 : 8), baseY - segH * 1.35, "+1");
 
   trunk.shift();
   /** @type {Side} */
-  let prev = null;
-  for (let i = trunk.length - 1; i >= 0; i--) {
-    if (trunk[i]) {
-      prev = trunk[i];
-      break;
-    }
-  }
-  const lastBranch = trunk[trunk.length - 1] != null;
-  trunk.push(nextBranch(score + 1, prev, lastBranch));
+  const prev = trunk[trunk.length - 1] ?? "left";
+  trunk.push(nextBranch(score + 1, prev));
 
   score += 1;
   hudScore.textContent = String(score);
-  energy = Math.min(ENERGY_MAX, energy + ENERGY_REFILL);
+  const { refill } = difficultyFor(score);
+  energy = Math.min(ENERGY_MAX, energy + refill);
   multiFill = Math.min(1, multiFill + MULTI_GAIN);
   multi = Math.min(MULTI_MAX, 1 + multiFill * (MULTI_MAX - 1));
   setEnergyUi();
@@ -1053,11 +1150,11 @@ function loop(ts) {
   lastTs = ts;
   animT += dt;
 
-  if (phase === "playing") {
+  if (phase === "playing" && !shotFreeze) {
     if (graceLeft > 0) {
       graceLeft -= dt;
     } else {
-      const drainScale = Math.min(1.55, 0.62 + score * 0.014);
+      const { drainScale } = difficultyFor(score);
       energy -= ENERGY_DRAIN * drainScale * dt;
     }
     multiFill = Math.max(0, multiFill - MULTI_DECAY * dt * 0.35);
@@ -1091,13 +1188,14 @@ function loop(ts) {
     }
   }
 
-  if (phase !== "paused") {
+  if (phase !== "paused" && !shotFreeze) {
     for (const d of debris) {
       d.x += d.vx;
       d.y += d.vy;
-      d.vy += 18 * dt;
+      d.vy += 22 * dt;
+      d.vx *= 0.995;
       d.rot += d.vr;
-      d.life -= dt * 1.15;
+      d.life -= dt * 0.95;
     }
     debris = debris.filter((d) => d.life > 0);
 
@@ -1137,7 +1235,10 @@ resize();
 // Second pass after first layout — clientHeight can be 0 on the first tick.
 requestAnimationFrame(() => {
   resize();
+  layout(); // sync SEGMENTS before seeding
+  seedTrunk();
 });
+layout();
 seedTrunk();
 showOverlay(
   "Karate Strike",
@@ -1148,6 +1249,8 @@ void loadBest();
 requestAnimationFrame(loop);
 
 const urlParams = new URLSearchParams(location.search);
+/** QA harness freezes VFX / energy so screenshots stay mid-kick. */
+let shotFreeze = false;
 
 // Optional smart bot for demos: /karate/?bot=1
 if (urlParams.get("bot") === "1") {
@@ -1167,14 +1270,20 @@ if (urlParams.get("bot") === "1") {
   setTimeout(botTick, 600);
 }
 
-// Screenshot / QA harness: /karate/?shot=idle|kick|defeat
+// Screenshot / QA harness: /karate/?shot=idle|kick|defeat|tree|split
 if (urlParams.has("shot")) {
   window.__karateShot = {
     ready: () => heroReady,
+    layout: () => layout(),
+    trunk: () => trunk.slice(),
+    debrisCount: () => debris.length,
+    floatsCount: () => floats.length,
+    difficulty: (s) => difficultyFor(s),
     show(pose) {
       hideOverlay();
       phase = "playing";
-      score = Math.max(score, 3);
+      shotFreeze = true;
+      score = Math.max(score, 12);
       hudScore.textContent = String(score);
       playerSide = "right";
       chopping = false;
@@ -1182,7 +1291,10 @@ if (urlParams.has("shot")) {
       walkUntil = 0;
       deathStartedAt = 0;
       heroPose = "idle";
-      if (pose === "kick") {
+      debris = [];
+      floats = [];
+      chips = [];
+      if (pose === "kick" || pose === "split") {
         playerSide = "left";
         chopping = true;
         strikeKind = "kick";
@@ -1192,8 +1304,60 @@ if (urlParams.has("shot")) {
         phase = "dying";
         deathStartedAt = performance.now() - HURT_MS - 50;
         heroPose = "defeat";
+        shotFreeze = false;
       } else {
         heroPose = "idle";
+      }
+      if (pose === "tree" || pose === "split") {
+        resize();
+        const L0 = layout(); // sync SEGMENTS to tall-block count
+        // Every segment branched; tree shot shows early same-side streaks
+        const n = L0.segments;
+        trunk = [];
+        if (pose === "split") {
+          // Kick on left → bottom hazard on right (safe)
+          for (let i = 0; i < n; i++) {
+            trunk.push(i % 2 === 0 ? "right" : "left");
+          }
+        } else {
+          // Early-game style: long same-side runs (bir tomondan)
+          let side = /** @type {"left"|"right"} */ ("left");
+          for (let i = 0; i < n; i++) {
+            trunk.push(side);
+            if (i === Math.floor(n * 0.6)) {
+              side = side === "left" ? "right" : "left";
+            }
+          }
+        }
+      }
+      if (pose === "split") {
+        resize();
+        const L = layout();
+        // Mid-flight split log opposite hero (hero left → chunk flies right-down)
+        spawnDebris(L.cx, L.baseY, L.trunkW, L.segH, "left", "right");
+        if (debris[0]) {
+          debris[0].x = L.cx + L.trunkW * 1.45;
+          debris[0].y = L.baseY - L.segH * 0.35;
+          debris[0].vx = 0;
+          debris[0].vy = 0;
+          debris[0].rot = 0.55;
+          debris[0].vr = 0;
+          debris[0].life = 1;
+        }
+        chips = chips.slice(0, 5).map((c, i) => ({
+          ...c,
+          x: L.cx + 22 + i * 9,
+          y: L.baseY - L.segH * 0.35 - i * 7,
+          vx: 0,
+          vy: 0,
+          a: 1,
+        }));
+        spawnFloat(L.cx + 10, L.baseY - L.segH * 0.85, "+1");
+        if (floats[0]) {
+          floats[0].vy = 0;
+          floats[0].life = 1;
+        }
+        return;
       }
       resize();
     },
