@@ -91,15 +91,9 @@ const HERO_OF_TREE_FRAC = 0.1;
 const HERO_OF_TREE_MIN = 0.08;
 const HERO_OF_TREE_MAX = 0.12;
 /** One segment settles in this many ms — mid of 0.25–0.6 s; queueable. */
-const DROP_DURATION_MS = 380;
+const DROP_DURATION_MS = 280;
 const DROP_DURATION_MIN_MS = 250;
 const DROP_DURATION_MAX_MS = 600;
-/** Brief lean on impact (degrees), then ease back — not random shake. */
-const TREE_BEND_DEG_MIN = 2;
-const TREE_BEND_DEG_MAX = 5;
-const TREE_BEND_DEG = 3.5;
-/** Bend settle time (seconds). */
-const TREE_BEND_SETTLE_S = 0.28;
 /** Debris spin while flying — mid of 90°–180°. */
 const DEBRIS_SPIN_DEG_MIN = 90;
 const DEBRIS_SPIN_DEG_MAX = 180;
@@ -194,13 +188,13 @@ let graceLeft = 0;
 let strikeCount = 0;
 /**
  * Trunk drop after chop: ≤0 px. Stack is drawn raised by this amount so a
- * visible gap opens at the stump, then eases down (queueable on rapid taps).
+ * brief gap opens, then eases flush onto the stump (never left hovering).
+ * Time-based anim so settle always completes even if a frame hitches.
+ * @type {{ start: number, from: number, duration: number } | null}
  */
+let trunkDropAnim = null;
+/** Cached sample of trunkDropAnim (updated each frame). */
 let trunkDropY = 0;
-/** Brief lean toward kick side (radians); eases to 0 — tekis vertical drop. */
-let trunkBend = 0;
-/** @type {1|-1} lean direction (away from hero kick). */
-let trunkBendDir = 1;
 
 /**
  * Flying split-log chunks (bo‘linish).
@@ -508,9 +502,8 @@ function resetRun() {
   pendingOverReason = "";
   strikeCount = 0;
   lastSubmitted = false;
+  trunkDropAnim = null;
   trunkDropY = 0;
-  trunkBend = 0;
-  trunkBendDir = 1;
   graceLeft = 2.2;
   debris = [];
   floats = [];
@@ -1024,49 +1017,75 @@ function layout() {
   };
 }
 
-/** Queue one segment of fall after a successful chop (stacks if mid-drop). */
-function beginTrunkDrop(segH) {
-  trunkDropY -= segH;
-}
-
-/** Ease stack down into the stump gap @ DROP_DURATION_MS per segment. */
-function updateTrunkDrop(dt) {
-  if (trunkDropY >= 0) {
+/**
+ * Current drop offset (≤0). Always samples the active time-based anim so
+ * the stack cannot get stuck floating above the stump.
+ * @param {number} [now]
+ */
+function sampleTrunkDropY(now = performance.now()) {
+  if (!trunkDropAnim) {
     trunkDropY = 0;
-    return;
+    return 0;
   }
-  const { segH } = layout();
-  const dur = Math.min(
+  // QA shot harness: hold the mid-drop pose (do not ease while frozen)
+  if (shotFreeze) {
+    trunkDropY = trunkDropAnim.from;
+    return trunkDropY;
+  }
+  const t = (now - trunkDropAnim.start) / trunkDropAnim.duration;
+  if (t >= 1 || !Number.isFinite(t)) {
+    trunkDropAnim = null;
+    trunkDropY = 0;
+    return 0;
+  }
+  // Ease-out cubic — fast start, soft settle flush on stump (KK2 feel)
+  const e = 1 - (1 - t) ** 3;
+  trunkDropY = trunkDropAnim.from * (1 - e);
+  // Snap when essentially flush so no sub-pixel hover remains
+  if (trunkDropY > -0.5) {
+    trunkDropAnim = null;
+    trunkDropY = 0;
+    return 0;
+  }
+  return trunkDropY;
+}
+
+/**
+ * Queue one segment of fall after a successful chop (stacks if mid-drop).
+ * Recaptures the *current* visual offset so rapid taps stay smooth.
+ * @param {number} segH
+ */
+function beginTrunkDrop(segH) {
+  if (!(segH > 0) || !Number.isFinite(segH)) return;
+  const now = performance.now();
+  const current = sampleTrunkDropY(now);
+  const from = current - segH;
+  const segs = Math.max(1, Math.abs(from) / segH);
+  const duration = Math.min(
     DROP_DURATION_MAX_MS,
-    Math.max(DROP_DURATION_MIN_MS, DROP_DURATION_MS),
+    Math.max(
+      DROP_DURATION_MIN_MS,
+      DROP_DURATION_MS * Math.min(segs, 2.2),
+    ),
   );
-  const speed = segH / (dur / 1000);
-  trunkDropY = Math.min(0, trunkDropY + speed * dt);
+  trunkDropAnim = { start: now, from, duration };
+  trunkDropY = from;
 }
 
-/** Brief 2–5° lean on impact, then settle (not random shake). */
-function beginTrunkBend(side) {
-  // Lean away from the kick (tree recoils opposite the hero)
-  trunkBendDir = side === "left" ? 1 : -1;
-  trunkBend = trunkBendDir * ((TREE_BEND_DEG * Math.PI) / 180);
-}
-
-function updateTrunkBend(dt) {
-  if (trunkBend === 0) return;
-  const k = 1 - Math.exp(-dt / Math.max(0.05, TREE_BEND_SETTLE_S * 0.35));
-  trunkBend *= 1 - k;
-  if (Math.abs(trunkBend) < 0.0008) trunkBend = 0;
+/** Advance / settle drop (also safe to call from draw). */
+function updateTrunkDrop(_dt) {
+  sampleTrunkDropY(performance.now());
 }
 
 function draw(now) {
-  const { w, h, cx, trunkW, segH, baseY } = layout();
+  const { w, h, cx, trunkW, segH, baseY, treeH } = layout();
   ctx.clearRect(0, 0, w, h);
 
   if (petals.length === 0) seedPetals(w, h);
 
   drawAtmosphere(w, h, baseY);
 
-  // Stump stays fixed (no bend / no shake)
+  // Stump stays fixed — stack slides tekis (vertical only) flush onto it
   roundRect(
     cx - trunkW * 0.65,
     baseY - 4,
@@ -1076,27 +1095,25 @@ function draw(now) {
     "#8a6238",
   );
 
-  // Trunk stack: vertical drop + brief lean about the stump (tekis pasga)
-  const dropY = trunkDropY;
+  // Sample drop every paint so settle can't stall between loop ticks
+  const dropY = sampleTrunkDropY(
+    typeof now === "number" ? now : performance.now(),
+  );
   const trunkX = cx - trunkW / 2;
   ctx.save();
-  if (trunkBend !== 0) {
-    ctx.translate(cx, baseY);
-    ctx.rotate(trunkBend);
-    ctx.translate(-cx, -baseY);
-  }
+  // No bend / lean / shake — perfectly vertical drop (KK2 slot feel)
+  // Fill only the segment stack bounds (never leave a phantom hover slab)
+  const stackTop = baseY - treeH + dropY;
   const stackBottom = baseY + dropY;
-  const fillTop = Math.min(0, dropY);
-  const fillH = Math.max(0, stackBottom - fillTop + 1);
-  // Wood fill only where the stack is — gap shows sky (ref mid-drop)
+  const fillH = Math.max(0, stackBottom - stackTop + 1);
   if (fillH > 0) {
     ctx.fillStyle = "#c49a6c";
-    ctx.fillRect(trunkX, fillTop, trunkW, fillH);
+    ctx.fillRect(trunkX, stackTop, trunkW, fillH);
     ctx.fillStyle = "rgba(90, 50, 22, 0.22)";
-    ctx.fillRect(trunkX, fillTop, 7, fillH);
-    ctx.fillRect(trunkX + trunkW - 8, fillTop, 8, fillH);
+    ctx.fillRect(trunkX, stackTop, 7, fillH);
+    ctx.fillRect(trunkX + trunkW - 8, stackTop, 8, fillH);
     ctx.fillStyle = "rgba(255, 230, 190, 0.2)";
-    ctx.fillRect(trunkX + 8, fillTop, 5, fillH);
+    ctx.fillRect(trunkX + 8, stackTop, 5, fillH);
   }
 
   for (let i = SEGMENTS - 1; i >= 0; i--) {
@@ -1241,9 +1258,8 @@ function chop(side) {
 
   trunk.shift();
   trunk.push(TreeBranchController.next(score + 1));
-  // Upper stack stays visually raised, then slides into the gap (queueable)
+  // Upper stack stays visually raised, then slides tekis into the gap (queueable)
   beginTrunkDrop(segH);
-  beginTrunkBend(side);
 
   score += 1;
   hudScore.textContent = String(score);
@@ -1479,10 +1495,12 @@ function loop(ts) {
     }
   }
 
-  if (phase !== "paused" && !shotFreeze) {
+  // Drop must always settle flush — even during pause freeze the pose,
+  // but never leave a stuck hover after a chop while playing.
+  if (!shotFreeze) {
     updateTrunkDrop(dt);
-    updateTrunkBend(dt);
-
+  }
+  if (phase !== "paused" && !shotFreeze) {
     const { baseY: groundY } = layout();
     for (const d of debris) {
       if (!d.grounded) {
@@ -1593,7 +1611,6 @@ if (urlParams.has("shot")) {
     floatsCount: () => floats.length,
     difficulty: (s) => difficultyFor(s),
     dropY: () => trunkDropY,
-    bend: () => trunkBend,
     feel: () => ({
       TARGET_FPS,
       DT_MAX,
@@ -1603,7 +1620,6 @@ if (urlParams.has("shot")) {
       TREE_HEIGHT_FRAC,
       HERO_OF_TREE_FRAC,
       DROP_DURATION_MS,
-      TREE_BEND_DEG,
       DEBRIS_SPIN_DEG_MIN,
       DEBRIS_SPIN_DEG_MAX,
       DEBRIS_GRAVITY,
@@ -1628,6 +1644,7 @@ if (urlParams.has("shot")) {
       debris = [];
       floats = [];
       chips = [];
+      trunkDropAnim = null;
       trunkDropY = 0;
       if (pose === "kick" || pose === "split" || pose === "drop") {
         playerSide = "left";
@@ -1690,10 +1707,13 @@ if (urlParams.has("shot")) {
           floats[0].life = 1;
         }
         if (pose === "drop") {
-          // Freeze mid-fall: gap ≈ half a segment above the stump + slight bend
+          // Freeze mid-fall for QA — tekis vertical only (no bend)
+          trunkDropAnim = {
+            start: performance.now(),
+            from: -L.segH * 0.55,
+            duration: 60_000,
+          };
           trunkDropY = -L.segH * 0.55;
-          trunkBend = ((TREE_BEND_DEG * Math.PI) / 180) * 0.7;
-          trunkBendDir = 1;
         }
         return;
       }
