@@ -1,8 +1,9 @@
 /**
- * Karate Strike — Timberman-style chop arcade (original art).
+ * Karate Strike — Timberman-style chop arcade.
  * Tap left/right to chop. Same-side branch = game over.
  * 1 successful chop = 1 stored point. High score only on server.
- * Atmosphere redrawn from design refs — no third-party sprites.
+ * Hero: user sprite atlas (cap / white tee / baggy pants) — idle, walk,
+ * Tepish kick, punch, hurt → Mag‘lubiyat defeat.
  */
 
 const canvas = document.getElementById("game");
@@ -38,7 +39,8 @@ if (tg) {
 }
 
 /** @typedef {"left"|"right"|null} Side */
-/** @typedef {"ready"|"playing"|"paused"|"over"} Phase */
+/** @typedef {"ready"|"playing"|"paused"|"dying"|"over"} Phase */
+/** @typedef {"idle"|"walk"|"kick"|"punch"|"hurt"|"defeat"} HeroPose */
 
 /** Visible queue ~6 segments — readable like refs. */
 const SEGMENTS = 6;
@@ -46,10 +48,48 @@ const ENERGY_MAX = 100;
 /** Base drain/sec — ramps with score so opening feels fair, later snappy. */
 const ENERGY_DRAIN = 11;
 const ENERGY_REFILL = 18;
-const CHOP_MS = 70;
+/** Strike hold — long enough to read Tepish kick + swoosh. */
+const CHOP_MS = 160;
+/** Side-switch flash through walk frames before/with kick. */
+const WALK_MS = 95;
+const HURT_MS = 380;
+const DEFEAT_HOLD_MS = 520;
 const MULTI_DECAY = 0.55;
 const MULTI_GAIN = 0.14;
 const MULTI_MAX = 2.5;
+
+/** Sprite atlas — feet-anchored frames facing right (mirror for right side). */
+const HERO_ATLAS = {
+  image: "./hero-atlas.png",
+  face: "right",
+  nativeH: 160,
+  frames: {
+    idle: { x: 2, y: 2, w: 90, h: 160 },
+    walk0: { x: 94, y: 2, w: 117, h: 160 },
+    walk1: { x: 213, y: 2, w: 118, h: 160 },
+    walk2: { x: 333, y: 2, w: 117, h: 160 },
+    walk3: { x: 452, y: 2, w: 163, h: 160 },
+    punch: { x: 617, y: 2, w: 168, h: 160 },
+    kick: { x: 787, y: 2, w: 143, h: 160 },
+    slam: { x: 2, y: 164, w: 194, h: 160 },
+    front: { x: 198, y: 164, w: 79, h: 160 },
+    back: { x: 279, y: 164, w: 69, h: 160 },
+    crouch: { x: 350, y: 164, w: 131, h: 160 },
+    jump: { x: 483, y: 164, w: 109, h: 160 },
+    hurt: { x: 594, y: 164, w: 191, h: 160 },
+    defeat: { x: 787, y: 164, w: 140, h: 65 },
+  },
+};
+
+const heroImg = new Image();
+let heroReady = false;
+heroImg.onload = () => {
+  heroReady = true;
+};
+heroImg.onerror = () => {
+  heroReady = false;
+};
+heroImg.src = HERO_ATLAS.image;
 
 /** @type {Phase} */
 let phase = "ready";
@@ -65,6 +105,15 @@ let playerSide = "right";
 let trunk = [];
 let chopping = false;
 let chopUntil = 0;
+/** @type {HeroPose} */
+let heroPose = "idle";
+/** Strike flavor for this chop — prefer kick (Tepish). */
+/** @type {"kick"|"punch"} */
+let strikeKind = "kick";
+let walkUntil = 0;
+let walkStartedAt = 0;
+let deathStartedAt = 0;
+let pendingOverReason = "";
 let lastTs = 0;
 let submitting = false;
 let lastSubmitted = false;
@@ -73,6 +122,8 @@ let muted = false;
 let animT = 0;
 /** Grace seconds after start before timer pressure. */
 let graceLeft = 0;
+/** Alternate punch occasionally so sheet punch+stars also appear. */
+let strikeCount = 0;
 
 /** @type {{ x: number, y: number, vx: number, vy: number, rot: number, vr: number, life: number }[]} */
 let debris = [];
@@ -152,6 +203,13 @@ function resetRun() {
   playerSide = "right";
   chopping = false;
   chopUntil = 0;
+  heroPose = "idle";
+  strikeKind = "kick";
+  walkUntil = 0;
+  walkStartedAt = 0;
+  deathStartedAt = 0;
+  pendingOverReason = "";
+  strikeCount = 0;
   lastSubmitted = false;
   shake = 0;
   graceLeft = 2.2;
@@ -414,83 +472,112 @@ function drawBranch(x, y, trunkW, segH, side) {
 }
 
 /**
- * Blocky chibi hero — red gi + black belt, side kick on chop.
+ * Resolve which atlas frame key to draw for the current hero pose / time.
+ * @param {number} now
+ * @returns {string}
+ */
+function heroFrameKey(now) {
+  if (phase === "dying" || (phase === "over" && deathStartedAt)) {
+    const elapsed = now - deathStartedAt;
+    if (elapsed < HURT_MS) return "hurt";
+    return "defeat";
+  }
+  if (chopping && now < chopUntil) {
+    // Side switch: brief walk cycle, then Tepish / punch
+    if (now < walkUntil) {
+      const t = (now - walkStartedAt) / Math.max(1, WALK_MS);
+      const idx = Math.min(3, Math.floor(t * 4));
+      return `walk${idx}`;
+    }
+    return strikeKind === "punch" ? "punch" : "kick";
+  }
+  if (now < walkUntil) {
+    const t = (now - walkStartedAt) / Math.max(1, WALK_MS);
+    const idx = Math.min(3, Math.floor(t * 4));
+    return `walk${idx}`;
+  }
+  return "idle";
+}
+
+/**
+ * Draw hero from sprite atlas. `y` is feet baseline. Faces trunk.
  * @param {number} x
  * @param {number} y
  * @param {Side} side
- * @param {boolean} choppingNow
+ * @param {number} now
+ * @param {number} [scaleMul]
  */
-function drawPlayer(x, y, side, choppingNow) {
-  const dir = side === "left" ? 1 : -1; // face toward trunk
-  const kick = choppingNow;
+function drawPlayer(x, y, side, now, scaleMul = 1) {
+  const faceRight = side === "left"; // left of trunk → face right
+  const key = heroFrameKey(now);
+  const fr = HERO_ATLAS.frames[key] || HERO_ATLAS.frames.idle;
+
+  // Target on-screen height sits next to ~58px trunk segments
+  const targetH =
+    key === "defeat" ? 28 * scaleMul : 78 * scaleMul;
+  const scale = targetH / fr.h;
+  const dw = fr.w * scale;
+  const dh = fr.h * scale;
+
+  // Subtle idle breath; strike lifts slightly toward trunk
+  let bob = 0;
+  let lift = 0;
+  if (key === "idle") bob = Math.sin(animT * 3.2) * 1.4;
+  if (key === "kick" || key === "punch") lift = 5;
+  if (key === "hurt") lift = 10;
+
+  const feetY = y + bob;
+  const drawX = x;
+  const drawY = feetY - dh - (key === "defeat" ? -2 : 0) - lift;
 
   // shadow under feet
-  ctx.fillStyle = "rgba(0,0,0,0.25)";
+  ctx.fillStyle = "rgba(0,0,0,0.28)";
   ctx.beginPath();
-  ctx.ellipse(x, y + 26, 16, 4, 0, 0, Math.PI * 2);
+  const shadowW = key === "defeat" ? dw * 0.45 : Math.min(22, dw * 0.28);
+  ctx.ellipse(drawX, feetY + 2, shadowW, 4.2, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // hair block
-  ctx.fillStyle = "#1a1020";
-  roundRect(x - 11, y - 40, 22, 12, 4, "#1a1020");
-
-  // head
-  ctx.fillStyle = "#f0b888";
-  roundRect(x - 10, y - 34, 20, 16, 5, "#f0b888");
-
-  // body — red gi
-  roundRect(x - 13, y - 18, 26, 28, 5, "#e53935");
-  // gi collar V
-  ctx.fillStyle = "#c62828";
-  ctx.beginPath();
-  ctx.moveTo(x, y - 16);
-  ctx.lineTo(x - 8, y + 2);
-  ctx.lineTo(x + 8, y + 2);
-  ctx.closePath();
-  ctx.fill();
-
-  // black belt
-  ctx.fillStyle = "#111";
-  ctx.fillRect(x - 13, y + 2, 26, 5);
-  ctx.fillStyle = "#333";
-  ctx.fillRect(x + dir * 6, y + 5, 8, 3);
-
-  // standing leg
-  ctx.fillStyle = "#e53935";
-  if (kick) {
-    roundRect(x - 6, y + 10, 10, 14, 3, "#e53935");
-    // kicking leg stretched toward trunk
-    ctx.save();
-    ctx.translate(x, y + 8);
-    ctx.rotate(dir * -0.95);
-    roundRect(0, -5, 34, 10, 4, "#e53935");
-    // foot
-    roundRect(30, -6, 10, 12, 3, "#1a1020");
-    ctx.restore();
-  } else {
-    roundRect(x - 11, y + 10, 10, 14, 3, "#e53935");
-    roundRect(x + 1, y + 10, 10, 14, 3, "#e53935");
-    ctx.fillStyle = "#1a1020";
-    ctx.fillRect(x - 12, y + 22, 11, 5);
-    ctx.fillRect(x + 1, y + 22, 11, 5);
+  if (!heroReady) {
+    // Minimal placeholder only until atlas loads — never red-gi
+    ctx.fillStyle = "#f5f5f5";
+    roundRect(drawX - 12, feetY - 56, 24, 56, 6, "#f5f5f5");
+    ctx.fillStyle = "#111";
+    roundRect(drawX - 10, feetY - 70, 20, 14, 3, "#111");
+    return;
   }
 
-  // arms
-  ctx.strokeStyle = "#f0b888";
-  ctx.lineWidth = 5;
-  ctx.lineCap = "round";
-  ctx.beginPath();
-  ctx.moveTo(x - dir * 8, y - 8);
-  if (kick) {
-    ctx.lineTo(x - dir * 18, y - 20);
+  ctx.save();
+  if (faceRight) {
+    // native atlas faces right
+    ctx.translate(drawX - dw / 2, drawY);
+    ctx.drawImage(
+      heroImg,
+      fr.x,
+      fr.y,
+      fr.w,
+      fr.h,
+      0,
+      0,
+      dw,
+      dh,
+    );
   } else {
-    ctx.lineTo(x - dir * 16, y + 2);
+    // mirror for right side of trunk
+    ctx.translate(drawX + dw / 2, drawY);
+    ctx.scale(-1, 1);
+    ctx.drawImage(
+      heroImg,
+      fr.x,
+      fr.y,
+      fr.w,
+      fr.h,
+      0,
+      0,
+      dw,
+      dh,
+    );
   }
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(x + dir * 6, y - 6);
-  ctx.lineTo(x + dir * (kick ? 14 : 12), y + (kick ? -4 : 4));
-  ctx.stroke();
+  ctx.restore();
 }
 
 function spawnDebris(cx, baseY, trunkW, segH, side) {
@@ -580,20 +667,19 @@ function draw(now) {
     "#8a6238",
   );
 
-  // Player
-  const playerY = baseY - segH * 0.05;
+  // Player — feet on stump ledge; close enough for kick to read as trunk hit
+  const playerY = baseY + 2;
+  const sideGap = Math.max(32, trunkW * 0.52 + 10);
   const px =
-    playerSide === "left" ? cx - trunkW / 2 - 36 : cx + trunkW / 2 + 36;
-  const choppingNow = chopping && now < chopUntil;
-  const chopLift = choppingNow ? 6 : 0;
-  drawPlayer(px + shakeX * 0.35, playerY - chopLift, playerSide, choppingNow);
+    playerSide === "left" ? cx - trunkW / 2 - sideGap : cx + trunkW / 2 + sideGap;
+  drawPlayer(px + shakeX * 0.35, playerY, playerSide, now);
 
   // Soft reflection of player
   ctx.save();
-  ctx.globalAlpha = 0.16;
-  ctx.translate(0, baseY + 4);
-  ctx.scale(1, -0.32);
-  drawPlayer(px + shakeX * 0.35, -(playerY - baseY) + chopLift, playerSide, false);
+  ctx.globalAlpha = 0.14;
+  ctx.translate(0, baseY + 6);
+  ctx.scale(1, -0.3);
+  drawPlayer(px + shakeX * 0.35, -(playerY - baseY) + 4, playerSide, now, 0.92);
   ctx.restore();
   ctx.globalAlpha = 1;
 
@@ -619,7 +705,12 @@ function draw(now) {
   ctx.globalAlpha = 1;
 
   // Large score on trunk (ref style)
-  if (phase === "playing" || phase === "paused" || phase === "over") {
+  if (
+    phase === "playing" ||
+    phase === "paused" ||
+    phase === "dying" ||
+    phase === "over"
+  ) {
     ctx.save();
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -666,11 +757,22 @@ function draw(now) {
  */
 function chop(side) {
   if (phase !== "playing" || !side) return;
-  if (chopping && performance.now() < chopUntil) return;
+  const now = performance.now();
+  if (chopping && now < chopUntil) return;
 
+  const switched = playerSide != null && playerSide !== side;
   playerSide = side;
   chopping = true;
-  chopUntil = performance.now() + CHOP_MS;
+  chopUntil = now + CHOP_MS;
+  strikeCount += 1;
+  // Prefer Tepish kick; every 4th hit shows punch + impact stars from sheet
+  strikeKind = strikeCount % 4 === 0 ? "punch" : "kick";
+  heroPose = strikeKind;
+  if (switched) {
+    walkStartedAt = now;
+    walkUntil = now + WALK_MS;
+    heroPose = "walk";
+  }
 
   const danger = trunk[0];
   if (danger && danger === side) {
@@ -735,13 +837,24 @@ function playChopTone() {
 playChopTone.ctx = undefined;
 
 function endGame(reason) {
-  if (phase === "over") return;
-  phase = "over";
+  if (phase === "over" || phase === "dying") return;
+  phase = "dying";
   chopping = false;
+  walkUntil = 0;
   shake = 12;
+  deathStartedAt = performance.now();
+  heroPose = "hurt";
+  pendingOverReason = reason || "Yana urinib ko‘ring!";
+  // Overlay + score submit wait until Mag‘lubiyat pose lands (see loop)
+}
+
+function finishDeathSequence() {
+  if (phase !== "dying") return;
+  phase = "over";
+  heroPose = "defeat";
   showOverlay(
     "O‘yin tugadi",
-    reason || "Yana urinib ko‘ring!",
+    pendingOverReason || "Yana urinib ko‘ring!",
     "Qayta o‘ynash",
   );
   void submitScore();
@@ -825,7 +938,7 @@ function togglePause() {
 }
 
 function onPointer(clientX) {
-  if (phase === "paused") return;
+  if (phase === "paused" || phase === "dying") return;
   if (phase === "ready" || phase === "over") {
     if (phase === "ready") startGame();
     return;
@@ -853,9 +966,9 @@ window.addEventListener("keydown", (ev) => {
     else if (phase === "playing") chop("right");
   } else if (ev.key === " " || ev.key === "Enter") {
     if (phase === "paused") togglePause();
-    else if (phase !== "playing") startGame();
+    else if (phase === "ready" || phase === "over") startGame();
   } else if (ev.key === "p" || ev.key === "P") {
-    togglePause();
+    if (phase !== "dying") togglePause();
   } else if (ev.key === "m" || ev.key === "M") {
     muted = !muted;
     btnMute?.classList.toggle("muted", muted);
@@ -901,6 +1014,13 @@ function loop(ts) {
     } else {
       setEnergyUi();
     }
+  }
+
+  // Hurt → Mag‘lubiyat before game-over card — no snap-cut
+  if (phase === "dying") {
+    const elapsed = ts - deathStartedAt;
+    if (elapsed >= HURT_MS) heroPose = "defeat";
+    if (elapsed >= HURT_MS + DEFEAT_HOLD_MS) finishDeathSequence();
   }
 
   // Petals drift always (atmosphere)
@@ -958,8 +1078,10 @@ showOverlay(
 void loadBest();
 requestAnimationFrame(loop);
 
+const urlParams = new URLSearchParams(location.search);
+
 // Optional smart bot for demos: /karate/?bot=1
-if (new URLSearchParams(location.search).get("bot") === "1") {
+if (urlParams.get("bot") === "1") {
   const botTick = () => {
     if (phase === "ready") {
       startGame();
@@ -974,4 +1096,45 @@ if (new URLSearchParams(location.search).get("bot") === "1") {
     setTimeout(botTick, 120);
   };
   setTimeout(botTick, 600);
+}
+
+// Screenshot / QA harness: /karate/?shot=idle|kick|defeat
+if (urlParams.has("shot")) {
+  window.__karateShot = {
+    ready: () => heroReady,
+    show(pose) {
+      hideOverlay();
+      phase = "playing";
+      score = Math.max(score, 3);
+      hudScore.textContent = String(score);
+      playerSide = "right";
+      chopping = false;
+      chopUntil = 0;
+      walkUntil = 0;
+      deathStartedAt = 0;
+      heroPose = "idle";
+      if (pose === "kick") {
+        playerSide = "left";
+        chopping = true;
+        strikeKind = "kick";
+        chopUntil = performance.now() + 60_000;
+        heroPose = "kick";
+      } else if (pose === "defeat") {
+        phase = "dying";
+        deathStartedAt = performance.now() - HURT_MS - 50;
+        heroPose = "defeat";
+      } else {
+        heroPose = "idle";
+      }
+      resize();
+    },
+  };
+  const waitHero = () => {
+    if (!heroReady) {
+      requestAnimationFrame(waitHero);
+      return;
+    }
+    window.__karateShot.show(urlParams.get("shot") || "idle");
+  };
+  requestAnimationFrame(waitHero);
 }
