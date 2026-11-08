@@ -91,7 +91,7 @@ const HERO_OF_TREE_FRAC = 0.1;
 const HERO_OF_TREE_MIN = 0.08;
 const HERO_OF_TREE_MAX = 0.12;
 /** One segment settles in this many ms — mid of 0.25–0.6 s; queueable. */
-const DROP_DURATION_MS = 380;
+const DROP_DURATION_MS = 280;
 const DROP_DURATION_MIN_MS = 250;
 const DROP_DURATION_MAX_MS = 600;
 /** Brief lean on impact (degrees), then ease back — not random shake. */
@@ -194,8 +194,12 @@ let graceLeft = 0;
 let strikeCount = 0;
 /**
  * Trunk drop after chop: ≤0 px. Stack is drawn raised by this amount so a
- * visible gap opens at the stump, then eases down (queueable on rapid taps).
+ * brief gap opens, then eases flush onto the stump (never left hovering).
+ * Time-based anim so settle always completes even if a frame hitches.
+ * @type {{ start: number, from: number, duration: number } | null}
  */
+let trunkDropAnim = null;
+/** Cached sample of trunkDropAnim (updated each frame). */
 let trunkDropY = 0;
 /** Brief lean toward kick side (radians); eases to 0 — tekis vertical drop. */
 let trunkBend = 0;
@@ -508,6 +512,7 @@ function resetRun() {
   pendingOverReason = "";
   strikeCount = 0;
   lastSubmitted = false;
+  trunkDropAnim = null;
   trunkDropY = 0;
   trunkBend = 0;
   trunkBendDir = 1;
@@ -1024,24 +1029,64 @@ function layout() {
   };
 }
 
-/** Queue one segment of fall after a successful chop (stacks if mid-drop). */
-function beginTrunkDrop(segH) {
-  trunkDropY -= segH;
+/**
+ * Current drop offset (≤0). Always samples the active time-based anim so
+ * the stack cannot get stuck floating above the stump.
+ * @param {number} [now]
+ */
+function sampleTrunkDropY(now = performance.now()) {
+  if (!trunkDropAnim) {
+    trunkDropY = 0;
+    return 0;
+  }
+  // QA shot harness: hold the mid-drop pose (do not ease while frozen)
+  if (shotFreeze) {
+    trunkDropY = trunkDropAnim.from;
+    return trunkDropY;
+  }
+  const t = (now - trunkDropAnim.start) / trunkDropAnim.duration;
+  if (t >= 1 || !Number.isFinite(t)) {
+    trunkDropAnim = null;
+    trunkDropY = 0;
+    return 0;
+  }
+  // Ease-out cubic — fast start, soft settle flush on stump (KK2 feel)
+  const e = 1 - (1 - t) ** 3;
+  trunkDropY = trunkDropAnim.from * (1 - e);
+  // Snap when essentially flush so no sub-pixel hover remains
+  if (trunkDropY > -0.5) {
+    trunkDropAnim = null;
+    trunkDropY = 0;
+    return 0;
+  }
+  return trunkDropY;
 }
 
-/** Ease stack down into the stump gap @ DROP_DURATION_MS per segment. */
-function updateTrunkDrop(dt) {
-  if (trunkDropY >= 0) {
-    trunkDropY = 0;
-    return;
-  }
-  const { segH } = layout();
-  const dur = Math.min(
+/**
+ * Queue one segment of fall after a successful chop (stacks if mid-drop).
+ * Recaptures the *current* visual offset so rapid taps stay smooth.
+ * @param {number} segH
+ */
+function beginTrunkDrop(segH) {
+  if (!(segH > 0) || !Number.isFinite(segH)) return;
+  const now = performance.now();
+  const current = sampleTrunkDropY(now);
+  const from = current - segH;
+  const segs = Math.max(1, Math.abs(from) / segH);
+  const duration = Math.min(
     DROP_DURATION_MAX_MS,
-    Math.max(DROP_DURATION_MIN_MS, DROP_DURATION_MS),
+    Math.max(
+      DROP_DURATION_MIN_MS,
+      DROP_DURATION_MS * Math.min(segs, 2.2),
+    ),
   );
-  const speed = segH / (dur / 1000);
-  trunkDropY = Math.min(0, trunkDropY + speed * dt);
+  trunkDropAnim = { start: now, from, duration };
+  trunkDropY = from;
+}
+
+/** Advance / settle drop (also safe to call from draw). */
+function updateTrunkDrop(_dt) {
+  sampleTrunkDropY(performance.now());
 }
 
 /** Brief 2–5° lean on impact, then settle (not random shake). */
@@ -1059,14 +1104,14 @@ function updateTrunkBend(dt) {
 }
 
 function draw(now) {
-  const { w, h, cx, trunkW, segH, baseY } = layout();
+  const { w, h, cx, trunkW, segH, baseY, treeH } = layout();
   ctx.clearRect(0, 0, w, h);
 
   if (petals.length === 0) seedPetals(w, h);
 
   drawAtmosphere(w, h, baseY);
 
-  // Stump stays fixed (no bend / no shake)
+  // Stump stays fixed (no bend / no shake) — stack must settle flush here
   roundRect(
     cx - trunkW * 0.65,
     baseY - 4,
@@ -1076,8 +1121,10 @@ function draw(now) {
     "#8a6238",
   );
 
-  // Trunk stack: vertical drop + brief lean about the stump (tekis pasga)
-  const dropY = trunkDropY;
+  // Sample drop every paint so settle can't stall between loop ticks
+  const dropY = sampleTrunkDropY(
+    typeof now === "number" ? now : performance.now(),
+  );
   const trunkX = cx - trunkW / 2;
   ctx.save();
   if (trunkBend !== 0) {
@@ -1085,18 +1132,18 @@ function draw(now) {
     ctx.rotate(trunkBend);
     ctx.translate(-cx, -baseY);
   }
+  // Fill only the segment stack bounds (never leave a phantom hover slab)
+  const stackTop = baseY - treeH + dropY;
   const stackBottom = baseY + dropY;
-  const fillTop = Math.min(0, dropY);
-  const fillH = Math.max(0, stackBottom - fillTop + 1);
-  // Wood fill only where the stack is — gap shows sky (ref mid-drop)
+  const fillH = Math.max(0, stackBottom - stackTop + 1);
   if (fillH > 0) {
     ctx.fillStyle = "#c49a6c";
-    ctx.fillRect(trunkX, fillTop, trunkW, fillH);
+    ctx.fillRect(trunkX, stackTop, trunkW, fillH);
     ctx.fillStyle = "rgba(90, 50, 22, 0.22)";
-    ctx.fillRect(trunkX, fillTop, 7, fillH);
-    ctx.fillRect(trunkX + trunkW - 8, fillTop, 8, fillH);
+    ctx.fillRect(trunkX, stackTop, 7, fillH);
+    ctx.fillRect(trunkX + trunkW - 8, stackTop, 8, fillH);
     ctx.fillStyle = "rgba(255, 230, 190, 0.2)";
-    ctx.fillRect(trunkX + 8, fillTop, 5, fillH);
+    ctx.fillRect(trunkX + 8, stackTop, 5, fillH);
   }
 
   for (let i = SEGMENTS - 1; i >= 0; i--) {
@@ -1479,8 +1526,12 @@ function loop(ts) {
     }
   }
 
-  if (phase !== "paused" && !shotFreeze) {
+  // Drop must always settle flush — even during pause freeze the pose,
+  // but never leave a stuck hover after a chop while playing.
+  if (!shotFreeze) {
     updateTrunkDrop(dt);
+  }
+  if (phase !== "paused" && !shotFreeze) {
     updateTrunkBend(dt);
 
     const { baseY: groundY } = layout();
@@ -1628,6 +1679,7 @@ if (urlParams.has("shot")) {
       debris = [];
       floats = [];
       chips = [];
+      trunkDropAnim = null;
       trunkDropY = 0;
       if (pose === "kick" || pose === "split" || pose === "drop") {
         playerSide = "left";
@@ -1690,7 +1742,12 @@ if (urlParams.has("shot")) {
           floats[0].life = 1;
         }
         if (pose === "drop") {
-          // Freeze mid-fall: gap ≈ half a segment above the stump + slight bend
+          // Freeze mid-fall for QA (shotFreeze blocks settle)
+          trunkDropAnim = {
+            start: performance.now(),
+            from: -L.segH * 0.55,
+            duration: 60_000,
+          };
           trunkDropY = -L.segH * 0.55;
           trunkBend = ((TREE_BEND_DEG * Math.PI) / 180) * 0.7;
           trunkBendDir = 1;
