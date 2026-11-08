@@ -451,7 +451,7 @@ export class UserRepository {
   }
 
   /**
-   * Persist a City Strike run (game id `karate`). total_points / rating store the personal best only:
+   * Persist a Karate Strike run (game id `karate`). total_points / rating store the personal best only:
    * if run ≤ stored best, keep best; if higher, update.
    */
   async submitScore(input: SubmitScoreInput): Promise<SubmitScoreResult> {
@@ -673,7 +673,7 @@ export class UserRepository {
   }
 
   /**
-   * Admin dashboard counters — DB users, City Strike runs, and high-score board.
+   * Admin dashboard counters — DB users, Karate Strike runs, and high-score board.
    */
   async getAdminStats(opts?: { topLimit?: number }): Promise<AdminStats> {
     const now = new Date();
@@ -744,7 +744,7 @@ export class UserRepository {
 
     for (const row of rows) {
       const raw = row.key.slice(FEATURE_SETTING_PREFIX.length);
-      // Legacy Air Hockey toggle → City Strike (flag key still `karate`).
+      // Legacy Air Hockey toggle → Karate Strike (flag key still `karate`).
       const id = (raw === "air_hockey" ? "karate" : raw) as FeatureFlagKey;
       if (!(FEATURE_FLAG_KEYS as readonly string[]).includes(id)) continue;
       flags[id] = row.value === "1" || row.value === "true";
