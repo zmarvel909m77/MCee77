@@ -259,18 +259,20 @@ function readFileAsDataUrl(file) {
   });
 }
 
-// O‘yin boshlanish tugmasi bosilganda ovozni sinab ko'rish va o'yinga o'tish
-els.playKarateBtn?.addEventListener("click", () => {
+// O‘yin boshlanish tugmasi bosilganda yangi chop.m4a ovozini chalish
+els.playKarateBtn?.addEventListener("click", (e) => {
+  e.preventDefault(); // Sahifaning darhol sakrab o'tib ketishini oldini oladi
+  
   const hitSound = document.getElementById("hitSound");
   if (hitSound) {
-    const soundClone = hitSound.cloneNode();
-    soundClone.volume = 1.0;
-    soundClone.play().catch(e => console.log("Ovozni o'ynatishda xatolik:", e));
+    hitSound.currentTime = 0;
+    hitSound.play().catch(err => console.log("Ovoz xatosi:", err));
   }
   
+  // Ovoz to'liqroq yangrashi uchun vaqtni 400 millisekundga uzaytirdik
   setTimeout(() => {
     location.href = "/karate/?from=app";
-  }, 150); // Ovoz ozgina eshitilib keyin o'tishi uchun qisqa pauza
+  }, 400);
 });
 
 async function loadLeaderboard() {
