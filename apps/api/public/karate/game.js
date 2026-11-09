@@ -1272,29 +1272,19 @@ function chop(side) {
   playChopTone();
 }
 
+// Yangi chop.m4a ovozini har safar zarba berganda chalish funksiyasi
+const gameHitSound = new Audio("./chop.m4a");
+gameHitSound.preload = "auto";
+
 function playChopTone() {
   if (muted) return;
   try {
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return;
-    if (!playChopTone.ctx) playChopTone.ctx = new AC();
-    const ac = playChopTone.ctx;
-    const o = ac.createOscillator();
-    const g = ac.createGain();
-    o.type = "triangle";
-    o.frequency.value = 180 + Math.random() * 40;
-    g.gain.value = 0.04;
-    o.connect(g);
-    g.connect(ac.destination);
-    o.start();
-    g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.08);
-    o.stop(ac.currentTime + 0.09);
+    gameHitSound.currentTime = 0;
+    gameHitSound.play().catch(e => console.log("Ovoz xatosi:", e));
   } catch {
     /* ignore */
   }
 }
-/** @type {AudioContext | undefined} */
-playChopTone.ctx = undefined;
 
 function endGame(reason) {
   if (phase === "over" || phase === "dying") return;
