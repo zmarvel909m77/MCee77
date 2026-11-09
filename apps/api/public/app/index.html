@@ -1,274 +1,86 @@
 <!DOCTYPE html>
 <html lang="uz">
-  <head>
-    <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
-    />
-    <title>GAME BOT</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="./styles.css" />
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mini App</title>
+    <link rel="stylesheet" href="styles.css">
     <style>
-      /* GAMEE namunasi uslubidagi katta banner kartochkasi */
-      .game-hero-banner {
-        position: relative;
-        width: 100%;
-        height: 240px;
-        border-radius: 24px;
-        overflow: hidden;
-        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        margin: 16px 0 24px;
-        background: #111;
-        cursor: pointer;
-        display: block;
-        padding: 0;
-        text-align: left;
-      }
-
-      .game-hero-banner img.banner-bg {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        display: block;
-      }
-
-      /* Pastki qismdagi xiralashtirilgan panel */
-      .banner-overlay-bar {
-        position: absolute;
-        bottom: 12px;
-        left: 12px;
-        right: 12px;
-        background: rgba(18, 20, 29, 0.78);
-        backdrop-filter: blur(14px);
-        -webkit-backdrop-filter: blur(14px);
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        border-radius: 18px;
-        padding: 10px 14px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-      }
-
-      .banner-info {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        min-width: 0;
-      }
-
-      .banner-mini-icon {
-        width: 44px;
-        height: 44px;
-        border-radius: 12px;
-        overflow: hidden;
-        flex-shrink: 0;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-      }
-
-      .banner-mini-icon img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-      }
-
-      .banner-titles {
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-      }
-
-      .banner-titles h3 {
-        margin: 0;
-        font-size: 16px;
-        font-weight: 800;
-        color: #ffffff;
-        letter-spacing: -0.2px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-
-      .banner-titles span {
-        font-size: 11px;
-        color: rgba(255, 255, 255, 0.6);
-        font-weight: 600;
-      }
-
-      /* Namunadagi 'ИГРАТЬ' tugmasi uslubidagi yorqin tugma */
-      .banner-play-btn {
-        background: linear-gradient(135deg, #1b6bff 0%, #0047cc 100%);
-        color: #ffffff;
-        font-size: 13px;
-        font-weight: 800;
-        padding: 10px 18px;
-        border-radius: 14px;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        white-space: nowrap;
-        border: 1px solid rgba(255, 255, 255, 0.25);
-        box-shadow: 0 4px 14px rgba(27, 107, 255, 0.45);
-        pointer-events: none;
-      }
+        /* Asosiy moslashuvlar va ixchamlashtirish */
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0f1015;
+            color: #ffffff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+        /* Yuqori qismdagi keraksiz elementlar va MCee77 olib tashlandi */
+        .top-header, .header-title {
+            display: none !important;
+        }
+        /* Pastki menyu (Tab bar) dizayni va shisha effekti */
+        .tab-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 65px;
+            background: rgba(20, 20, 30, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 1000;
+        }
+        .tab-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-decoration: none;
+            color: #8e8e93;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        .tab-item img {
+            width: 28px;
+            height: 28px;
+            object-fit: contain;
+            margin-bottom: 3px;
+        }
+        .tab-item.active {
+            color: #007aff;
+        }
     </style>
-  </head>
-  <body>
-    <div id="app">
-      <header class="topbar">
-        <button type="button" id="profileChip" class="profile-chip" aria-label="Profil">
-          <span class="chip-av">
-            <img id="chipAvatar" class="chip-av-img hidden" alt="" />
-            <span id="chipFallback" class="chip-av-fallback" aria-hidden="true">
-              <svg viewBox="0 0 48 48" width="22" height="22" fill="currentColor">
-                <circle cx="24" cy="17" r="9"/>
-                <path d="M7 42c1.8-10 9.2-15 17-15s15.2 5 17 15v2H7v-2Z"/>
-              </svg>
-            </span>
-          </span>
-          <span id="chipNick" class="chip-nick">…</span>
-        </button>
-        <p class="brand-mark">MCee77</p>
-      </header>
+</head>
+<body>
 
-      <main id="views" class="views">
-        <!-- Magazin -->
-        <section id="view-magazin" class="view" data-view="magazin">
-          <div class="section-head">
-            <h2>Magazin</h2>
-            <p>Sovg‘alar va resurslar</p>
-          </div>
-          <div class="shop-empty">
-            <div class="shop-ico" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.6">
-                <path d="M4 9h16l-1.2 10.2A2 2 0 0 1 16.8 21H7.2a2 2 0 0 1-2-1.8L4 9Z"/>
-                <path d="M8 9V7a4 4 0 0 1 8 0v2"/>
-              </svg>
-            </div>
-            <h3>Resurslar yo‘q</h3>
-            <p>
-              Hozircha magazin javonlari bo‘sh — omborimiz yangi imkoniyatlar
-              bilan to‘ldirilmoqda.
-            </p>
-          </div>
-        </section>
-
-        <!-- O‘yinlar -->
-        <section id="view-oyinlar" class="view active" data-view="oyinlar">
-          <div class="section-head">
-            <h2>O‘yinlar</h2>
-            <p>Tanlang va rekordingizni yangilang</p>
-          </div>
-
-          <!-- Katta to‘rtburchak KidoChop banneri -->
-          <div id="playKarateBtn" class="game-hero-banner" role="button" tabindex="0">
-            <img 
-              src="./49BAC606-C8B7-48AC-834F-F0F183854913.png" 
-              alt="KidoChop O‘yini" 
-              class="banner-bg"
-            />
-            <div class="banner-overlay-bar">
-              <div class="banner-info">
-                <div class="banner-mini-icon">
-                  <img src="./49BAC606-C8B7-48AC-834F-F0F183854913.png" alt="Icon" />
-                </div>
-                <div class="banner-titles">
-                  <h3>KidoChop</h3>
-                  <span>1 zarba = 1 ball</span>
-                </div>
-              </div>
-              <div class="banner-play-btn">O‘yinni boshlash</div>
-            </div>
-          </div>
-        </section>
-
-        <!-- Reyting -->
-        <section id="view-reyting" class="view" data-view="reyting">
-          <div class="section-head">
-            <h2>Reyting</h2>
-            <p>KidoChop bo‘yicha eng yaxshi natijalar</p>
-          </div>
-          <ol id="leaderboard" class="board"></ol>
-          <p id="boardEmpty" class="empty hidden">
-            <span class="empty-ico" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
-                <path d="M5 21h4v-8H5zm5 0h4V9h-4zm5 0h4V3h-4z"/>
-              </svg>
-            </span>
-            Reyting hali shakllanmagan
-          </p>
-          <p id="boardStatus" class="status center"></p>
-        </section>
-      </main>
-
-      <!-- Profile editor sheet -->
-      <div id="profileSheet" class="sheet-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
-        <div class="sheet-panel">
-          <div class="sheet-grab" aria-hidden="true"></div>
-          <h2 id="sheetTitle">Profil</h2>
-          <div class="sheet-avatar-wrap">
-            <button type="button" id="avatarBtn" class="avatar-btn" aria-label="Rasm yuklash">
-              <img id="avatarImg" class="avatar-img hidden" alt="" />
-              <span id="avatarFallback" class="avatar-fallback">
-                <svg viewBox="0 0 48 48" width="40" height="40" fill="currentColor" aria-hidden="true">
-                  <circle cx="24" cy="17" r="9"/>
-                  <path d="M7 42c1.8-10 9.2-15 17-15s15.2 5 17 15v2H7v-2Z"/>
-                </svg>
-              </span>
-              <span class="avatar-cam" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
-                  <path d="M9 4.5 7.8 6H5.5A2.5 2.5 0 0 0 3 8.5v9A2.5 2.5 0 0 0 5.5 20h13a2.5 2.5 0 0 0 2.5-2.5v-9A2.5 2.5 0 0 0 18.5 6h-2.3L15 4.5H9Zm3 13a4 4 0 1 1 0-8 4 4 0 0 1 0 8Z"/>
-                </svg>
-              </span>
-            </button>
-            <input id="avatarInput" type="file" accept="image/jpeg,image/png,image/webp" hidden />
-          </div>
-          <label for="nickInput">Taxallus</label>
-          <input id="nickInput" maxlength="32" placeholder="Ismingizni yozing" />
-          <div class="sheet-actions">
-            <button type="button" id="nickCancel" class="ghost">Yopish</button>
-            <button type="button" id="nickSave">Saqlash</button>
-          </div>
-          <p id="nickStatus" class="status"></p>
-          <p id="profileStatus" class="status center"></p>
-          <p class="best-line">Eng yaxshi: <strong id="statBest">0</strong></p>
+    <!-- Asosiy Kontent qismi -->
+    <div class="content-container" style="padding: 12px; padding-bottom: 80px;">
+        <!-- Sahifalar -->
+        <div id="shop-page" class="page">
+            <h2 style="font-size: 20px; margin-bottom: 10px;">Do‘kon</h2>
+            <!-- Do'kon tarkibi -->
         </div>
-      </div>
-
-      <nav class="tabbar" aria-label="Asosiy menyu">
-        <button type="button" class="tab" data-tab="magazin">
-          <span class="tab-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
-              <path d="M4 7h16l-1.1 11.2A2 2 0 0 1 16.9 20H7.1a2 2 0 0 1-2-1.8L4 7Zm4 0V5.5A4 4 0 0 1 16 5.5V7"/>
-            </svg>
-          </span>
-          <span>Magazin</span>
-        </button>
-        <button type="button" class="tab active" data-tab="oyinlar">
-          <span class="tab-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
-              <path d="M8 4h8v3H8zm1 5h6l1 11H8L9 9zm2 2v7h2v-7z"/>
-            </svg>
-          </span>
-          <span>O‘yinlar</span>
-        </button>
-        <button type="button" class="tab" data-tab="reyting">
-          <span class="tab-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
-              <path d="M5 21h4v-8H5zm5 0h4V9h-4zm5 0h4V3h-4z"/>
-            </svg>
-          </span>
-          <span>Reyting</span>
-        </button>
-      </nav>
     </div>
-    <script src="./app.js" defer></script>
-  </body>
+
+    <!-- Pastki Navigatsiya Menyu -->
+    <div class="tab-bar">
+        <a href="#" class="tab-item active" onclick="switchTab('shop')">
+            <img src="tab-gift.png.JPG" alt="Do'kon">
+            <span>Do‘kon</span>
+        </a>
+        <a href="#" class="tab-item" onclick="switchTab('games')">
+            <img src="tab-game.png.JPG" alt="O'yinlar">
+            <span>O‘yinlar</span>
+        </a>
+        <a href="#" class="tab-item" onclick="switchTab('leaderboard')">
+            <img src="tab-cup.png.JPG" alt="Reyting">
+            <span>Reyting</span>
+        </a>
+    </div>
+
+    <script src="app.js"></script>
+</body>
 </html>
