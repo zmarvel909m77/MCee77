@@ -259,8 +259,18 @@ function readFileAsDataUrl(file) {
   });
 }
 
+// O‘yin boshlanish tugmasi bosilganda ovozni sinab ko'rish va o'yinga o'tish
 els.playKarateBtn?.addEventListener("click", () => {
-  location.href = "/karate/?from=app";
+  const hitSound = document.getElementById("hitSound");
+  if (hitSound) {
+    const soundClone = hitSound.cloneNode();
+    soundClone.volume = 1.0;
+    soundClone.play().catch(e => console.log("Ovozni o'ynatishda xatolik:", e));
+  }
+  
+  setTimeout(() => {
+    location.href = "/karate/?from=app";
+  }, 150); // Ovoz ozgina eshitilib keyin o'tishi uchun qisqa pauza
 });
 
 async function loadLeaderboard() {
