@@ -540,7 +540,7 @@ button.ghost {
   background: rgba(139, 108, 240, 0.16);
 }
 
-/* --- PASTKI 3D IKONKALARNI IXCHAM VA MUKAMMAL QILISH QISMI --- */
+/* --- MUKAMMAL 3D IKONKALAR SOZLAMASI --- */
 .tab-ico {
   display: flex;
   align-items: center;
@@ -549,9 +549,12 @@ button.ghost {
   height: 28px;
 }
 
-.tab-ico img {
+.tab-ico img,
+.tab img {
   width: 26px !important;
   height: 26px !important;
+  max-width: 26px !important;
+  max-height: 26px !important;
   object-fit: contain !important;
   display: block;
 }
