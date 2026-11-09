@@ -1272,15 +1272,162 @@ function chop(side) {
   playChopTone();
 }
 
-// Yangi chop.m4a ovozini har safar zarba berganda chalish funksiyasi
-const gameHitSound = new Audio("./chop.m4a");
-gameHitSound.preload = "auto";
+/* ── Arcade SFX (Web Audio: noise + short tones, no big asset packs) ── */
+/** @type {AudioContext | undefined} */
+let audioCtx;
+/** Shared noise sample for hit / thud bursts. */
+/** @type {AudioBuffer | undefined} */
+let noiseBuffer;
 
+function getAudioCtx() {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  if (!audioCtx) audioCtx = new AC();
+  return audioCtx;
+}
+
+/** Resume AudioContext after a user gesture (required on mobile / Telegram). */
+function unlockAudio() {
+  const ac = getAudioCtx();
+  if (!ac) return;
+  if (ac.state === "suspended") void ac.resume();
+}
+
+/**
+ * @param {AudioContext} ac
+ */
+function getNoiseBuffer(ac) {
+  if (noiseBuffer && noiseBuffer.sampleRate === ac.sampleRate) return noiseBuffer;
+  const len = Math.max(1, Math.floor(ac.sampleRate * 0.25));
+  const buf = ac.createBuffer(1, len, ac.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+  noiseBuffer = buf;
+  return buf;
+}
+
+/**
+ * @param {AudioContext} ac
+ * @param {number} peak
+ * @param {number} attack
+ * @param {number} decay
+ */
+function envGain(ac, peak, attack, decay) {
+  const g = ac.createGain();
+  const t = ac.currentTime;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(Math.max(0.0001, peak), t + attack);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + attack + decay);
+  return g;
+}
+
+/**
+ * Band-passed noise burst (wood/impact body).
+ * @param {AudioContext} ac
+ * @param {number} duration
+ * @param {number} peak
+ * @param {number} filterFreq
+ * @param {number} q
+ */
+function playNoiseBurst(ac, duration, peak, filterFreq, q) {
+  const src = ac.createBufferSource();
+  src.buffer = getNoiseBuffer(ac);
+  const filter = ac.createBiquadFilter();
+  filter.type = "bandpass";
+  filter.frequency.value = filterFreq;
+  filter.Q.value = q;
+  const g = envGain(ac, peak, 0.002, duration);
+  src.connect(filter);
+  filter.connect(g);
+  g.connect(ac.destination);
+  src.start();
+  src.stop(ac.currentTime + duration + 0.05);
+}
+
+/**
+ * Short pitched tone with optional downward slide.
+ * @param {AudioContext} ac
+ * @param {OscillatorType} type
+ * @param {number} freq
+ * @param {number} peak
+ * @param {number} dur
+ * @param {number} [slideTo]
+ */
+function playTone(ac, type, freq, peak, dur, slideTo) {
+  const o = ac.createOscillator();
+  const g = envGain(ac, peak, 0.002, dur);
+  o.type = type;
+  const t = ac.currentTime;
+  o.frequency.setValueAtTime(freq, t);
+  if (slideTo != null && slideTo > 0) {
+    o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+  }
+  o.connect(g);
+  g.connect(ac.destination);
+  o.start();
+  o.stop(t + dur + 0.05);
+}
+
+/** Successful chop — punchier every 4th (punch pose), woodier kick otherwise. */
 function playChopTone() {
   if (muted) return;
   try {
-    gameHitSound.currentTime = 0;
-    gameHitSound.play().catch(e => console.log("Ovoz xatosi:", e));
+    const ac = getAudioCtx();
+    if (!ac) return;
+    if (ac.state === "suspended") void ac.resume();
+    const punch = strikeKind === "punch";
+    if (punch) {
+      // Brighter fist snap + crack
+      playNoiseBurst(ac, 0.055, 0.2, 2100, 0.9);
+      playNoiseBurst(ac, 0.03, 0.1, 4200, 1.2);
+      playTone(ac, "square", 240 + Math.random() * 40, 0.07, 0.045, 95);
+      playTone(ac, "triangle", 520, 0.035, 0.035, 180);
+    } else {
+      // Wood kick thud + mid crack
+      playNoiseBurst(ac, 0.075, 0.17, 780, 0.55);
+      playNoiseBurst(ac, 0.04, 0.08, 1600, 0.8);
+      playTone(ac, "sine", 78 + Math.random() * 12, 0.1, 0.09, 42);
+      playTone(ac, "triangle", 170 + Math.random() * 35, 0.08, 0.065, 70);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Soft UI click (start / unmute). */
+function playUiTap() {
+  if (muted) return;
+  try {
+    const ac = getAudioCtx();
+    if (!ac) return;
+    if (ac.state === "suspended") void ac.resume();
+    playTone(ac, "sine", 660, 0.03, 0.04, 420);
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Game-over / energy-out cue.
+ * @param {string} [reason]
+ */
+function playGameOverSfx(reason) {
+  if (muted) return;
+  try {
+    const ac = getAudioCtx();
+    if (!ac) return;
+    if (ac.state === "suspended") void ac.resume();
+    const energyOut = typeof reason === "string" && /vaqt|tugadi/i.test(reason);
+    if (energyOut) {
+      // Soft depleting whistle
+      playTone(ac, "sine", 320, 0.06, 0.22, 90);
+      playTone(ac, "triangle", 180, 0.04, 0.28, 60);
+    } else {
+      // Branch hit — heavy dull impact
+      playNoiseBurst(ac, 0.14, 0.22, 420, 0.45);
+      playTone(ac, "sine", 110, 0.12, 0.18, 40);
+      playTone(ac, "triangle", 70, 0.08, 0.22, 35);
+    }
   } catch {
     /* ignore */
   }
@@ -1294,6 +1441,7 @@ function endGame(reason) {
   deathStartedAt = performance.now();
   heroPose = "hurt";
   pendingOverReason = reason || "Yana urinib ko‘ring!";
+  playGameOverSfx(pendingOverReason);
   // Overlay + score submit wait until Mag‘lubiyat pose lands (see loop)
 }
 
@@ -1369,10 +1517,12 @@ async function loadBest() {
 }
 
 function startGame() {
+  unlockAudio();
   resetRun();
   phase = "playing";
   hideOverlay();
   lastTs = performance.now();
+  playUiTap();
 }
 
 function togglePause() {
@@ -1401,12 +1551,14 @@ canvas.addEventListener(
   "pointerdown",
   (ev) => {
     ev.preventDefault();
+    unlockAudio();
     onPointer(ev.clientX);
   },
   { passive: false },
 );
 
 window.addEventListener("keydown", (ev) => {
+  unlockAudio();
   if (ev.key === "ArrowLeft" || ev.key === "a" || ev.key === "A") {
     if (phase === "ready") startGame();
     else if (phase === "playing") chop("left");
@@ -1421,10 +1573,15 @@ window.addEventListener("keydown", (ev) => {
   } else if (ev.key === "m" || ev.key === "M") {
     muted = !muted;
     btnMute?.classList.toggle("muted", muted);
+    if (!muted) {
+      unlockAudio();
+      playUiTap();
+    }
   }
 });
 
 primaryBtn.addEventListener("click", () => {
+  unlockAudio();
   startGame();
 });
 
@@ -1432,6 +1589,10 @@ btnMute?.addEventListener("click", (ev) => {
   ev.stopPropagation();
   muted = !muted;
   btnMute.classList.toggle("muted", muted);
+  if (!muted) {
+    unlockAudio();
+    playUiTap();
+  }
 });
 
 btnPause?.addEventListener("click", (ev) => {
