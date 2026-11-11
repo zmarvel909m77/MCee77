@@ -1,636 +1,42 @@
-/**
- * Karate Strike — Timberman-style chop arcade.
- * Tap left/right to chop. Same-side branch = game over.
- * 1 successful chop = 1 stored point. High score only on server.
- * Hero: user sprite atlas (cap / white tee / baggy pants) — idle, walk,
- * Tepish kick, punch, hurt → Mag‘lubiyat defeat.
- */
+```javascript
+    const sky = ctx.createLinearGradient(0, 0, 0, h);
+    sky.addColorStop(0, "#3a1a6e");
+    sky.addColorStop(0.28, "#6b1f78");
+    sky.addColorStop(0.55, "#c23a7a");
+    sky.addColorStop(0.78, "#e85a8a");
+    sky.addColorStop(1, "#2a1038");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, w, h);
 
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
-const overlay = document.getElementById("overlay");
-const overlayTitle = document.getElementById("overlayTitle");
-const overlayText = document.getElementById("overlayText");
-const overlayScore = document.getElementById("overlayScore");
-const submitStatus = document.getElementById("submitStatus");
-const primaryBtn = document.getElementById("primaryBtn");
-const hudScore = document.getElementById("hudScore");
-const hudBest = document.getElementById("hudBest");
-const energyBar = document.getElementById("energyBar");
-const multiBar = document.getElementById("multiBar");
-const multiBadge = document.getElementById("multiBadge");
-const hint = document.getElementById("hint");
-const btnMute = document.getElementById("btnMute");
-const btnPause = document.getElementById("btnPause");
-
-const tg = window.Telegram?.WebApp;
-
-/**
- * Sync CSS --app-height to Telegram's stable viewport (avoids 100vh drift)
- * and prefer WebApp safe-area insets when CSS env() reports 0.
- */
-function syncAppHeight() {
-  const px =
-    (tg && (tg.viewportStableHeight || tg.viewportHeight)) ||
-    window.visualViewport?.height ||
-    window.innerHeight ||
-    document.documentElement.clientHeight;
-  if (px > 0) {
-    document.documentElement.style.setProperty("--app-height", `${Math.round(px)}px`);
-  }
-  const insetBottom = Math.max(
-    Number(tg?.safeAreaInset?.bottom) || 0,
-    Number(tg?.contentSafeAreaInset?.bottom) || 0,
-  );
-  if (insetBottom > 0) {
-    document.documentElement.style.setProperty(
-      "--safe-bottom",
-      `${Math.round(insetBottom)}px`,
+    const glow = ctx.createRadialGradient(
+      w * 0.5,
+      baseY * 0.72,
+      10,
+      w * 0.5,
+      baseY * 0.72,
+      w * 0.55,
     );
+    glow.addColorStop(0, "rgba(255, 160, 120, 0.35)");
+    glow.addColorStop(0.45, "rgba(220, 70, 140, 0.18)");
+    glow.addColorStop(1, "rgba(40, 10, 60, 0)");
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(w * 0.5, baseY * 0.72, w * 0.55, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(40, 12, 60, 0.35)";
+    drawCloud(w * 0.18, baseY * 0.28, 48);
+    drawCloud(w * 0.78, baseY * 0.22, 40);
+    drawCloud(w * 0.55, baseY * 0.18, 28);
+
+    ctx.fillStyle = "#1a0828";
+    drawTorii(w * 0.22, baseY - 8, Math.min(90, w * 0.28));
+    drawPagoda(w * 0.72, baseY - 4, Math.min(70, w * 0.2));
+    drawPine(w * 0.08, baseY, 38);
+    drawPine(w * 0.92, baseY, 44);
+    drawPine(w * 0.38, baseY, 28);
+    drawBush(w * 0.5, baseY, 36);
   }
-}
-
-if (tg) {
-  tg.ready();
-  tg.expand();
-  if (typeof tg.disableVerticalSwipes === "function") {
-    tg.disableVerticalSwipes();
-  }
-  try {
-    tg.setHeaderColor("#2a1248");
-    tg.setBackgroundColor("#1a0f2e");
-  } catch {
-    /* older clients */
-  }
-  syncAppHeight();
-} else {
-  syncAppHeight();
-}
-
-/** @typedef {"left"|"right"|null} Side */
-/** @typedef {"ready"|"playing"|"paused"|"dying"|"over"} Phase */
-/** @typedef {"idle"|"walk"|"kick"|"punch"|"hurt"|"defeat"} HeroPose */
-
-/* ── Feel / timing targets (2D side-view sprite game) ─────────────── */
-/** Target game loop rate (requestAnimationFrame + dt clamp). */
-const TARGET_FPS = 60;
-/** Max simulation step (seconds) — clamps hitches; ~2 frames @ 60 FPS. */
-const DT_MAX = 2 / TARGET_FPS;
-/** Hero atlas frame cadence (walk cycle) — mid of 30–60 FPS. */
-const SPRITE_FPS = 45;
-/** Walk cycle uses 4 atlas frames at SPRITE_FPS. */
-const WALK_MS = Math.round((4 / SPRITE_FPS) * 1000);
-/** Kick / hit pose hold — mid of 0.08–0.15 s. */
-const CHOP_MS = 120;
-/** Trunk visual height as fraction of canvas (mid of 75–90%). */
-const TREE_HEIGHT_FRAC = 0.82;
-const TREE_HEIGHT_MIN_FRAC = 0.75;
-const TREE_HEIGHT_MAX_FRAC = 0.9;
-/** Hero height as fraction of tree height (mid of 8–12%). */
-const HERO_OF_TREE_FRAC = 0.1;
-const HERO_OF_TREE_MIN = 0.08;
-const HERO_OF_TREE_MAX = 0.12;
-/** One segment settles in this many ms — mid of 0.25–0.6 s; queueable. */
-const DROP_DURATION_MS = 280;
-const DROP_DURATION_MIN_MS = 250;
-const DROP_DURATION_MAX_MS = 600;
-/** Debris spin while flying — mid of 90°–180°. */
-const DEBRIS_SPIN_DEG_MIN = 90;
-const DEBRIS_SPIN_DEG_MAX = 180;
-/** Debris gravity (px/s²). */
-const DEBRIS_GRAVITY = 980;
-/** Dark reflective ground strip ≈ 1 cm on phone (~40–48 CSS px). */
-const GROUND_MIN = 40;
-const GROUND_MAX = 48;
-
-/**
- * Live segment count — derived in layout() from TREE_HEIGHT_FRAC.
- * Starts at 5; resized when the canvas lays out.
- */
-let SEGMENTS = 5;
-const ENERGY_MAX = 100;
-/** Base drain/sec — scaled by difficultyFor(score). */
-const ENERGY_DRAIN = 11;
-/** Base refill per hit — scaled by difficultyFor(score). */
-const ENERGY_REFILL = 18;
-/** Score below this = easy same-side streaks + forgiving timer. */
-const DIFF_EASY_UNTIL = 20;
-const HURT_MS = 380;
-const DEFEAT_HOLD_MS = 520;
-const MULTI_DECAY = 0.55;
-const MULTI_GAIN = 0.14;
-const MULTI_MAX = 2.5;
-
-/** Sprite atlas — feet-anchored frames facing right (mirror for right side). */
-const HERO_ATLAS = {
-  image: "./hero-atlas.png",
-  face: "right",
-  nativeH: 160,
-  frames: {
-    idle: { x: 2, y: 2, w: 90, h: 160 },
-    walk0: { x: 94, y: 2, w: 117, h: 160 },
-    walk1: { x: 213, y: 2, w: 118, h: 160 },
-    walk2: { x: 333, y: 2, w: 117, h: 160 },
-    walk3: { x: 452, y: 2, w: 163, h: 160 },
-    punch: { x: 617, y: 2, w: 168, h: 160 },
-    kick: { x: 787, y: 2, w: 143, h: 160 },
-    slam: { x: 2, y: 164, w: 194, h: 160 },
-    front: { x: 198, y: 164, w: 79, h: 160 },
-    back: { x: 279, y: 164, w: 69, h: 160 },
-    crouch: { x: 350, y: 164, w: 131, h: 160 },
-    jump: { x: 483, y: 164, w: 109, h: 160 },
-    hurt: { x: 594, y: 164, w: 191, h: 160 },
-    defeat: { x: 787, y: 164, w: 140, h: 65 },
-  },
-};
-
-const heroImg = new Image();
-let heroReady = false;
-heroImg.onload = () => {
-  heroReady = true;
-};
-heroImg.onerror = () => {
-  heroReady = false;
-};
-heroImg.src = HERO_ATLAS.image;
-
-/** @type {Phase} */
-let phase = "ready";
-let score = 0;
-let best = 0;
-let energy = ENERGY_MAX;
-/** Visual combo multiplier only — scoring stays 1 hit = 1 point. */
-let multi = 1;
-let multiFill = 0;
-/** @type {Side} */
-let playerSide = "right";
-/** @type {Side[]} */
-let trunk = [];
-let chopping = false;
-let chopUntil = 0;
-/** @type {HeroPose} */
-let heroPose = "idle";
-/** Strike flavor for this chop — prefer kick (Tepish). */
-/** @type {"kick"|"punch"} */
-let strikeKind = "kick";
-let walkUntil = 0;
-let walkStartedAt = 0;
-let deathStartedAt = 0;
-let pendingOverReason = "";
-let lastTs = 0;
-let submitting = false;
-let lastSubmitted = false;
-let muted = false;
-let animT = 0;
-/** Grace seconds after start before timer pressure. */
-let graceLeft = 0;
-/** Alternate punch occasionally so sheet punch+stars also appear. */
-let strikeCount = 0;
-/**
- * Trunk drop after chop: ≤0 px. Stack is drawn raised by this amount so a
- * brief gap opens, then eases flush onto the stump (never left hovering).
- * Time-based anim so settle always completes even if a frame hitches.
- * @type {{ start: number, from: number, duration: number } | null}
- */
-let trunkDropAnim = null;
-/** Cached sample of trunkDropAnim (updated each frame). */
-let trunkDropY = 0;
-
-/**
- * Flying split-log chunks (bo‘linish).
- * @type {{ x: number, y: number, vx: number, vy: number, rot: number, vr: number, life: number, w: number, h: number, branch: Side, grounded?: boolean }[]}
- */
-let debris = [];
-/** @type {{ x: number, y: number, vy: number, life: number, text: string }[]} */
-let floats = [];
-/** @type {{ x: number, y: number, r: number, a: number, vy: number, vx: number }[]} */
-let chips = [];
-/** @type {{ x: number, y: number, s: number, rot: number, vr: number, vy: number }[]} */
-let petals = [];
-
-function authPayload() {
-  const initData = tg?.initData || "";
-  if (initData) return { initData };
-  const inTelegram = Boolean(tg?.initDataUnsafe?.user?.id);
-  if (inTelegram) return null;
-  let id = Number(sessionStorage.getItem("gb_dev_id") || 0);
-  if (!id) {
-    id = Date.now() % 1_000_000;
-    sessionStorage.setItem("gb_dev_id", String(id));
-  }
-  return { devTelegramId: id, displayName: `Dev ${id}` };
-}
-
-async function waitForAuthPayload(maxMs = 2500) {
-  const started = Date.now();
-  let payload = authPayload();
-  while (!payload && Date.now() - started < maxMs) {
-    await new Promise((r) => setTimeout(r, 100));
-    payload = authPayload();
-  }
-  return payload;
-}
-
-/**
- * Mulberry32 — deterministic stream from a per-run seed.
- * @param {number} seed
- * @returns {() => number} in [0, 1)
- */
-function createRng(seed) {
-  let s = seed >>> 0;
-  return function rand() {
-    s = (s + 0x6d2b79f5) | 0;
-    let t = Math.imul(s ^ (s >>> 15), 1 | s);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-/**
- * TreeBranchController — random fair branch combos with empty gaps.
- *
- * Empty segments ARE allowed (not every block has a branch).
- * Combos of 1–3 consecutive same-side branches; random L/R; random
- * gaps between groups; no back-to-back identical combo; new seed each run.
- * Never both sides on one height (always one safe side at the player).
- */
-const TreeBranchController = {
-  seed: 0,
-  /** @type {() => number} */
-  rand: Math.random,
-  /** @type {"EASY"|"MEDIUM"|"HARD"|"EXTREME"} */
-  tier: "EASY",
-  gapLeft: 0,
-  comboLeft: 0,
-  /** @type {"left"|"right"|null} */
-  comboSide: null,
-  /** Last finished combo key e.g. "left:2" */
-  lastComboKey: "",
-  /** @type {"left"|"right"|null} */
-  pendingSide: null,
-  pendingLen: 0,
-  pendingComboKey: "",
-
-  /**
-   * @param {number} [seed]
-   */
-  reset(seed) {
-    this.seed =
-      seed != null
-        ? seed >>> 0
-        : (Date.now() ^ ((Math.random() * 0x100000000) >>> 0)) >>> 0;
-    this.rand = createRng(this.seed);
-    this.tier = "EASY";
-    this.gapLeft = 0;
-    this.comboLeft = 0;
-    this.comboSide = null;
-    this.lastComboKey = "";
-    this.pendingSide = null;
-    this.pendingLen = 0;
-    this.pendingComboKey = "";
-    this._planNext(0);
-  },
-
-  /**
-   * Map score → difficulty tier.
-   * @param {number} score
-   * @returns {"EASY"|"MEDIUM"|"HARD"|"EXTREME"}
-   */
-  tierFor(score) {
-    if (score < 15) return "EASY";
-    if (score < 40) return "MEDIUM";
-    if (score < 80) return "HARD";
-    return "EXTREME";
-  },
-
-  /**
-   * Gap + combo-length weights by tier.
-   * @param {"EASY"|"MEDIUM"|"HARD"|"EXTREME"} tier
-   */
-  params(tier) {
-    switch (tier) {
-      case "EASY":
-        // Few branches, large gaps, mostly 1-branch combos
-        return {
-          gapMin: 2,
-          gapMax: 5,
-          comboWeights: [0.78, 0.2, 0.02],
-          switchBias: 0.55,
-        };
-      case "MEDIUM":
-        return {
-          gapMin: 1,
-          gapMax: 3,
-          comboWeights: [0.42, 0.48, 0.1],
-          switchBias: 0.62,
-        };
-      case "HARD":
-        return {
-          gapMin: 0,
-          gapMax: 2,
-          comboWeights: [0.22, 0.48, 0.3],
-          switchBias: 0.7,
-        };
-      default:
-        // EXTREME — dense, 1–3 streaks, small gaps
-        return {
-          gapMin: 0,
-          gapMax: 1,
-          comboWeights: [0.18, 0.37, 0.45],
-          switchBias: 0.78,
-        };
-    }
-  },
-
-  /**
-   * @param {number[]} weights length 3 → combo lens 1..3
-   * @returns {number}
-   */
-  _pickComboLen(weights) {
-    const r = this.rand();
-    let acc = 0;
-    for (let i = 0; i < weights.length; i++) {
-      acc += weights[i];
-      if (r < acc) return i + 1;
-    }
-    return 1;
-  },
-
-  /**
-   * Plan the next empty gap + upcoming combo (not yet started).
-   * Avoids repeating the same combo key back-to-back.
-   * @param {number} score
-   */
-  _planNext(score) {
-    this.tier = this.tierFor(score);
-    const p = this.params(this.tier);
-    this.gapLeft =
-      p.gapMin + Math.floor(this.rand() * (p.gapMax - p.gapMin + 1));
-
-    const lastSide = this.lastComboKey.startsWith("left")
-      ? "left"
-      : this.lastComboKey.startsWith("right")
-        ? "right"
-        : null;
-
-    // Gap 0 + same side would merge into a streak > 3 — force a switch
-    if (this.gapLeft === 0 && lastSide) {
-      // Will force opposite side below
-    }
-
-    let tries = 0;
-    let side = /** @type {"left"|"right"} */ ("left");
-    let len = 1;
-    let key = "";
-    do {
-      len = this._pickComboLen(p.comboWeights);
-      if (this.gapLeft === 0 && lastSide) {
-        side = lastSide === "left" ? "right" : "left";
-      } else if (lastSide && this.rand() < p.switchBias) {
-        side = lastSide === "left" ? "right" : "left";
-      } else {
-        side = this.rand() < 0.5 ? "left" : "right";
-      }
-      key = `${side}:${len}`;
-      tries += 1;
-    } while (key === this.lastComboKey && tries < 10);
-
-    this.pendingSide = side;
-    this.pendingLen = len;
-    this.pendingComboKey = key;
-  },
-
-  /**
-   * Emit the next trunk segment (null | left | right).
-   * @param {number} score
-   * @returns {Side}
-   */
-  next(score) {
-    this.tier = this.tierFor(score);
-
-    if (this.gapLeft > 0) {
-      this.gapLeft -= 1;
-      return null;
-    }
-
-    if (this.comboLeft <= 0) {
-      // Begin the pending combo
-      this.comboSide = this.pendingSide;
-      this.comboLeft = this.pendingLen;
-      this.lastComboKey = this.pendingComboKey;
-    }
-
-    const out = this.comboSide;
-    this.comboLeft -= 1;
-    if (this.comboLeft <= 0) {
-      this.comboSide = null;
-      this._planNext(score);
-    }
-    return out;
-  },
-
-  /**
-   * Build opening queue. Fair: player starts on the right → bottom
-   * must not be a right-side hazard (empty or left only).
-   * @param {number} count
-   * @param {number} [score]
-   * @returns {Side[]}
-   */
-  seedQueue(count, score = 0) {
-    // Soft opening: at least one empty at the stump
-    this.gapLeft = Math.max(this.gapLeft, 1 + Math.floor(this.rand() * 2));
-    // First combo prefers left (safe vs default stand-right)
-    this.pendingSide = "left";
-    this.pendingLen = 1;
-    this.pendingComboKey = "left:1";
-
-    /** @type {Side[]} */
-    const out = [];
-    for (let i = 0; i < count; i++) {
-      out.push(this.next(score));
-    }
-    if (out[0] === "right") out[0] = null;
-    return out;
-  },
-};
-
-/**
- * Timer / energy scale from the same score tiers as TreeBranchController.
- * @param {number} runScore
- */
-function difficultyFor(runScore) {
-  const tier = TreeBranchController.tierFor(runScore);
-  const easy = tier === "EASY";
-  const t = Math.max(0, runScore - DIFF_EASY_UNTIL);
-  const drainScale =
-    tier === "EASY"
-      ? 0.32 + runScore * 0.01
-      : tier === "MEDIUM"
-        ? 0.7 + (runScore - 15) * 0.012
-        : tier === "HARD"
-          ? Math.min(1.45, 1.0 + (runScore - 40) * 0.012)
-          : Math.min(1.75, 1.25 + (runScore - 80) * 0.01);
-  const refill =
-    tier === "EASY"
-      ? 28 - runScore * 0.2
-      : tier === "MEDIUM"
-        ? 22 - (runScore - 15) * 0.12
-        : tier === "HARD"
-          ? Math.max(13, 18 - (runScore - 40) * 0.1)
-          : Math.max(11, 14 - (runScore - 80) * 0.08);
-  return { easy, tier, drainScale, refill };
-}
-
-function seedTrunk() {
-  trunk = TreeBranchController.seedQueue(SEGMENTS, score);
-  trunk.length = SEGMENTS;
-}
-
-function resetRun() {
-  score = 0;
-  energy = ENERGY_MAX;
-  multi = 1;
-  multiFill = 0;
-  playerSide = "right";
-  chopping = false;
-  chopUntil = 0;
-  heroPose = "idle";
-  strikeKind = "kick";
-  walkUntil = 0;
-  walkStartedAt = 0;
-  deathStartedAt = 0;
-  pendingOverReason = "";
-  strikeCount = 0;
-  lastSubmitted = false;
-  trunkDropAnim = null;
-  trunkDropY = 0;
-  graceLeft = 2.2;
-  debris = [];
-  floats = [];
-  chips = [];
-  // New random seed each run → new branch combination plan
-  TreeBranchController.reset();
-  seedTrunk();
-  hudScore.textContent = "0";
-  setEnergyUi();
-  setMultiUi();
-  submitStatus.textContent = "";
-  submitStatus.classList.remove("error", "ok");
-}
-
-function setEnergyUi() {
-  const t = Math.max(0, Math.min(1, energy / ENERGY_MAX));
-  energyBar.style.transform = `scaleX(${t})`;
-}
-
-function setMultiUi() {
-  const display = Math.max(1, Math.min(MULTI_MAX, multi));
-  const label =
-    display < 1.05 ? "1X" : `${display.toFixed(1).replace(/\.0$/, "")}X`;
-  multiBadge.textContent = label;
-  multiBar.style.transform = `scaleX(${Math.max(0.06, Math.min(1, multiFill))})`;
-}
-
-function showOverlay(title, text, btnLabel) {
-  overlayTitle.textContent = title;
-  overlayText.textContent = text;
-  overlayScore.textContent = String(score);
-  primaryBtn.textContent = btnLabel;
-  overlay.classList.remove("hidden");
-  hint.style.visibility = "hidden";
-}
-
-function hideOverlay() {
-  overlay.classList.add("hidden");
-  hint.style.visibility = "visible";
-}
-
-function resize() {
-  syncAppHeight();
-  // CSS grid owns the box (100% of minmax(0,1fr) cell). Do NOT size the
-  // canvas to #wrap — that overflowed HUD+hint and hid the ground strip.
-  canvas.style.width = "100%";
-  canvas.style.height = "100%";
-  const w = Math.max(1, Math.floor(canvas.clientWidth));
-  const h = Math.max(1, Math.floor(canvas.clientHeight));
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  const bw = Math.floor(w * dpr);
-  const bh = Math.floor(h * dpr);
-  if (canvas.width !== bw || canvas.height !== bh) {
-    canvas.width = bw;
-    canvas.height = bh;
-  }
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-}
-
-function roundRect(x, y, w, h, r, color) {
-  const rr = Math.min(r, w / 2, h / 2);
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.moveTo(x + rr, y);
-  ctx.arcTo(x + w, y, x + w, y + h, rr);
-  ctx.arcTo(x + w, y + h, x, y + h, rr);
-  ctx.arcTo(x, y + h, x, y, rr);
-  ctx.arcTo(x, y, x + w, y, rr);
-  ctx.closePath();
-  ctx.fill();
-}
-
-function seedPetals(w, h) {
-  petals = [];
-  for (let i = 0; i < 18; i++) {
-    petals.push({
-      x: Math.random() * w,
-      y: Math.random() * h * 0.75,
-      s: 3 + Math.random() * 5,
-      rot: Math.random() * Math.PI * 2,
-      vr: (Math.random() - 0.5) * 0.04,
-      vy: 0.25 + Math.random() * 0.55,
-    });
-  }
-}
-
-function drawAtmosphere(w, h, baseY) {
-  const sky = ctx.createLinearGradient(0, 0, 0, h);
-  sky.addColorStop(0, "#3a1a6e");
-  sky.addColorStop(0.28, "#6b1f78");
-  sky.addColorStop(0.55, "#c23a7a");
-  sky.addColorStop(0.78, "#e85a8a");
-  sky.addColorStop(1, "#2a1038");
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, w, h);
-
-  // Soft dusk glow behind silhouettes
-  const glow = ctx.createRadialGradient(
-    w * 0.5,
-    baseY * 0.72,
-    10,
-    w * 0.5,
-    baseY * 0.72,
-    w * 0.55,
-  );
-  glow.addColorStop(0, "rgba(255, 160, 120, 0.35)");
-  glow.addColorStop(0.45, "rgba(220, 70, 140, 0.18)");
-  glow.addColorStop(1, "rgba(40, 10, 60, 0)");
-  ctx.fillStyle = glow;
-  ctx.beginPath();
-  ctx.arc(w * 0.5, baseY * 0.72, w * 0.55, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Soft cloud blobs
-  ctx.fillStyle = "rgba(40, 12, 60, 0.35)";
-  drawCloud(w * 0.18, baseY * 0.28, 48);
-  drawCloud(w * 0.78, baseY * 0.22, 40);
-  drawCloud(w * 0.55, baseY * 0.18, 28);
-
-  // Midground silhouettes — original torii / pagoda / pine (not GAMEE bitmaps)
-  ctx.fillStyle = "#1a0828";
-  drawTorii(w * 0.22, baseY - 8, Math.min(90, w * 0.28));
-  drawPagoda(w * 0.72, baseY - 4, Math.min(70, w * 0.2));
-  drawPine(w * 0.08, baseY, 38);
-  drawPine(w * 0.92, baseY, 44);
-  drawPine(w * 0.38, baseY, 28);
-  drawBush(w * 0.5, baseY, 36);
 
   // Falling petals / leaves
   ctx.fillStyle = "rgba(20, 6, 30, 0.55)";
@@ -644,7 +50,7 @@ function drawAtmosphere(w, h, baseY) {
     ctx.restore();
   }
 
-  // Dark reflective ground strip (~1 cm / 40–48 CSS px above canvas bottom)
+  // Dark reflective ground strip
   const ground = ctx.createLinearGradient(0, baseY, 0, h);
   ground.addColorStop(0, "#2a1438");
   ground.addColorStop(0.2, "#1a0c24");
@@ -653,13 +59,11 @@ function drawAtmosphere(w, h, baseY) {
   ctx.fillStyle = ground;
   ctx.fillRect(0, baseY, w, Math.max(0, h - baseY));
 
-  // Horizon rim — makes the ground plane readable against pink sky
   ctx.fillStyle = "rgba(255, 200, 220, 0.28)";
   ctx.fillRect(0, baseY - 1, w, 3);
   ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
   ctx.fillRect(0, baseY + 2, w, 4);
 
-  // Reflection streaks
   ctx.strokeStyle = "rgba(255, 200, 220, 0.1)";
   ctx.lineWidth = 1.5;
   const groundSpan = Math.max(8, h - baseY);
@@ -672,7 +76,6 @@ function drawAtmosphere(w, h, baseY) {
     ctx.stroke();
   }
 
-  // Foreground bush silhouettes — rooted on the ground plane (not past the fold)
   ctx.fillStyle = "#0c0614";
   const bushY = Math.min(h, baseY + Math.max(10, (h - baseY) * 0.55));
   drawBush(w * 0.12, bushY, 50);
@@ -691,10 +94,8 @@ function drawTorii(cx, baseY, scale) {
   const w = scale;
   const h = scale * 0.85;
   const postW = w * 0.08;
-  // posts
   ctx.fillRect(cx - w * 0.35, baseY - h * 0.75, postW, h * 0.75);
   ctx.fillRect(cx + w * 0.35 - postW, baseY - h * 0.75, postW, h * 0.75);
-  // top lintel (kasagi)
   ctx.beginPath();
   ctx.moveTo(cx - w * 0.5, baseY - h * 0.78);
   ctx.quadraticCurveTo(cx, baseY - h * 0.92, cx + w * 0.5, baseY - h * 0.78);
@@ -702,7 +103,6 @@ function drawTorii(cx, baseY, scale) {
   ctx.quadraticCurveTo(cx, baseY - h * 0.82, cx - w * 0.48, baseY - h * 0.7);
   ctx.closePath();
   ctx.fill();
-  // lower beam (nuki)
   ctx.fillRect(cx - w * 0.38, baseY - h * 0.55, w * 0.76, h * 0.07);
 }
 
@@ -721,7 +121,6 @@ function drawPagoda(cx, baseY, scale) {
     ctx.fill();
     ctx.fillRect(cx - tw * 0.28, ty + th, tw * 0.56, scale * 0.08);
   }
-  // finial
   ctx.fillRect(cx - 2, baseY - scale * 0.22 * tiers - 14, 4, 14);
 }
 
@@ -766,15 +165,12 @@ function drawBush(cx, baseY, r) {
  * @param {Side} side
  */
 function drawBranch(x, y, trunkW, segH, side) {
-  // Top-aligned: plank flush with the upper seam of the block (ref)
   const bh = Math.min(18, Math.max(12, segH * 0.12));
-  const by = y; // exact top edge
-  const bw = trunkW * 2.15; // longer plank so thin trunk still reads
+  const by = y;
+  const bw = trunkW * 2.15;
   const left = side === "left";
   const hx = left ? x - bw + 4 : x + trunkW - 4;
-  // Wooden plank — same family as trunk
   roundRect(hx, by, bw, bh, 4, "#a67c52");
-  // grain
   ctx.strokeStyle = "rgba(70, 40, 20, 0.28)";
   ctx.lineWidth = 1.2;
   for (let i = 0; i < 2; i++) {
@@ -784,7 +180,6 @@ function drawBranch(x, y, trunkW, segH, side) {
     ctx.lineTo(hx + bw - 6, gy + (i % 2));
     ctx.stroke();
   }
-  // dark edge near trunk
   ctx.fillStyle = "rgba(60, 30, 15, 0.28)";
   if (left) ctx.fillRect(hx + bw - 8, by, 8, bh);
   else ctx.fillRect(hx, by, 8, bh);
@@ -802,7 +197,6 @@ function heroFrameKey(now) {
     return "defeat";
   }
   if (chopping && now < chopUntil) {
-    // Side switch: brief walk cycle, then Tepish / punch
     if (now < walkUntil) {
       const t = (now - walkStartedAt) / Math.max(1, WALK_MS);
       const idx = Math.min(3, Math.floor(t * 4));
@@ -827,11 +221,10 @@ function heroFrameKey(now) {
  * @param {number} [scaleMul]
  */
 function drawPlayer(x, y, side, now, scaleMul = 1) {
-  const faceRight = side === "left"; // left of trunk → face right
+  const faceRight = side === "left";
   const key = heroFrameKey(now);
   const fr = HERO_ATLAS.frames[key] || HERO_ATLAS.frames.idle;
 
-  // Hero height = HERO_OF_TREE_FRAC × tree height (layout)
   const { heroH } = layout();
   const targetH =
     key === "defeat" ? heroH * 0.4 * scaleMul : heroH * scaleMul;
@@ -839,7 +232,6 @@ function drawPlayer(x, y, side, now, scaleMul = 1) {
   const dw = fr.w * scale;
   const dh = fr.h * scale;
 
-  // Subtle idle breath; strike lifts slightly toward trunk
   let bob = 0;
   let lift = 0;
   if (key === "idle") bob = Math.sin(animT * 3.2) * 1.4;
@@ -850,7 +242,6 @@ function drawPlayer(x, y, side, now, scaleMul = 1) {
   const drawX = x;
   const drawY = feetY - dh - (key === "defeat" ? -2 : 0) - lift;
 
-  // shadow under feet
   ctx.fillStyle = "rgba(0,0,0,0.28)";
   ctx.beginPath();
   const shadowW = key === "defeat" ? dw * 0.45 : Math.min(22, dw * 0.28);
@@ -858,7 +249,6 @@ function drawPlayer(x, y, side, now, scaleMul = 1) {
   ctx.fill();
 
   if (!heroReady) {
-    // Minimal placeholder only until atlas loads — never red-gi
     ctx.fillStyle = "#f5f5f5";
     roundRect(drawX - 12, feetY - 56, 24, 56, 6, "#f5f5f5");
     ctx.fillStyle = "#111";
@@ -868,34 +258,12 @@ function drawPlayer(x, y, side, now, scaleMul = 1) {
 
   ctx.save();
   if (faceRight) {
-    // native atlas faces right
     ctx.translate(drawX - dw / 2, drawY);
-    ctx.drawImage(
-      heroImg,
-      fr.x,
-      fr.y,
-      fr.w,
-      fr.h,
-      0,
-      0,
-      dw,
-      dh,
-    );
+    ctx.drawImage(heroImg, fr.x, fr.y, fr.w, fr.h, 0, 0, dw, dh);
   } else {
-    // mirror for right side of trunk
     ctx.translate(drawX + dw / 2, drawY);
     ctx.scale(-1, 1);
-    ctx.drawImage(
-      heroImg,
-      fr.x,
-      fr.y,
-      fr.w,
-      fr.h,
-      0,
-      0,
-      dw,
-      dh,
-    );
+    ctx.drawImage(heroImg, fr.x, fr.y, fr.w, fr.h, 0, 0, dw, dh);
   }
   ctx.restore();
 }
@@ -923,7 +291,6 @@ function debrisSpinRate(dir, lifeSec) {
 }
 
 function spawnDebris(cx, baseY, trunkW, segH, side, branch = null) {
-  // Opposite the hero — right kick → chunk flies left-down
   const dir = side === "left" ? 1 : -1;
   const chunkW = trunkW * 0.48;
   const chunkH = Math.min(26, Math.max(16, segH * 0.16));
@@ -933,7 +300,7 @@ function spawnDebris(cx, baseY, trunkW, segH, side, branch = null) {
     return {
       x: cx + dir * (4 + Math.random() * 6),
       y: baseY - segH * (0.3 + Math.random() * 0.25),
-      vx: dir * (180 + Math.random() * 140), // px/s
+      vx: dir * (180 + Math.random() * 140),
       vy: -(40 + Math.random() * 80),
       rot: dir * 0.2,
       vr: debrisSpinRate(dir * (Math.random() < 0.5 ? 1 : -1), life),
@@ -967,16 +334,12 @@ function layout() {
   const w = canvas.clientWidth;
   const h = canvas.clientHeight;
   const cx = w * 0.5;
-  // Thinner pole (ingichkaroq) — branches still top-mounted on each block
   const trunkW = Math.min(46, Math.max(40, w * 0.115));
-  // Keep ~1cm ground visible above the canvas bottom (shell already clears
-  // safe-area / home indicator via padding-bottom + --app-height).
   const groundH = Math.max(
     GROUND_MIN,
     Math.min(GROUND_MAX, Math.round(h * 0.09)),
   );
   const baseY = Math.max(groundH + 80, h - groundH);
-  // Tree height = 75–90% of canvas (TREE_HEIGHT_FRAC), capped by baseY
   const treeH = Math.min(
     baseY,
     Math.max(
@@ -984,7 +347,6 @@ function layout() {
       Math.min(h * TREE_HEIGHT_MAX_FRAC, h * TREE_HEIGHT_FRAC),
     ),
   );
-  // Hero = 8–12% of tree height
   const heroH = Math.max(
     h * TREE_HEIGHT_MIN_FRAC * HERO_OF_TREE_MIN,
     Math.min(
@@ -992,7 +354,6 @@ function layout() {
       treeH * HERO_OF_TREE_FRAC,
     ),
   );
-  // Tall blocks: each longer than the hero; count fills treeH
   const minSegH = heroH * 1.55;
   const nextSegs = Math.max(4, Math.floor(treeH / minSegH));
   const segH = treeH / nextSegs;
@@ -1027,7 +388,6 @@ function sampleTrunkDropY(now = performance.now()) {
     trunkDropY = 0;
     return 0;
   }
-  // QA shot harness: hold the mid-drop pose (do not ease while frozen)
   if (shotFreeze) {
     trunkDropY = trunkDropAnim.from;
     return trunkDropY;
@@ -1038,10 +398,8 @@ function sampleTrunkDropY(now = performance.now()) {
     trunkDropY = 0;
     return 0;
   }
-  // Ease-out cubic — fast start, soft settle flush on stump (KK2 feel)
   const e = 1 - (1 - t) ** 3;
   trunkDropY = trunkDropAnim.from * (1 - e);
-  // Snap when essentially flush so no sub-pixel hover remains
   if (trunkDropY > -0.5) {
     trunkDropAnim = null;
     trunkDropY = 0;
@@ -1085,7 +443,6 @@ function draw(now) {
 
   drawAtmosphere(w, h, baseY);
 
-  // Stump stays fixed — stack slides tekis (vertical only) flush onto it
   roundRect(
     cx - trunkW * 0.65,
     baseY - 4,
@@ -1095,14 +452,11 @@ function draw(now) {
     "#8a6238",
   );
 
-  // Sample drop every paint so settle can't stall between loop ticks
   const dropY = sampleTrunkDropY(
     typeof now === "number" ? now : performance.now(),
   );
   const trunkX = cx - trunkW / 2;
   ctx.save();
-  // No bend / lean / shake — perfectly vertical drop (KK2 slot feel)
-  // Fill only the segment stack bounds (never leave a phantom hover slab)
   const stackTop = baseY - treeH + dropY;
   const stackBottom = baseY + dropY;
   const fillH = Math.max(0, stackBottom - stackTop + 1);
@@ -1119,12 +473,10 @@ function draw(now) {
   for (let i = SEGMENTS - 1; i >= 0; i--) {
     const y = baseY - (i + 1) * segH + dropY;
     const x = trunkX;
-    // Subtle alternating block shade
     if (i % 2 === 0) {
       ctx.fillStyle = "rgba(196, 154, 108, 0.35)";
       ctx.fillRect(x, y, trunkW, segH + 1.5);
     }
-    // Vertical grain
     ctx.strokeStyle = "rgba(90, 50, 25, 0.2)";
     ctx.lineWidth = 1.35;
     for (let g = 0; g < 4; g++) {
@@ -1134,7 +486,6 @@ function draw(now) {
       ctx.lineTo(gx + (g % 2 ? 1.4 : -1), y + segH - 4);
       ctx.stroke();
     }
-    // Top seam of this block — branch attaches here (ref)
     ctx.strokeStyle = "rgba(55, 28, 10, 0.38)";
     ctx.lineWidth = 2.2;
     ctx.beginPath();
@@ -1147,14 +498,12 @@ function draw(now) {
   }
   ctx.restore();
 
-  // Player — feet on stump ledge; close enough for kick to read as trunk hit
   const playerY = baseY + 2;
   const sideGap = Math.max(32, trunkW * 0.52 + 10);
   const px =
     playerSide === "left" ? cx - trunkW / 2 - sideGap : cx + trunkW / 2 + sideGap;
   drawPlayer(px, playerY, playerSide, now);
 
-  // Soft reflection of player
   ctx.save();
   ctx.globalAlpha = 0.14;
   ctx.translate(0, baseY + 6);
@@ -1163,7 +512,6 @@ function draw(now) {
   ctx.restore();
   ctx.globalAlpha = 1;
 
-  // Debris — compact flying wood chunks (ixcham)
   for (const d of debris) {
     const dw = d.w || trunkW * 0.48;
     const dh = d.h || Math.min(26, segH * 0.16);
@@ -1179,7 +527,6 @@ function draw(now) {
     ctx.lineTo(dw / 2 - 4, 0.5);
     ctx.stroke();
     if (d.branch) {
-      // Short stub plank (not a full-size branch)
       const bh = Math.min(8, dh * 0.4);
       const bw = dw * 1.55;
       const left = d.branch === "left";
@@ -1198,7 +545,6 @@ function draw(now) {
   }
   ctx.globalAlpha = 1;
 
-  // Floating +N near kick (HUD Ball/Rekord stays — no mid-trunk score)
   for (const f of floats) {
     ctx.globalAlpha = Math.max(0, f.life);
     ctx.fillStyle = "#fff";
@@ -1220,10 +566,317 @@ function draw(now) {
     ctx.fillText("Pauza", cx, h * 0.45);
   }
 }
+**3-qism.** Ikkinchi qismning tagidan davom ettiring. Shu bilan `game.js` tugaydi.
 
-/**
- * @param {Side} side
- */
+```javascript
+  trunk.shift();
+  trunk.push(TreeBranchController.next(score + 1));
+  beginTrunkDrop(segH);
+
+  score += 1;
+  hudScore.textContent = String(score);
+  const { refill } = difficultyFor(score);
+  energy = Math.min(ENERGY_MAX, energy + refill);
+  multiFill = Math.min(1, multiFill + MULTI_GAIN);
+  multi = Math.min(MULTI_MAX, 1 + multiFill * (MULTI_MAX - 1));
+  setEnergyUi();
+  setMultiUi();
+  playChopTone();
+}
+
+/* ── Arcade SFX (Web Audio: noise + short tones, no big asset packs) ── */
+let audioCtx;
+let noiseBuffer;
+
+function getAudioCtx() {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  if (!audioCtx) audioCtx = new AC();
+  return audioCtx;
+}
+
+function unlockAudio() {
+  const ac = getAudioCtx();
+  if (!ac) return;
+  if (ac.state === "suspended") void ac.resume();
+}
+
+function getNoiseBuffer(ac) {
+  if (noiseBuffer && noiseBuffer.sampleRate === ac.sampleRate) return noiseBuffer;
+  const len = Math.max(1, Math.floor(ac.sampleRate * 0.25));
+  const buf = ac.createBuffer(1, len, ac.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+  noiseBuffer = buf;
+  return buf;
+}
+
+function envGain(ac, peak, attack, decay) {
+  const g = ac.createGain();
+  const t = ac.currentTime;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(Math.max(0.0001, peak), t + attack);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + attack + decay);
+  return g;
+}
+
+function playChopTone() {
+  if (muted) return;
+  const ac = getAudioCtx();
+  if (!ac) return;
+  unlockAudio();
+
+  const t = ac.currentTime;
+  const osc = ac.createOscillator();
+  const gain = envGain(ac, 0.12, 0.005, 0.12);
+  osc.type = "triangle";
+  osc.frequency.setValueAtTime(180, t);
+  osc.frequency.exponentialRampToValueAtTime(75, t + 0.11);
+  osc.connect(gain);
+  gain.connect(ac.destination);
+  osc.start(t);
+  osc.stop(t + 0.14);
+
+  const noise = ac.createBufferSource();
+  noise.buffer = getNoiseBuffer(ac);
+  const filter = ac.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(900, t);
+  const ng = envGain(ac, 0.08, 0.002, 0.09);
+  noise.connect(filter);
+  filter.connect(ng);
+  ng.connect(ac.destination);
+  noise.start(t);
+  noise.stop(t + 0.1);
+}
+
+function playGameOverTone() {
+  if (muted) return;
+  const ac = getAudioCtx();
+  if (!ac) return;
+  unlockAudio();
+  const t = ac.currentTime;
+  const osc = ac.createOscillator();
+  const gain = envGain(ac, 0.14, 0.01, 0.45);
+  osc.type = "sawtooth";
+  osc.frequency.setValueAtTime(220, t);
+  osc.frequency.exponentialRampToValueAtTime(55, t + 0.42);
+  osc.connect(gain);
+  gain.connect(ac.destination);
+  osc.start(t);
+  osc.stop(t + 0.48);
+}
+
+async function submitScore() {
+  if (submitting || lastSubmitted) return;
+  submitting = true;
+  submitStatus.textContent = "Natija saqlanmoqda...";
+  submitStatus.classList.remove("error", "ok");
+
+  try {
+    const payload = await waitForAuthPayload();
+    if (!payload) {
+      submitStatus.textContent = "Telegram tasdiqlash ma’lumoti topilmadi.";
+      submitStatus.classList.add("error");
+      return;
+    }
+
+    const response = await fetch("/api/v1/scores", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...payload, score }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || "Natijani saqlab bo‘lmadi");
+    }
+
+    best = Math.max(best, Number(data.bestScore) || score);
+    hudBest.textContent = String(best);
+    submitStatus.textContent = "Natija saqlandi";
+    submitStatus.classList.add("ok");
+    lastSubmitted = true;
+  } catch (error) {
+    console.error("Score submit error:", error);
+    submitStatus.textContent = error.message || "Server bilan aloqa yo‘q";
+    submitStatus.classList.add("error");
+  } finally {
+    submitting = false;
+  }
+}
+
+async function loadMe() {
+  try {
+    const payload = await waitForAuthPayload();
+    if (!payload) return;
+
+    const response = await fetch("/api/v1/me", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) return;
+    const data = await response.json();
+    best = Number(data.bestScore) || 0;
+    hudBest.textContent = String(best);
+  } catch (error) {
+    console.warn("Profile load error:", error);
+  }
+}
+
+function endGame(reason = "") {
+  if (phase === "over" || phase === "dying") return;
+  phase = "dying";
+  pendingOverReason = reason;
+  deathStartedAt = performance.now();
+  chopping = false;
+  playGameOverTone();
+
+  setTimeout(() => {
+    if (phase !== "dying") return;
+    phase = "over";
+    showOverlay("O‘yin tugadi", reason, "Qayta o‘ynash");
+    void submitScore();
+  }, HURT_MS + DEFEAT_HOLD_MS);
+}
+
+function startGame() {
+  resetRun();
+  phase = "playing";
+  hideOverlay();
+  unlockAudio();
+  lastTs = performance.now();
+}
+
+function togglePause() {
+  if (phase === "playing") {
+    phase = "paused";
+    btnPause.textContent = "Davom etish";
+  } else if (phase === "paused") {
+    phase = "playing";
+    btnPause.textContent = "Pauza";
+    lastTs = performance.now();
+  }
+}
+
+function update(dt) {
+  if (phase !== "playing") return;
+
+  animT += dt;
+  if (graceLeft > 0) {
+    graceLeft = Math.max(0, graceLeft - dt);
+  } else {
+    const { drainScale } = difficultyFor(score);
+    energy = Math.max(0, energy - ENERGY_DRAIN * drainScale * dt);
+    if (energy <= 0) {
+      setEnergyUi();
+      endGame("Quvvat tugadi!");
+      return;
+    }
+  }
+
+  if (chopping && performance.now() >= chopUntil) {
+    chopping = false;
+    heroPose = "idle";
+  }
+
+  multiFill = Math.max(0, multiFill - MULTI_DECAY * dt);
+  multi = 1 + multiFill * (MULTI_MAX - 1);
+
+  updateTrunkDrop(dt);
+  setEnergyUi();
+  setMultiUi();
+
+  for (const p of petals) {
+    p.x += Math.sin(animT * 1.4 + p.rot) * 0.25;
+    p.y += p.vy;
+    p.rot += p.vr;
+    if (p.y > canvas.clientHeight + 10) {
+      p.y = -10;
+      p.x = Math.random() * canvas.clientWidth;
+    }
+  }
+
+  for (const d of debris) {
+    if (d.grounded) continue;
+    d.x += d.vx * dt;
+    d.y += d.vy * dt;
+    d.vy += DEBRIS_GRAVITY * dt;
+    d.rot += d.vr * dt;
+    d.life -= dt;
+    if (d.y > canvas.clientHeight - 35) {
+      d.y = canvas.clientHeight - 35;
+      d.grounded = true;
+    }
+  }
+  debris = debris.filter((d) => d.life > 0);
+
+  for (const c of chips) {
+    c.x += c.vx * dt;
+    c.y += c.vy * dt;
+    c.vy += DEBRIS_GRAVITY * 0.7 * dt;
+    c.a -= dt * 1.4;
+  }
+  chips = chips.filter((c) => c.a > 0);
+
+  for (const f of floats) {
+    f.y += f.vy;
+    f.life -= dt * 1.5;
+  }
+  floats = floats.filter((f) => f.life > 0);
+}
+
+let shotFreeze = false;
+
+function frame(ts) {
+  if (!lastTs) lastTs = ts;
+  const dt = Math.min(DT_MAX, Math.max(0, (ts - lastTs) / 1000));
+  lastTs = ts;
+
+  if (!shotFreeze) update(dt);
+  draw(ts);
+
+  requestAnimationFrame(frame);
+}
+
+function onPointerDown(event) {
+  if (phase === "ready" || phase === "over") {
+    startGame();
+    return;
+  }
+  if (phase !== "playing") return;
+
+  unlockAudio();
+  const rect = canvas.getBoundingClientRect();
+  const x = event.clientX - rect.left;
+  chop(x < rect.width / 2 ? "left" : "right");
+}
+
+canvas.addEventListener("pointerdown", onPointerDown);
+
+primaryBtn.addEventListener("click", () => {
+  if (phase === "ready" || phase === "over") startGame();
+});
+
+btnMute.addEventListener("click", () => {
+  muted = !muted;
+  btnMute.textContent = muted ? "Ovoz yoqish" : "Ovozni o‘chirish";
+});
+
+btnPause.addEventListener("click", togglePause);
+
+window.addEventListener("resize", resize);
+window.addEventListener("orientationchange", resize);
+
+if (tg) {
+  tg.onEvent?.("viewportChanged", resize);
+}
+
+resize();
+void loadMe();
+requestAnimationFrame(frame);
 function chop(side) {
   if (phase !== "playing" || !side) return;
   const now = performance.now();
