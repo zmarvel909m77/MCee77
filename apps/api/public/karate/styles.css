@@ -1,7 +1,6 @@
-
 :root {
-  --bg0: #090016;
-  --bg1: #1b003d;
+  --bg0: #030008;
+  --bg1: #100020;
   --accent: #f5a8ff;
   --hot: #ff245f;
   --ok: #5eead4;
@@ -28,93 +27,149 @@ body {
   overscroll-behavior: none;
   font-family: var(--font);
   color: #fff;
-  background:
-    radial-gradient(ellipse at 50% 0%, #510080 0%, transparent 55%),
-    linear-gradient(180deg, #210044, #080013 85%);
+  background: #020104;
 }
 
 #wrap {
   height: 100%;
   max-height: 100%;
-  max-width: 480px;
+  max-width: 520px;
   margin: 0 auto;
   position: relative;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
-  padding-bottom: var(--safe-bottom);
+  padding: calc(8px + var(--safe-top)) 9px var(--safe-bottom);
   overflow: hidden;
   background:
-    radial-gradient(ellipse at 50% 0%, rgba(157, 0, 255, 0.2), transparent 65%);
+    radial-gradient(ellipse at 50% 0%, rgba(105, 0, 180, .17), transparent 48%),
+    #020104;
 }
 
 .hud {
   display: grid;
-  grid-template-columns: 38px minmax(55px, 1fr) auto;
-  gap: 8px;
+  grid-template-columns: 34px minmax(82px, 1fr) auto;
+  gap: 7px;
   align-items: center;
-  padding: calc(12px + var(--safe-top)) 12px 12px;
-  background: linear-gradient(145deg, rgba(35, 0, 75, 0.96), rgba(10, 0, 29, 0.98));
-  border: 2px solid #a600ff;
-  border-top-color: #f35aff;
-  border-bottom-color: #c000ff;
-  border-radius: 0 0 22px 22px;
+  padding: 13px 12px 9px;
+  background:
+    radial-gradient(ellipse at 40% 0%, rgba(125, 0, 210, .2), transparent 60%),
+    linear-gradient(145deg, #17002d, #080015 72%);
+  border: 2px solid #a900ff;
+  border-bottom: 0;
+  border-radius: 25px 25px 0 0;
   box-shadow:
-    0 0 8px #d000ff,
-    0 0 20px rgba(196, 0, 255, 0.65),
-    inset 0 0 16px rgba(185, 0, 255, 0.25);
+    0 0 7px #e000ff,
+    0 0 19px rgba(183, 0, 255, .72),
+    inset 0 0 16px rgba(185, 0, 255, .2);
   position: relative;
   z-index: 3;
 }
 
+.hud::before,
+.meters::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  left: 3%;
+  right: 3%;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    #f8baff 18%,
+    #d000ff 50%,
+    #f8baff 82%,
+    transparent
+  );
+  box-shadow: 0 0 8px #f000ff, 0 0 16px #b000ff;
+}
+
+.hud::before {
+  top: 3px;
+}
+
 .back {
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 11px;
   display: grid;
   place-items: center;
   text-decoration: none;
   color: #fff;
-  background: linear-gradient(145deg, #7b00bd, #26004d);
+  background: linear-gradient(145deg, #8700c7, #28004e);
   border: 1px solid #e65aff;
-  box-shadow: 0 0 10px rgba(211, 0, 255, 0.7);
-  font-size: 1.5rem;
-  font-weight: 700;
+  box-shadow: 0 0 9px rgba(211, 0, 255, .7);
+  font-size: 1.45rem;
+  font-weight: 800;
 }
 
 .hud-score-block {
+  position: relative;
   text-align: center;
   min-width: 0;
-  padding: 2px 5px;
+  padding: 1px 4px 4px;
+  isolation: isolate;
+}
+
+.hud-score-block::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: 12%;
+  right: 12%;
+  bottom: 0;
+  height: 3px;
+  border-radius: 50%;
+  background: #f6a7ff;
+  box-shadow: 0 0 8px #fff, 0 0 17px #df00ff;
+}
+
+.hud .label {
+  display: block;
+  font-size: .9rem;
+  color: #fff;
+  font-weight: 800;
+  text-shadow: 0 0 8px #df00ff;
+}
+
+.hud strong {
+  font-size: clamp(1.65rem, 7vw, 2.45rem);
+  line-height: 1.08;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.03em;
+  text-shadow: 0 0 5px #fff, 0 0 13px #df00ff;
 }
 
 .hud-tools {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 7px;
   min-width: 0;
 }
 
 .icon-btn {
-  width: 40px;
-  height: 40px;
+  width: 43px;
+  height: 43px;
   flex-shrink: 0;
-  border-radius: 13px;
-  border: 1px solid #d84bff;
-  background: linear-gradient(145deg, #8100b9, #260044);
+  border-radius: 14px;
+  border: 1px solid #dc45ff;
+  background: linear-gradient(145deg, #9b26c9, #30005c 65%, #17002c);
   color: #fff;
   display: grid;
   place-items: center;
   cursor: pointer;
   padding: 0;
   box-shadow:
-    0 0 8px rgba(222, 50, 255, 0.8),
-    inset 0 0 8px rgba(255, 255, 255, 0.12);
+    0 0 7px #d000ff,
+    0 0 14px rgba(190, 0, 255, .55),
+    inset 0 1px 7px rgba(255,255,255,.32);
   transition: transform 120ms ease, box-shadow 120ms ease;
 }
 
 .icon-btn:active {
-  transform: scale(0.92);
+  transform: scale(.92);
   box-shadow: 0 0 15px #ed45ff;
 }
 
@@ -127,56 +182,64 @@ body {
 }
 
 .hud-best-block {
-  text-align: center;
-  min-width: 58px;
-  padding: 5px 9px;
-  border: 1px solid #d946ff;
-  border-radius: 30px;
-  background: linear-gradient(145deg, #300052, #100020);
+  min-width: 83px;
+  height: 43px;
+  padding: 3px 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid #c83bff;
+  border-radius: 28px;
+  background: linear-gradient(145deg, #300052, #090018);
   box-shadow:
-    0 0 9px rgba(214, 0, 255, 0.8),
-    inset 0 0 8px rgba(198, 0, 255, 0.2);
+    0 0 8px rgba(214, 0, 255, .8),
+    inset 0 0 8px rgba(198, 0, 255, .2);
 }
 
-.hud .label {
-  display: block;
-  font-size: 0.72rem;
-  color: #f6b7ff;
-  font-weight: 800;
-  text-shadow: 0 0 8px #e000ff;
+.hud-best-block strong {
+  font-size: clamp(1.2rem, 5vw, 1.75rem);
 }
 
-.hud strong {
-  font-size: clamp(1.25rem, 5vw, 1.8rem);
-  font-weight: 900;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-  text-shadow:
-    0 0 5px #fff,
-    0 0 12px #df00ff;
+.crown {
+  width: 27px;
+  height: 25px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 5px #ffb900);
 }
 
 .meters {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
   gap: 10px;
-  padding: 12px 13px 12px;
+  padding: 10px 12px 13px;
   align-items: center;
-  background: linear-gradient(180deg, rgba(25, 0, 49, 0.92), rgba(9, 0, 24, 0.82));
-  border-bottom: 1px solid rgba(213, 50, 255, 0.65);
-  box-shadow: 0 5px 18px rgba(155, 0, 255, 0.25);
+  background: linear-gradient(180deg, #080015, #100020);
+  border: 2px solid #a900ff;
+  border-top: 1px solid rgba(222, 0, 255, .7);
+  border-radius: 0 0 25px 25px;
+  box-shadow:
+    0 0 7px #d000ff,
+    0 0 18px rgba(183, 0, 255, .65),
+    inset 0 0 14px rgba(185, 0, 255, .18);
+  z-index: 3;
+}
+
+.meters::after {
+  bottom: 3px;
 }
 
 .meter {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   min-width: 0;
 }
 
 .meter-ico {
-  width: 28px;
-  height: 28px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -184,25 +247,25 @@ body {
 }
 
 .energy-ico {
-  background: linear-gradient(145deg, #ff43b9, #a000ff);
+  background: linear-gradient(145deg, #ff54ca, #b000ff 75%);
   color: #fff;
-  border: 1px solid #ffb5ff;
+  border: 2px solid #ffb5ff;
   box-shadow:
     0 0 8px #ff36dc,
-    0 0 15px rgba(255, 0, 220, 0.8);
+    0 0 15px rgba(255, 0, 220, .8);
 }
 
 .meter-track {
   flex: 1;
   min-width: 0;
-  height: 13px;
+  height: 15px;
   border-radius: 999px;
-  background: rgba(12, 0, 27, 0.9);
+  background: rgba(12, 0, 27, .95);
   overflow: hidden;
   border: 1px solid #a72bff;
   box-shadow:
-    0 0 7px rgba(183, 0, 255, 0.8),
-    inset 0 0 6px rgba(0, 0, 0, 0.8);
+    0 0 7px rgba(183, 0, 255, .8),
+    inset 0 0 6px rgba(0,0,0,.8);
 }
 
 .meter-fill {
@@ -214,12 +277,18 @@ body {
 }
 
 .energy-fill {
-  background: linear-gradient(90deg, #fff000, #ff9d00, #ff00d9, #ff347a);
+  background: linear-gradient(
+    90deg,
+    #fff000,
+    #ff9d00,
+    #ff00d9,
+    #ff347a
+  );
   box-shadow: 0 0 12px #ff00d9;
 }
 
 .multi-track {
-  background: rgba(32, 0, 54, 0.95);
+  background: rgba(32, 0, 54, .95);
 }
 
 .multi-fill {
@@ -230,20 +299,20 @@ body {
 
 .multi-badge {
   flex-shrink: 0;
-  min-width: 39px;
-  height: 30px;
-  padding: 0 8px;
+  min-width: 48px;
+  height: 39px;
+  padding: 0 9px;
   border-radius: 999px;
   display: grid;
   place-items: center;
-  font-size: 0.82rem;
+  font-size: 1rem;
   font-weight: 900;
   color: #fff;
-  background: linear-gradient(145deg, #ff4d65, #e90069);
+  background: linear-gradient(145deg, #ff536b, #ed004f);
   border: 1px solid #ff9bb7;
   box-shadow:
     0 0 8px #ff176c,
-    0 0 15px rgba(255, 0, 90, 0.6);
+    0 0 15px rgba(255, 0, 90, .6);
   text-shadow: 0 0 5px #fff;
 }
 
@@ -262,17 +331,15 @@ body {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: calc(48px + var(--safe-bottom));
+  bottom: calc(35px + var(--safe-bottom));
   z-index: 2;
   text-align: center;
   padding: 0 16px;
   color: #ffe0ff;
-  font-size: 0.82rem;
-  font-weight: 700;
+  font-size: .82rem;
+  font-weight: 800;
   pointer-events: none;
-  text-shadow:
-    0 0 5px #d000ff,
-    0 1px 8px #000;
+  text-shadow: 0 0 5px #d000ff, 0 1px 8px #000;
 }
 
 .overlay {
@@ -281,7 +348,7 @@ body {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(8, 0, 22, 0.78);
+  background: rgba(4, 0, 13, .78);
   backdrop-filter: blur(8px);
   z-index: 5;
 }
@@ -298,17 +365,17 @@ body {
   background: linear-gradient(160deg, #45006d, #120025);
   border: 1px solid #e34cff;
   box-shadow:
-    0 0 12px rgba(221, 0, 255, 0.8),
-    0 0 35px rgba(151, 0, 255, 0.45),
-    inset 0 0 15px rgba(212, 0, 255, 0.18);
+    0 0 12px rgba(221, 0, 255, .8),
+    0 0 35px rgba(151, 0, 255, .45),
+    inset 0 0 15px rgba(212, 0, 255, .18);
   animation: pop 280ms ease-out;
 }
 
 .eyebrow {
   margin: 0 0 6px;
-  letter-spacing: 0.18em;
+  letter-spacing: .18em;
   text-transform: uppercase;
-  font-size: 0.72rem;
+  font-size: .72rem;
   font-weight: 800;
   color: #f5a8ff;
   text-shadow: 0 0 8px #d000ff;
@@ -318,15 +385,15 @@ body {
   margin: 0 0 10px;
   font-size: 1.55rem;
   font-weight: 900;
-  letter-spacing: -0.02em;
+  letter-spacing: -.02em;
   text-shadow: 0 0 10px #dc00ff;
 }
 
 .card p {
   margin: 0;
-  color: rgba(245, 220, 255, 0.95);
+  color: rgba(245, 220, 255, .95);
   line-height: 1.45;
-  font-size: 0.92rem;
+  font-size: .92rem;
 }
 
 .score-line {
@@ -344,7 +411,7 @@ body {
 .status {
   min-height: 1.2em;
   margin-top: 10px !important;
-  font-size: 0.82rem !important;
+  font-size: .82rem !important;
 }
 
 .status.error {
@@ -368,66 +435,128 @@ body {
   cursor: pointer;
   background: linear-gradient(120deg, #e9008d, #8b00ff);
   box-shadow:
-    0 0 10px rgba(255, 0, 200, 0.8),
-    0 0 20px rgba(145, 0, 255, 0.5);
+    0 0 10px rgba(255, 0, 200, .8),
+    0 0 20px rgba(145, 0, 255, .5);
   text-shadow: 0 0 5px #fff;
 }
 
 #primaryBtn:active {
-  transform: scale(0.97);
+  transform: scale(.97);
 }
 
 @keyframes pop {
   from {
     opacity: 0;
-    transform: translateY(12px) scale(0.97);
+    transform: translateY(12px) scale(.97);
   }
+
   to {
     opacity: 1;
     transform: none;
   }
 }
 
-@media (max-width: 360px) {
+@media (max-width: 390px) {
+  #wrap {
+    padding-left: 5px;
+    padding-right: 5px;
+  }
+
   .hud {
-    grid-template-columns: 32px minmax(48px, 1fr) auto;
+    grid-template-columns: 28px minmax(60px, 1fr) auto;
     gap: 5px;
-    padding-left: 8px;
-    padding-right: 8px;
+    padding: 11px 7px 8px;
   }
 
   .back {
-    width: 32px;
-    height: 32px;
-  }
-
-  .icon-btn {
-    width: 34px;
-    height: 34px;
+    width: 28px;
+    height: 30px;
   }
 
   .hud-tools {
-    gap: 4px;
+    gap: 5px;
+  }
+
+  .icon-btn {
+    width: 36px;
+    height: 38px;
+    border-radius: 12px;
   }
 
   .hud-best-block {
-    min-width: 48px;
-    padding: 4px 6px;
+    min-width: 70px;
+    height: 38px;
+    padding: 2px 6px;
+    gap: 3px;
+  }
+
+  .crown {
+    width: 22px;
+    height: 21px;
   }
 
   .meters {
     gap: 6px;
-    padding-left: 8px;
-    padding-right: 8px;
+    padding: 9px 7px 12px;
+  }
+
+  .meter {
+    gap: 5px;
   }
 
   .meter-ico {
-    width: 23px;
-    height: 23px;
+    width: 32px;
+    height: 32px;
+  }
+
+  .meter-track {
+    height: 13px;
   }
 
   .multi-badge {
-    min-width: 32px;
-    padding: 0 5px;
+    min-width: 39px;
+    height: 34px;
+    padding: 0 6px;
+    font-size: .9rem;
+  }
+}
+
+@media (max-width: 340px) {
+  .hud {
+    grid-template-columns: 25px minmax(50px, 1fr) auto;
+    gap: 3px;
+    padding-left: 5px;
+    padding-right: 5px;
+  }
+
+  .icon-btn {
+    width: 32px;
+    height: 34px;
+  }
+
+  .hud-best-block {
+    min-width: 62px;
+  }
+
+  .hud-best-block strong {
+    font-size: 1.05rem;
+  }
+
+  .crown {
+    width: 19px;
+  }
+
+  .meters {
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+  }
+
+  .meter-ico {
+    width: 28px;
+    height: 28px;
+  }
+
+  .multi-badge {
+    min-width: 34px;
   }
 }
