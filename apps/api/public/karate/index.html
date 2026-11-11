@@ -2,85 +2,110 @@
 <html lang="uz">
   <head>
     <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
-    />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <title>Karate Strike — GAME BOT</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&display=swap"
-      rel="stylesheet"
-    />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
+
   <body>
     <div id="wrap">
+
       <header class="hud">
         <a class="back" href="/app/#oyinlar" id="backBtn" aria-label="Orqaga">‹</a>
+
         <div class="hud-score-block">
           <span class="label">Ball</span>
           <strong id="hudScore">0</strong>
         </div>
+
         <div class="hud-tools">
           <button type="button" id="btnMute" class="icon-btn" aria-label="Ovoz">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
-              <path d="M4 10v4h3l5 4V6L7 10H4zm12.5 2a3.5 3.5 0 0 0-1.5-2.9v5.8A3.5 3.5 0 0 0 16.5 12z"/>
+            <svg viewBox="0 0 24 24" width="23" height="23" fill="currentColor" aria-hidden="true">
+              <path d="M4 9v6h4l5 4V5L8 9H4zm12.2 3a4.2 4.2 0 0 0-2.2-3.7v7.4a4.2 4.2 0 0 0 2.2-3.7zm0-8v2.2a7 7 0 0 1 0 11.6V20a9 9 0 0 0 0-16z"/>
               <path class="mute-slash" d="M4 4l16 16" stroke="currentColor" stroke-width="2" fill="none"/>
             </svg>
           </button>
+
           <button type="button" id="btnPause" class="icon-btn" aria-label="Pauza">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
-              <rect x="6" y="5" width="4" height="14" rx="1"/>
-              <rect x="14" y="5" width="4" height="14" rx="1"/>
+            <svg viewBox="0 0 24 24" width="21" height="21" fill="currentColor" aria-hidden="true">
+              <rect x="5" y="4" width="5" height="16" rx="1.5"/>
+              <rect x="14" y="4" width="5" height="16" rx="1.5"/>
             </svg>
           </button>
+
           <div class="hud-best-block">
-            <span class="label">Rekord</span>
+            <svg class="crown" viewBox="0 0 48 40" aria-hidden="true">
+              <path d="M4 10 14 19 23 4 33 19 44 9 39 32H9L4 10Z" fill="#ffd52e" stroke="#ff9d00" stroke-width="2" stroke-linejoin="round"/>
+              <path d="M10 35h29" stroke="#ffdf55" stroke-width="3" stroke-linecap="round"/>
+              <circle cx="4" cy="9" r="3" fill="#fff36b"/>
+              <circle cx="23" cy="4" r="3" fill="#fff36b"/>
+              <circle cx="44" cy="8" r="3" fill="#fff36b"/>
+            </svg>
             <strong id="hudBest">0</strong>
           </div>
         </div>
       </header>
+            <div class="meters" aria-hidden="true">
 
-      <div class="meters" aria-hidden="true">
         <div class="meter meter-energy">
           <span class="meter-ico energy-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-              <path d="M13 2 4 14h7l-1 8 10-14h-7l0-6z" />
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+              <path d="M13 1 4 14h7l-1 9 10-14h-7l0-8z"/>
             </svg>
           </span>
+
           <div class="meter-track">
             <div id="energyBar" class="meter-fill energy-fill"></div>
           </div>
         </div>
+
         <div class="meter meter-multi">
           <div class="meter-track multi-track">
             <div id="multiBar" class="meter-fill multi-fill"></div>
           </div>
+
           <span class="multi-badge" id="multiBadge">1X</span>
         </div>
+
       </div>
 
       <canvas id="game" width="360" height="560"></canvas>
 
-      <div class="hint" id="hint">Chap yoki o‘ng tomonga bosing</div>
+      <div class="hint" id="hint">
+        Chap yoki o‘ng tomonga bosing
+      </div>
 
       <div id="overlay" class="overlay">
         <div class="card">
+
           <p class="eyebrow">KARATE STRIKE</p>
+
           <h1 id="overlayTitle">Boshlash</h1>
+
           <p id="overlayText">
-            Yog‘och novdani chap yoki o‘ngdan choping. Novda siz tomonda
-            bo‘lsa — ehtiyot!
+            Yog‘och novdani chap yoki o‘ngdan choping.
+            Novda siz tomonda bo‘lsa — ehtiyot!
           </p>
-          <p class="score-line">Ball: <strong id="overlayScore">0</strong></p>
+
+          <p class="score-line">
+            Ball: <strong id="overlayScore">0</strong>
+          </p>
+
           <p id="submitStatus" class="status"></p>
-          <button type="button" id="primaryBtn">O‘ynash</button>
+
+          <button type="button" id="primaryBtn">
+            O‘ynash
+          </button>
+
         </div>
       </div>
+
     </div>
+
     <script src="./game.js" defer></script>
   </body>
 </html>
