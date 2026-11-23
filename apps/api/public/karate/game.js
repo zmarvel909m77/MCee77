@@ -1,4 +1,9 @@
 
+
+
+
+
+
 /**
 * Karate Strike — Timberman-style chop arcade.
 * Tap left/right to chop. Same-side branch = game over.
@@ -1599,7 +1604,7 @@ function togglePause() {
  } else if (phase === "paused") {
    phase = "playing";
    lastTs = performance.now();
-   hint.textContent = "Chap yoki o‘ng tomonga bosing";
+   hint.textContent = "";
  }
 }
  
@@ -1791,7 +1796,7 @@ TreeBranchController.reset();
 seedTrunk();
 showOverlay(
  "Karate Strike",
- "Chap yoki o‘ng tomonga bosing. Novda siz tomonda bo‘lsa — ehtiyot!",
+ "",
  "O‘ynash",
 );
 void loadBest();
