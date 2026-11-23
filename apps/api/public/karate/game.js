@@ -1,5 +1,4 @@
 
-
 /**
 * Karate Strike — Timberman-style chop arcade.
 * Tap left/right to chop. Same-side branch = game over.
@@ -22,6 +21,7 @@ const energyBar = document.getElementById("energyBar");
 const multiBar = document.getElementById("multiBar");
 const multiBadge = document.getElementById("multiBadge");
 const hint = document.getElementById("hint");
+if (hint) hint.style.display = "none";
 const btnMute = document.getElementById("btnMute");
 const btnPause = document.getElementById("btnPause");
  
@@ -109,7 +109,7 @@ const GROUND_MAX = 48;
 * Live segment count — derived in layout() from TREE_HEIGHT_FRAC.
 * Starts at 5; resized when the canvas lays out.
 */
-let SEGMENTS = 7;
+let SEGMENTS = 6;
 const ENERGY_MAX = 100;
 /** Base drain/sec — scaled by difficultyFor(score). */
 const ENERGY_DRAIN = 11;
@@ -825,7 +825,7 @@ function drawBranch(x, y, trunkW, segH, side) {
  const left = side === "left";
  const hx = left ? x - bw + 4 : x + trunkW - 4;
  // Wooden plank — same family as trunk
- roundRect(hx, by, bw, bh, 4, "#a67c52");
+ roundRect(hx, by, bw, bh, 4, "#76502f");
  // grain
  ctx.strokeStyle = "rgba(70, 40, 20, 0.28)";
  ctx.lineWidth = 1.2;
@@ -1045,7 +1045,7 @@ function layout() {
    ),
  );
  // Ustun har doim 8 ta teng yog‘och qismdan iborat bo‘ladi.
- const nextSegs = 7;
+ const nextSegs = 6;
  const segH = treeH / nextSegs;
  if (nextSegs !== SEGMENTS) {
    SEGMENTS = nextSegs;
@@ -1152,65 +1152,30 @@ function updateTrunkDrop(_dt) {
  ctx.save();
  // No bend / lean / shake — perfectly vertical drop (KK2 slot feel)
  // Fill only the segment stack bounds (never leave a phantom hover slab)
- const stackTop = baseY - treeH + dropY;
+ const stackTop = baseY - SEGMENTS * segH + dropY;
  const stackBottom = baseY + dropY;
  const fillH = Math.max(0, stackBottom - stackTop + 1);
  if (fillH > 0) {
-   ctx.fillStyle = "#c49a6c";
+   ctx.fillStyle = "#855b37";
    ctx.fillRect(trunkX, stackTop, trunkW, fillH);
-   ctx.fillStyle = "rgba(90, 50, 22, 0.22)";
+   ctx.fillStyle = "rgba(35, 19, 9, 0.30)";
    ctx.fillRect(trunkX, stackTop, 7, fillH);
    ctx.fillRect(trunkX + trunkW - 8, stackTop, 8, fillH);
-   ctx.fillStyle = "rgba(255, 230, 190, 0.2)";
+   ctx.fillStyle = "rgba(190, 139, 91, 0.12)";
    ctx.fillRect(trunkX + 8, stackTop, 5, fillH);
  }
  
  for (let i = SEGMENTS - 1; i >= 0; i--) {
    const y = baseY - (i + 1) * segH + dropY;
    const x = trunkX;
-   // Subtle alternating block shade
-   if (i % 2 === 0) {
-     ctx.fillStyle = "rgba(196, 154, 108, 0.35)";
-     ctx.fillRect(x, y, trunkW, segH + 1.5);
-   }
-   // Vertical grain
-   ctx.strokeStyle = "rgba(90, 50, 25, 0.2)";
-   ctx.lineWidth = 1.35;
-   for (let g = 0; g < 4; g++) {
-     const gx = x + 10 + g * ((trunkW - 20) / 3.2);
-     ctx.beginPath();
-     ctx.moveTo(gx, y + 6);
-     ctx.lineTo(gx + (g % 2 ? 1.4 : -1), y + segH - 4);
-     ctx.stroke();
-   }
-   // Top seam of this block — branch attaches here (ref)
-   ctx.strokeStyle = "rgba(55, 28, 10, 0.38)";
-   ctx.lineWidth = 2.2;
-   ctx.beginPath();
-   ctx.moveTo(x + 3, y + 1);
-   ctx.lineTo(x + trunkW - 3, y + 1);
-   ctx.stroke();
- 
    const branch = trunk[i];
    if (branch) drawBranch(x, y, trunkW, segH, branch);
  }
 
  // Ustun tepasidagi ochiq kesimni yog'och qopqoq bilan yopish.
  // Qopqoq stack bilan birga siljiydi va novdalar chizilgandan keyin ko'rinadi.
- ctx.fillStyle = "#d4ad7e";
+ ctx.fillStyle = "#8b623e";
  ctx.fillRect(trunkX - 1, stackTop - 2, trunkW + 2, 6);
- ctx.strokeStyle = "rgba(75, 43, 20, 0.55)";
- ctx.lineWidth = 1.5;
- ctx.beginPath();
- ctx.moveTo(trunkX, stackTop);
- ctx.lineTo(trunkX + trunkW, stackTop);
- ctx.stroke();
- ctx.strokeStyle = "rgba(255, 225, 180, 0.35)";
- ctx.lineWidth = 1;
- ctx.beginPath();
- ctx.moveTo(trunkX + 8, stackTop - 1);
- ctx.lineTo(trunkX + trunkW - 8, stackTop - 1);
- ctx.stroke();
  ctx.fillStyle = "rgba(90, 50, 22, 0.3)";
  ctx.fillRect(trunkX - 1, stackTop - 2, 3, 6);
  ctx.fillRect(trunkX + trunkW - 2, stackTop - 2, 3, 6);
@@ -1950,3 +1915,5 @@ if (urlParams.has("shot")) {
  };
  requestAnimationFrame(waitHero);
 }
+
+
