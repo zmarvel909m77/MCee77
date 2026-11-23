@@ -1,3 +1,4 @@
+
 /**
 * Karate Strike — Timberman-style chop arcade.
 * Tap left/right to chop. Same-side branch = game over.
@@ -82,10 +83,10 @@ const SPRITE_FPS = 45;
 const WALK_MS = Math.round((4 / SPRITE_FPS) * 1000);
 /** Kick / hit pose hold — mid of 0.08–0.15 s. */
 const CHOP_MS = 120;
-/** Daraxt ustuni canvas balandligining taxminan 82 foizini egallaydi. */
-const TREE_HEIGHT_FRAC = 0.82;
-const TREE_HEIGHT_MIN_FRAC = 0.82;
-const TREE_HEIGHT_MAX_FRAC = 0.82;
+/** Ustun balandligi oshirildi: tepadagi bo‘shliq yopiladi. */
+const TREE_HEIGHT_FRAC = 0.94;
+const TREE_HEIGHT_MIN_FRAC = 0.94;
+const TREE_HEIGHT_MAX_FRAC = 0.94;
 /** Hero height as fraction of tree height (mid of 8–12%). */
 const HERO_OF_TREE_FRAC = 0.1;
 const HERO_OF_TREE_MIN = 0.08;
@@ -107,7 +108,7 @@ const GROUND_MAX = 48;
 * Live segment count — derived in layout() from TREE_HEIGHT_FRAC.
 * Starts at 5; resized when the canvas lays out.
 */
-let SEGMENTS = 5;
+let SEGMENTS = 8;
 const ENERGY_MAX = 100;
 /** Base drain/sec — scaled by difficultyFor(score). */
 const ENERGY_DRAIN = 11;
@@ -153,13 +154,6 @@ heroImg.onerror = () => {
  heroReady = false;
 };
 heroImg.src = HERO_ATLAS.image;
-
-// Alohida fon rasmi. Fayl game.js bilan bir papkada: background.png
-const backgroundImg = new Image();
-let backgroundReady = false;
-backgroundImg.onload = () => { backgroundReady = true; };
-backgroundImg.onerror = () => { backgroundReady = false; };
-backgroundImg.src = "./background.PNG";
  
 // Fon endi Canvas kodlari bilan chiziladi; tashqi background.png talab qilinmaydi.
  
@@ -551,7 +545,8 @@ function showOverlay(title, text, btnLabel) {
  
 function hideOverlay() {
  overlay.classList.add("hidden");
- hint.style.visibility = "visible";
+ hint.textContent = "";
+ hint.style.visibility = "hidden";
 }
  
 function resize() {
@@ -671,11 +666,6 @@ function drawForestLine(w, y, height, color, seed = 1) {
 }
  
 function drawAtmosphere(w, h, baseY) {
- // Rasm yuklangan bo‘lsa, fon sifatida uni chizamiz.
- if (backgroundReady && backgroundImg.complete && backgroundImg.naturalWidth > 0) {
-   ctx.drawImage(backgroundImg, 0, 0, w, h);
-   return;
- }
  // Binafsha osmon va pushti shafaq.
  const sky = ctx.createLinearGradient(0, 0, 0, h);
  sky.addColorStop(0, "#21006d");
@@ -1108,9 +1098,8 @@ function layout() {
      treeH * HERO_OF_TREE_FRAC,
    ),
  );
- // Tall blocks: each longer than the hero; count fills treeH
- const minSegH = heroH * 1.55;
- const nextSegs = Math.max(4, Math.floor(treeH / minSegH));
+ // Ustun har doim 8 ta teng yog‘och qismdan iborat bo‘ladi.
+ const nextSegs = 8;
  const segH = treeH / nextSegs;
  if (nextSegs !== SEGMENTS) {
    SEGMENTS = nextSegs;
@@ -1260,25 +1249,29 @@ function updateTrunkDrop(_dt) {
    if (branch) drawBranch(x, y, trunkW, segH, branch);
  }
 
- // Ustun tepasidagi ochiq kesimni yog'och qopqoq bilan yopish.
- // Qopqoq stack bilan birga siljiydi va novdalar chizilgandan keyin ko'rinadi.
- ctx.fillStyle = "#d4ad7e";
- ctx.fillRect(trunkX - 1, stackTop - 2, trunkW + 2, 6);
- ctx.strokeStyle = "rgba(75, 43, 20, 0.55)";
- ctx.lineWidth = 1.5;
+ // Ustunning yuqori kesimi: ochiq joyni yopadigan yog‘och qopqoq.
+ // Qopqoq ustun bilan birga siljiydi.
+ ctx.save();
+ ctx.fillStyle = "#b98958";
  ctx.beginPath();
- ctx.moveTo(trunkX, stackTop);
- ctx.lineTo(trunkX + trunkW, stackTop);
+ ctx.ellipse(cx, stackTop, trunkW * 0.58, 8, 0, 0, Math.PI * 2);
+ ctx.fill();
+ ctx.strokeStyle = "#6f472b";
+ ctx.lineWidth = 2;
  ctx.stroke();
- ctx.strokeStyle = "rgba(255, 225, 180, 0.35)";
+ ctx.fillStyle = "#d9b487";
+ ctx.beginPath();
+ ctx.ellipse(cx, stackTop - 1, trunkW * 0.48, 5.5, 0, 0, Math.PI * 2);
+ ctx.fill();
+ ctx.strokeStyle = "rgba(105, 67, 38, 0.65)";
  ctx.lineWidth = 1;
  ctx.beginPath();
- ctx.moveTo(trunkX + 8, stackTop - 1);
- ctx.lineTo(trunkX + trunkW - 8, stackTop - 1);
+ ctx.ellipse(cx, stackTop - 1, trunkW * 0.29, 2.8, 0, 0, Math.PI * 2);
  ctx.stroke();
- ctx.fillStyle = "rgba(90, 50, 22, 0.3)";
- ctx.fillRect(trunkX - 1, stackTop - 2, 3, 6);
- ctx.fillRect(trunkX + trunkW - 2, stackTop - 2, 3, 6);
+ ctx.beginPath();
+ ctx.ellipse(cx, stackTop - 1, trunkW * 0.12, 1.3, 0, 0, Math.PI * 2);
+ ctx.stroke();
+ ctx.restore();
 
  ctx.restore();
  
@@ -1663,11 +1656,13 @@ function startGame() {
 function togglePause() {
  if (phase === "playing") {
    phase = "paused";
-   hint.textContent = "Davom etish uchun pauzani bosing";
+   hint.textContent = ""; 
+   hint.style.visibility = "hidden";
  } else if (phase === "paused") {
    phase = "playing";
    lastTs = performance.now();
-   hint.textContent = "Chap yoki o‘ng tomonga bosing";
+   hint.textContent = "";
+   hint.style.visibility = "hidden";
  }
 }
  
@@ -1859,7 +1854,7 @@ TreeBranchController.reset();
 seedTrunk();
 showOverlay(
  "Karate Strike",
- "Chap yoki o‘ng tomonga bosing. Novda siz tomonda bo‘lsa — ehtiyot!",
+ "",
  "O‘ynash",
 );
 void loadBest();
@@ -2015,3 +2010,4 @@ if (urlParams.has("shot")) {
  };
  requestAnimationFrame(waitHero);
 }
+
