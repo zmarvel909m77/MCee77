@@ -82,10 +82,10 @@ const SPRITE_FPS = 45;
 const WALK_MS = Math.round((4 / SPRITE_FPS) * 1000);
 /** Kick / hit pose hold — mid of 0.08–0.15 s. */
 const CHOP_MS = 120;
-/** Daraxt ustuni canvas balandligining taxminan 82 foizini egallaydi. */
-const TREE_HEIGHT_FRAC = 0.82;
-const TREE_HEIGHT_MIN_FRAC = 0.82;
-const TREE_HEIGHT_MAX_FRAC = 0.82;
+/** Ustun balandligi oshirildi: tepadagi bo‘shliq yopiladi. */
+const TREE_HEIGHT_FRAC = 0.94;
+const TREE_HEIGHT_MIN_FRAC = 0.94;
+const TREE_HEIGHT_MAX_FRAC = 0.94;
 /** Hero height as fraction of tree height (mid of 8–12%). */
 const HERO_OF_TREE_FRAC = 0.1;
 const HERO_OF_TREE_MIN = 0.08;
@@ -107,7 +107,7 @@ const GROUND_MAX = 48;
 * Live segment count — derived in layout() from TREE_HEIGHT_FRAC.
 * Starts at 5; resized when the canvas lays out.
 */
-let SEGMENTS = 5;
+let SEGMENTS = 8;
 const ENERGY_MAX = 100;
 /** Base drain/sec — scaled by difficultyFor(score). */
 const ENERGY_DRAIN = 11;
@@ -153,13 +153,6 @@ heroImg.onerror = () => {
  heroReady = false;
 };
 heroImg.src = HERO_ATLAS.image;
-
-// Alohida fon rasmi. Fayl game.js bilan bir papkada: background.png
-const backgroundImg = new Image();
-let backgroundReady = false;
-backgroundImg.onload = () => { backgroundReady = true; };
-backgroundImg.onerror = () => { backgroundReady = false; };
-backgroundImg.src = "./background.PNG";
  
 // Fon endi Canvas kodlari bilan chiziladi; tashqi background.png talab qilinmaydi.
  
@@ -587,14 +580,17 @@ function roundRect(x, y, w, h, r, color) {
  
 function seedPetals(w, h) {
  petals = [];
- for (let i = 0; i < 18; i++) {
+ // Barglar ekranning yuqori qismidan pastga qarab tushadi.
+ for (let i = 0; i < 36; i++) {
    petals.push({
      x: Math.random() * w,
-     y: Math.random() * h * 0.75,
-     s: 3 + Math.random() * 5,
+     y: Math.random() * h,
+     s: 4 + Math.random() * 6,
      rot: Math.random() * Math.PI * 2,
-     vr: (Math.random() - 0.5) * 0.04,
-     vy: 0.25 + Math.random() * 0.55,
+     vr: (Math.random() - 0.5) * 0.055,
+     vy: 0.65 + Math.random() * 1.25,
+     sway: 0.5 + Math.random() * 1.1,
+     phase: Math.random() * Math.PI * 2,
    });
  }
 }
@@ -671,11 +667,6 @@ function drawForestLine(w, y, height, color, seed = 1) {
 }
  
 function drawAtmosphere(w, h, baseY) {
- // Rasm yuklangan bo‘lsa, fon sifatida uni chizamiz.
- if (backgroundReady && backgroundImg.complete && backgroundImg.naturalWidth > 0) {
-   ctx.drawImage(backgroundImg, 0, 0, w, h);
-   return;
- }
  // Binafsha osmon va pushti shafaq.
  const sky = ctx.createLinearGradient(0, 0, 0, h);
  sky.addColorStop(0, "#21006d");
@@ -782,15 +773,21 @@ function drawAtmosphere(w, h, baseY) {
    ctx.stroke();
  }
  
- // Harakatlanuvchi barglar.
- ctx.fillStyle = "rgba(12, 2, 35, 0.72)";
+ // Tepadan pastga tushayotgan pushti sakura barglari.
  for (const p of petals) {
    ctx.save();
    ctx.translate(p.x, p.y);
    ctx.rotate(p.rot);
+   ctx.fillStyle = "rgba(255, 174, 211, 0.92)";
    ctx.beginPath();
-   ctx.ellipse(0, 0, p.s, p.s * 0.45, 0, 0, Math.PI * 2);
+   ctx.ellipse(0, 0, p.s * 1.15, p.s * 0.58, 0, 0, Math.PI * 2);
    ctx.fill();
+   ctx.strokeStyle = "rgba(255, 225, 239, 0.75)";
+   ctx.lineWidth = 0.8;
+   ctx.beginPath();
+   ctx.moveTo(-p.s * 0.8, 0);
+   ctx.lineTo(p.s * 0.8, 0);
+   ctx.stroke();
    ctx.restore();
  }
 }
@@ -1108,9 +1105,8 @@ function layout() {
      treeH * HERO_OF_TREE_FRAC,
    ),
  );
- // Tall blocks: each longer than the hero; count fills treeH
- const minSegH = heroH * 1.55;
- const nextSegs = Math.max(4, Math.floor(treeH / minSegH));
+ // Ustun har doim 8 ta teng yog‘och qismdan iborat bo‘ladi.
+ const nextSegs = 8;
  const segH = treeH / nextSegs;
  if (nextSegs !== SEGMENTS) {
    SEGMENTS = nextSegs;
@@ -1769,14 +1765,15 @@ function loop(ts) {
    if (elapsed >= HURT_MS + DEFEAT_HOLD_MS) finishDeathSequence();
  }
  
- // Petals drift always (atmosphere)
+ // Barglar yuqoridan pastga uzluksiz tushadi.
  const { w, h } = layout();
  for (const p of petals) {
-   p.y += p.vy * (phase === "paused" ? 0.2 : 1);
-   p.x += Math.sin(animT * 1.2 + p.rot) * 0.35;
-   p.rot += p.vr;
-   if (p.y > h * 0.78) {
-     p.y = -10;
+   const fallSpeed = phase === "paused" ? 0.18 : 1;
+   p.y += p.vy * fallSpeed;
+   p.x += Math.sin(animT * 1.35 + p.phase) * p.sway * fallSpeed;
+   p.rot += p.vr * fallSpeed;
+   if (p.y > h + 18) {
+     p.y = -18 - Math.random() * 50;
      p.x = Math.random() * w;
    }
  }
