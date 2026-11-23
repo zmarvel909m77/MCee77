@@ -1,4 +1,6 @@
 
+
+
 /**
 * Karate Strike — Timberman-style chop arcade.
 * Tap left/right to chop. Same-side branch = game over.
@@ -108,7 +110,7 @@ const GROUND_MAX = 48;
 * Live segment count — derived in layout() from TREE_HEIGHT_FRAC.
 * Starts at 5; resized when the canvas lays out.
 */
-let SEGMENTS = 8;
+let SEGMENTS = 7;
 const ENERGY_MAX = 100;
 /** Base drain/sec — scaled by difficultyFor(score). */
 const ENERGY_DRAIN = 11;
@@ -154,8 +156,8 @@ heroImg.onerror = () => {
  heroReady = false;
 };
 heroImg.src = HERO_ATLAS.image;
- 
-// Orqa fon rasmi. Barglar animatsiyasi va uning chizilish kodi o‘zgartirilmagan.
+
+// Orqa fon rasmi. Barglar animatsiyasi va uning chizilish kodi saqlanadi.
 const backgroundImg = new Image();
 let backgroundReady = false;
 backgroundImg.onload = () => {
@@ -165,6 +167,8 @@ backgroundImg.onerror = () => {
   backgroundReady = false;
 };
 backgroundImg.src = "./background.PNG";
+ 
+// Fon endi Canvas kodlari bilan chiziladi; tashqi background.png talab qilinmaydi.
  
 /** @type {Phase} */
 let phase = "ready";
@@ -554,8 +558,7 @@ function showOverlay(title, text, btnLabel) {
  
 function hideOverlay() {
  overlay.classList.add("hidden");
- // Pastki boshqaruv yozuvi ekranda ko‘rsatilmaydi.
- hint.style.visibility = "hidden";
+ hint.style.visibility = "visible";
 }
  
 function resize() {
@@ -675,7 +678,7 @@ function drawForestLine(w, y, height, color, seed = 1) {
 }
  
 function drawAtmosphere(w, h, baseY) {
- // Rasm butun Canvas maydonini qoplaydi. O‘yin obyektlari uning ustida chiziladi.
+ // Fon rasmi butun Canvas maydonini qoplaydi. O‘yin obyektlari uning ustida chiziladi.
  if (backgroundReady && backgroundImg.naturalWidth > 0 && backgroundImg.naturalHeight > 0) {
    const scale = Math.max(w / backgroundImg.naturalWidth, h / backgroundImg.naturalHeight);
    const drawW = backgroundImg.naturalWidth * scale;
@@ -716,7 +719,7 @@ function drawAtmosphere(w, h, baseY) {
    ctx.stroke();
  }
 
- // Harakatlanuvchi barglar. Eski animatsiya kodi aynan saqlandi.
+ // Harakatlanuvchi barglar. Animatsiya kodi o‘zgartirilmagan.
  ctx.fillStyle = "rgba(12, 2, 35, 0.72)";
  for (const p of petals) {
    ctx.save();
@@ -817,9 +820,9 @@ function drawBush(cx, baseY, r) {
 */
 function drawBranch(x, y, trunkW, segH, side) {
  // Top-aligned: plank flush with the upper seam of the block (ref)
- const bh = Math.min(18, Math.max(12, segH * 0.12));
+ const bh = Math.min(25, Math.max(18, segH * 0.18));
  const by = y; // exact top edge
- const bw = trunkW * 2.15; // longer plank so thin trunk still reads
+ const bw = trunkW * 1.65; // shorter, thicker branch obstacle
  const left = side === "left";
  const hx = left ? x - bw + 4 : x + trunkW - 4;
  // Wooden plank — same family as trunk
@@ -1018,7 +1021,7 @@ function layout() {
  const h = canvas.clientHeight;
  const cx = w * 0.5;
  // Thinner pole (ingichkaroq) — branches still top-mounted on each block
- const trunkW = Math.min(46, Math.max(40, w * 0.115));
+ const trunkW = Math.min(58, Math.max(50, w * 0.14));
  // Keep ~1cm ground visible above the canvas bottom (shell already clears
  // safe-area / home indicator via padding-bottom + --app-height).
  const groundH = Math.max(
@@ -1043,7 +1046,7 @@ function layout() {
    ),
  );
  // Ustun har doim 8 ta teng yog‘och qismdan iborat bo‘ladi.
- const nextSegs = 8;
+ const nextSegs = 7;
  const segH = treeH / nextSegs;
  if (nextSegs !== SEGMENTS) {
    SEGMENTS = nextSegs;
@@ -1600,7 +1603,7 @@ function togglePause() {
  } else if (phase === "paused") {
    phase = "playing";
    lastTs = performance.now();
-   hint.textContent = "";
+   hint.textContent = "Chap yoki o‘ng tomonga bosing";
  }
 }
  
@@ -1792,7 +1795,7 @@ TreeBranchController.reset();
 seedTrunk();
 showOverlay(
  "Karate Strike",
- "",
+ "Chap yoki o‘ng tomonga bosing. Novda siz tomonda bo‘lsa — ehtiyot!",
  "O‘ynash",
 );
 void loadBest();
