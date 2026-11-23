@@ -1,5 +1,6 @@
 
 
+
     /**
     * Karate Strike — Timberman-style chop arcade.
     * Tap left/right to chop. Same-side hovering drone = game over.
@@ -816,59 +817,86 @@
     * @param {Side} side
     */
     function drawBranch(x, y, trunkW, segH, side, now = performance.now()) {
-      // Novda o‘rniga ustundan alohida uchib turadigan mini-kiber dron.
-      // Dron bilan quvur orasida doim ochiq masofa qoladi.
-      const radius = Math.max(10, Math.min(16, segH * 0.19));
+      // Quvurdan alohida turgan qattiq zirhli to‘siq.
+      // To‘siq joyida qotib turadi, nur yoki energiya shakli emas.
       const direction = side === "left" ? -1 : 1;
-      const gap = Math.max(24, trunkW * 0.72);
-      const droneX = x + trunkW / 2 + direction * (trunkW / 2 + gap + radius);
-      const droneY = y + segH * 0.5 + Math.sin(now * 0.0028 + y * 0.018) * 5;
-      const color = side === "left" ? "#00eaff" : "#ff43e8";
-      const spin = now * 0.002;
+      const blockW = Math.max(25, Math.min(34, trunkW * 0.76));
+      const blockH = Math.max(30, Math.min(42, segH * 0.58));
+      const gap = Math.max(28, trunkW * 0.82);
+      const blockX = x + trunkW / 2 + direction * (trunkW / 2 + gap + blockW / 2);
+      const blockY = y + segH * 0.5;
 
       ctx.save();
-      ctx.translate(droneX, droneY);
-      ctx.rotate(Math.sin(spin) * 0.12);
-      ctx.globalCompositeOperation = "lighter";
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 18;
+      ctx.translate(blockX, blockY);
 
-      // Outer energy halo
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
+      // Qattiq, qirrali tashqi korpus.
+      const left = -blockW / 2;
+      const right = blockW / 2;
+      const top = -blockH / 2;
+      const bottom = blockH / 2;
       ctx.beginPath();
-      ctx.ellipse(0, 0, radius * 1.35, radius * 0.82, spin, 0, Math.PI * 2);
+      ctx.moveTo(left + 6, top);
+      ctx.lineTo(right - 6, top);
+      ctx.lineTo(right, top + 7);
+      ctx.lineTo(right, bottom - 7);
+      ctx.lineTo(right - 6, bottom);
+      ctx.lineTo(left + 6, bottom);
+      ctx.lineTo(left, bottom - 7);
+      ctx.lineTo(left, top + 7);
+      ctx.closePath();
+
+      const armor = ctx.createLinearGradient(left, top, right, bottom);
+      armor.addColorStop(0, "#788397");
+      armor.addColorStop(0.28, "#333d50");
+      armor.addColorStop(0.62, "#171e2c");
+      armor.addColorStop(1, "#080d17");
+      ctx.fillStyle = armor;
+      ctx.strokeStyle = "#aab5c5";
+      ctx.lineWidth = 1.5;
+      ctx.fill();
       ctx.stroke();
 
-      // Floating drone body
-      const body = ctx.createRadialGradient(-radius * 0.25, -radius * 0.3, 1, 0, 0, radius);
-      body.addColorStop(0, "#ffffff");
-      body.addColorStop(0.25, color);
-      body.addColorStop(0.72, "#25243e");
-      body.addColorStop(1, "#090817");
-      ctx.fillStyle = body;
+      // Qalin old panel: to‘siqning qattiq jism ekanini ko‘rsatadi.
       ctx.beginPath();
-      ctx.arc(0, 0, radius * 0.72, 0, Math.PI * 2);
+      ctx.moveTo(left + 5, top + 6);
+      ctx.lineTo(right - 5, top + 6);
+      ctx.lineTo(right - 5, bottom - 6);
+      ctx.lineTo(left + 5, bottom - 6);
+      ctx.closePath();
+      ctx.fillStyle = "#252f40";
       ctx.fill();
 
-      // Three small floating stabilizer nodes
-      for (let i = 0; i < 3; i++) {
-        const a = spin * 1.8 + i * (Math.PI * 2 / 3);
-        const sx = Math.cos(a) * radius * 1.22;
-        const sy = Math.sin(a) * radius * 0.72;
-        ctx.fillStyle = "#ffffff";
-        ctx.beginPath();
-        ctx.arc(sx, sy, Math.max(2, radius * 0.12), 0, Math.PI * 2);
-        ctx.fill();
+      // Markazdagi metall plastina va pastki soya.
+      ctx.fillStyle = "#596579";
+      roundRect(left + 8, top + 8, blockW - 16, 4, 1.5, "#596579");
+      ctx.fillStyle = "#101722";
+      roundRect(left + 7, bottom - 10, blockW - 14, 4, 1.5, "#101722");
+
+      // Mahkamlovchi boltlar.
+      const boltR = 1.8;
+      for (const bx of [left + 5, right - 5]) {
+        for (const by of [top + 6, bottom - 6]) {
+          ctx.beginPath();
+          ctx.arc(bx, by, boltR, 0, Math.PI * 2);
+          ctx.fillStyle = "#c4ccd7";
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(bx - 1, by);
+          ctx.lineTo(bx + 1, by);
+          ctx.strokeStyle = "#303a49";
+          ctx.lineWidth = 0.8;
+          ctx.stroke();
+        }
       }
 
-      // Bright central sensor
-      ctx.fillStyle = "#ffffff";
-      ctx.shadowColor = "#ffffff";
-      ctx.shadowBlur = 12;
+      // Qirrada bo‘ylab xira metall aks, neon nursiz.
       ctx.beginPath();
-      ctx.arc(0, 0, radius * 0.2, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.moveTo(left + 7, top + 3);
+      ctx.lineTo(right - 8, top + 3);
+      ctx.strokeStyle = "rgba(235,242,250,0.55)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
       ctx.restore();
     }
     /**
@@ -1159,7 +1187,8 @@
      
      drawAtmosphere(w, h, baseY);
      
-     // Zamonaviy silindrsimon neon quvur — yog‘och ustun o‘rnida.
+     // Yangi ko‘rinishdagi yaxlit grafit ustun.
+     // Besh uzunlik qismi faqat ichki tuzilma sifatida qoladi, tashqi chegaralar yo‘q.
      const dropY = sampleTrunkDropY(
        typeof now === "number" ? now : performance.now(),
      );
@@ -1168,54 +1197,58 @@
      const pipeW = trunkW;
      const pipeH = treeH;
 
-     // Quvur tanasi: metall gradient, yumaloq chetlar va markaziy nur.
      ctx.save();
-     ctx.shadowColor = "#8b2cff";
-     ctx.shadowBlur = 22;
-     const pipeGradient = ctx.createLinearGradient(towerX, 0, towerX + pipeW, 0);
-     pipeGradient.addColorStop(0, "#090b19");
-     pipeGradient.addColorStop(0.12, "#39445e");
-     pipeGradient.addColorStop(0.28, "#151d32");
-     pipeGradient.addColorStop(0.52, "#69758b");
-     pipeGradient.addColorStop(0.72, "#20283e");
-     pipeGradient.addColorStop(0.9, "#46516c");
-     pipeGradient.addColorStop(1, "#080b17");
-     roundRect(towerX, stackTop, pipeW, pipeH, pipeW * 0.42, pipeGradient);
 
-     // Silindr bo‘ylab uzluksiz yoritish chiziqlari.
-     ctx.shadowBlur = 12;
-     ctx.shadowColor = "#00eaff";
-     ctx.fillStyle = "rgba(0,234,255,0.9)";
-     roundRect(towerX + pipeW * 0.16, stackTop + 8, 2.5, pipeH - 16, 1.2, "rgba(0,234,255,0.9)");
-     ctx.shadowColor = "#ff43e8";
-     ctx.fillStyle = "rgba(255,67,232,0.8)";
-     roundRect(towerX + pipeW * 0.78, stackTop + 8, 2, pipeH - 16, 1, "rgba(255,67,232,0.8)");
+     // Asosiy korpus: to‘q grafit, keramik qoplama va qirrali yon tomonlar.
+     const bodyGradient = ctx.createLinearGradient(towerX, 0, towerX + pipeW, 0);
+     bodyGradient.addColorStop(0, "#080c14");
+     bodyGradient.addColorStop(0.12, "#303a49");
+     bodyGradient.addColorStop(0.27, "#596475");
+     bodyGradient.addColorStop(0.48, "#252e3c");
+     bodyGradient.addColorStop(0.72, "#424d5e");
+     bodyGradient.addColorStop(0.9, "#1b2431");
+     bodyGradient.addColorStop(1, "#070b12");
 
-     // Besh uzun bo‘lakli uzluksiz quvur. Bo‘laklar orasida chiziq yo‘q.
+     // Yumaloq bitta tashqi korpus, segment choklari chizilmaydi.
+     roundRect(towerX, stackTop, pipeW, pipeH, 9, bodyGradient);
+
+     // Yon qirralardagi metall relslar.
+     roundRect(towerX + 4, stackTop + 8, 2, pipeH - 16, 1, "#8d9aab");
+     roundRect(towerX + pipeW - 6, stackTop + 8, 2, pipeH - 16, 1, "#101722");
+
+     // Uzun markaziy panel. Hech qanday ko‘ndalang bo‘luvchi chiziq yo‘q.
+     const panelX = towerX + pipeW * 0.29;
+     const panelW = pipeW * 0.42;
+     const panelGradient = ctx.createLinearGradient(panelX, 0, panelX + panelW, 0);
+     panelGradient.addColorStop(0, "#1a2330");
+     panelGradient.addColorStop(0.5, "#8994a3");
+     panelGradient.addColorStop(1, "#202a38");
+     roundRect(panelX, stackTop + 5, panelW, pipeH - 10, 3, panelGradient);
+
+     // Mayda vertikal tekstura korpusni metall ko‘rinishida saqlaydi.
+     ctx.save();
+     ctx.globalAlpha = 0.22;
+     ctx.strokeStyle = "#dce4ef";
+     ctx.lineWidth = 0.7;
+     for (let i = 0; i < 9; i++) {
+       const sx = towerX + 8 + i * ((pipeW - 16) / 8);
+       ctx.beginPath();
+       ctx.moveTo(sx, stackTop + 14);
+       ctx.lineTo(sx, stackTop + pipeH - 14);
+       ctx.stroke();
+     }
+     ctx.restore();
+
+     // To‘siqlar quvurga tegmaydi va korpus yuzasida hech qanday chiziq yo‘q.
      for (let i = SEGMENTS - 1; i >= 0; i--) {
        const y = baseY - (i + 1) * segH + dropY;
-       const ringY = y + 1;
-       ctx.shadowColor = "#ff24e8";
-       ctx.shadowBlur = 10;
-       roundRect(towerX - 2, ringY, pipeW + 4, 3, 1.5, "#ff24e8");
-
-       // Metall yuzadagi qisqa aks.
-       ctx.shadowBlur = 0;
-       ctx.fillStyle = "rgba(255,255,255,0.2)";
-       roundRect(towerX + pipeW * 0.43, y + 7, 2, Math.max(4, segH - 14), 1, "rgba(255,255,255,0.2)");
-
-       // Quvurdan ajralib turgan xavf droni.
        const hazard = trunk[i];
        if (hazard) drawBranch(towerX, y, pipeW, segH, hazard, now);
      }
 
-     // Quvurning yuqori va pastki metall gardishlari.
-     ctx.shadowColor = "#00dfff";
-     ctx.shadowBlur = 18;
-     roundRect(towerX - 3, stackTop - 5, pipeW + 6, 8, 4, "#00dfff");
-     ctx.shadowColor = "#ff28e8";
-     ctx.shadowBlur = 14;
-     roundRect(towerX - 3, baseY + dropY - 3, pipeW + 6, 7, 3, "#ff28e8");
+     // Faqat yuqori va pastki uchlarida qalin mexanik qopqoq.
+     roundRect(towerX - 2, stackTop - 4, pipeW + 4, 8, 3, "#aab5c4");
+     roundRect(towerX - 2, baseY + dropY - 3, pipeW + 4, 8, 3, "#687587");
      ctx.restore();
 
      // Player — feet on the existing ground line, facing the neon tower.
@@ -1306,7 +1339,7 @@
      
      const danger = trunk[0];
      if (danger && danger === side) {
-       endGame("Kiber dronga urildingiz!");
+       endGame("Zirhli to‘siqqa urildingiz!");
        return;
      }
      
@@ -1941,3 +1974,5 @@
      };
      requestAnimationFrame(waitHero);
     }
+
+
