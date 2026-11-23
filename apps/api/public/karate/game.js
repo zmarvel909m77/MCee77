@@ -1,6 +1,5 @@
 
 
-
 /**
 * Karate Strike — Timberman-style chop arcade.
 * Tap left/right to chop. Same-side branch = game over.
@@ -826,7 +825,7 @@ function drawBranch(x, y, trunkW, segH, side) {
  const left = side === "left";
  const hx = left ? x - bw + 4 : x + trunkW - 4;
  // Wooden plank — same family as trunk
- roundRect(hx, by, bw, bh, 4, "#76502f");
+ roundRect(hx, by, bw, bh, 4, "#a67c52");
  // grain
  ctx.strokeStyle = "rgba(70, 40, 20, 0.28)";
  ctx.lineWidth = 1.2;
@@ -1047,7 +1046,7 @@ function layout() {
  );
  // Ustun har doim 8 ta teng yog‘och qismdan iborat bo‘ladi.
  const nextSegs = 7;
- const segH = treeH / 6.3;
+ const segH = treeH / nextSegs;
  if (nextSegs !== SEGMENTS) {
    SEGMENTS = nextSegs;
    while (trunk.length < SEGMENTS) {
@@ -1153,16 +1152,16 @@ function updateTrunkDrop(_dt) {
  ctx.save();
  // No bend / lean / shake — perfectly vertical drop (KK2 slot feel)
  // Fill only the segment stack bounds (never leave a phantom hover slab)
- const stackTop = baseY - SEGMENTS * segH + dropY;
+ const stackTop = baseY - treeH + dropY;
  const stackBottom = baseY + dropY;
  const fillH = Math.max(0, stackBottom - stackTop + 1);
  if (fillH > 0) {
-   ctx.fillStyle = "#855b37";
+   ctx.fillStyle = "#c49a6c";
    ctx.fillRect(trunkX, stackTop, trunkW, fillH);
-   ctx.fillStyle = "rgba(35, 19, 9, 0.30)";
+   ctx.fillStyle = "rgba(90, 50, 22, 0.22)";
    ctx.fillRect(trunkX, stackTop, 7, fillH);
    ctx.fillRect(trunkX + trunkW - 8, stackTop, 8, fillH);
-   ctx.fillStyle = "rgba(190, 139, 91, 0.12)";
+   ctx.fillStyle = "rgba(255, 230, 190, 0.2)";
    ctx.fillRect(trunkX + 8, stackTop, 5, fillH);
  }
  
@@ -1198,7 +1197,7 @@ function updateTrunkDrop(_dt) {
 
  // Ustun tepasidagi ochiq kesimni yog'och qopqoq bilan yopish.
  // Qopqoq stack bilan birga siljiydi va novdalar chizilgandan keyin ko'rinadi.
- ctx.fillStyle = "#8b623e";
+ ctx.fillStyle = "#d4ad7e";
  ctx.fillRect(trunkX - 1, stackTop - 2, trunkW + 2, 6);
  ctx.strokeStyle = "rgba(75, 43, 20, 0.55)";
  ctx.lineWidth = 1.5;
@@ -1951,7 +1950,3 @@ if (urlParams.has("shot")) {
  };
  requestAnimationFrame(waitHero);
 }
-
-
-
-
