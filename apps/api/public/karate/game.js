@@ -1,14 +1,6 @@
 
 
 
-
-
-
-
-
-
-
-
 /**
 * Karate Strike — Timberman-style chop arcade.
 * Tap left/right to chop. Same-side branch = game over.
@@ -118,7 +110,7 @@ const GROUND_MAX = 48;
 * Live segment count — derived in layout() from TREE_HEIGHT_FRAC.
 * Starts at 5; resized when the canvas lays out.
 */
-let SEGMENTS = 7;
+let SEGMENTS = 6;
 const ENERGY_MAX = 100;
 /** Base drain/sec — scaled by difficultyFor(score). */
 const ENERGY_DRAIN = 11;
@@ -827,28 +819,17 @@ function drawBush(cx, baseY, r) {
 * @param {Side} side
 */
 function drawBranch(x, y, trunkW, segH, side) {
- // Top-aligned: plank flush with the upper seam of the block (ref)
+ // Novda ham ustun bilan bir xil rangdagi yaxlit taxta.
  const bh = Math.min(25, Math.max(18, segH * 0.18));
- const by = y; // exact top edge
- const bw = trunkW * 1.65; // shorter, thicker branch obstacle
+ const by = y;
+ const bw = trunkW * 1.65;
  const left = side === "left";
  const hx = left ? x - bw + 4 : x + trunkW - 4;
- // Wooden plank — same family as trunk
  roundRect(hx, by, bw, bh, 4, "#D9B486");
- // grain
- ctx.strokeStyle = "rgba(105, 65, 30, 0.22)";
- ctx.lineWidth = 1.2;
- for (let i = 0; i < 2; i++) {
-   const gy = by + 4 + i * (bh / 2.4);
-   ctx.beginPath();
-   ctx.moveTo(hx + 6, gy);
-   ctx.lineTo(hx + bw - 6, gy + (i % 2));
-   ctx.stroke();
- }
- // dark edge near trunk
- ctx.fillStyle = "rgba(105, 65, 30, 0.18)";
- if (left) ctx.fillRect(hx + bw - 8, by, 8, bh);
- else ctx.fillRect(hx, by, 8, bh);
+ // Yuzada chiziq yo‘q, faqat chetida sayoz o‘yma qirrasi bor.
+ const edgeX = left ? hx + bw - 5 : hx + 2;
+ roundRect(edgeX, by + 3, 3, bh - 6, 1.5, "rgba(125, 87, 49, 0.10)");
+ roundRect(edgeX + 3, by + 4, 1.2, bh - 8, 0.6, "rgba(255, 239, 211, 0.18)");
 }
  
 /**
@@ -1054,7 +1035,7 @@ function layout() {
    ),
  );
  // Ustun har doim 8 ta teng yog‘och qismdan iborat bo‘ladi.
- const nextSegs = 7;
+ const nextSegs = 6;
  const segH = treeH / nextSegs;
  if (nextSegs !== SEGMENTS) {
    SEGMENTS = nextSegs;
@@ -1150,7 +1131,7 @@ function updateTrunkDrop(_dt) {
    trunkW * 1.3,
    14,
    4,
-   "#C99B68",
+   "#D9B486",
  );
  
  // Sample drop every paint so settle can't stall between loop ticks
@@ -1165,59 +1146,30 @@ function updateTrunkDrop(_dt) {
  const stackBottom = baseY + dropY;
  const fillH = Math.max(0, stackBottom - stackTop + 1);
  if (fillH > 0) {
+   // Ustun va barcha bo‘laklar bir xil och yog‘och rangida.
    ctx.fillStyle = "#D9B486";
    ctx.fillRect(trunkX, stackTop, trunkW, fillH);
-   ctx.fillStyle = "rgba(105, 65, 30, 0.16)";
-   ctx.fillRect(trunkX, stackTop, 7, fillH);
-   ctx.fillRect(trunkX + trunkW - 8, stackTop, 8, fillH);
-   ctx.fillStyle = "rgba(255, 242, 218, 0.28)";
-   ctx.fillRect(trunkX + 8, stackTop, 5, fillH);
- }
- 
- for (let i = SEGMENTS - 1; i >= 0; i--) {
-   const y = baseY - (i + 1) * segH + dropY;
-   const x = trunkX;
-   // Vertical grain
-   ctx.strokeStyle = "rgba(105, 65, 30, 0.18)";
-   ctx.lineWidth = 1.35;
-   for (let g = 0; g < 4; g++) {
-     const gx = x + 10 + g * ((trunkW - 20) / 3.2);
-     ctx.beginPath();
-     ctx.moveTo(gx, y + 6);
-     ctx.lineTo(gx + (g % 2 ? 1.4 : -1), y + segH - 4);
-     ctx.stroke();
-   }
-   // Top seam of this block — branch attaches here (ref)
-   ctx.strokeStyle = "rgba(105, 65, 30, 0.22)";
-   ctx.lineWidth = 2.2;
-   ctx.beginPath();
-   ctx.moveTo(x + 3, y + 1);
-   ctx.lineTo(x + trunkW - 3, y + 1);
-   ctx.stroke();
- 
-   const branch = trunk[i];
-   if (branch) drawBranch(x, y, trunkW, segH, branch);
- }
 
+   // Taxta tolalari chiziq qilib chizilmaydi. Ular sayoz o‘yma ko‘rinishida.
+   for (let i = 0; i < SEGMENTS; i++) {
+     const y = baseY - (i + 1) * segH + dropY;
+     const grooveTop = y + Math.max(10, segH * 0.09);
+     const grooveH = segH - Math.max(20, segH * 0.18);
+     for (let g = 0; g < 3; g++) {
+       const gx = trunkX + 12 + g * ((trunkW - 24) / 2);
+       roundRect(gx, grooveTop, 3.2, grooveH, 1.6, "rgba(125, 87, 49, 0.10)");
+       roundRect(gx + 3.2, grooveTop + 1, 1.3, grooveH - 2, 0.65, "rgba(255, 239, 211, 0.20)");
+     }
+     const branch = trunk[i];
+     if (branch) drawBranch(trunkX, y, trunkW, segH, branch);
+   }
+ }
  // Ustun tepasidagi ochiq kesimni yog'och qopqoq bilan yopish.
  // Qopqoq stack bilan birga siljiydi va novdalar chizilgandan keyin ko'rinadi.
- ctx.fillStyle = "#E4C49A";
+ ctx.fillStyle = "#D9B486";
  ctx.fillRect(trunkX - 1, stackTop - 2, trunkW + 2, 6);
- ctx.strokeStyle = "rgba(105, 65, 30, 0.28)";
- ctx.lineWidth = 1.5;
- ctx.beginPath();
- ctx.moveTo(trunkX, stackTop);
- ctx.lineTo(trunkX + trunkW, stackTop);
- ctx.stroke();
- ctx.strokeStyle = "rgba(255, 242, 218, 0.42)";
- ctx.lineWidth = 1;
- ctx.beginPath();
- ctx.moveTo(trunkX + 8, stackTop - 1);
- ctx.lineTo(trunkX + trunkW - 8, stackTop - 1);
- ctx.stroke();
- ctx.fillStyle = "rgba(105, 65, 30, 0.18)";
- ctx.fillRect(trunkX - 1, stackTop - 2, 3, 6);
- ctx.fillRect(trunkX + trunkW - 2, stackTop - 2, 3, 6);
+ ctx.fillStyle = "rgba(120, 82, 45, 0.10)";
+ ctx.fillRect(trunkX - 1, stackTop + 2, trunkW + 2, 2);
 
  ctx.restore();
  
@@ -1246,12 +1198,6 @@ function updateTrunkDrop(_dt) {
    ctx.rotate(d.rot);
    ctx.globalAlpha = Math.max(0, Math.min(1, d.life));
    roundRect(-dw / 2, -dh / 2, dw, dh, 2.5, "#D9B486");
-   ctx.strokeStyle = "rgba(90, 50, 25, 0.28)";
-   ctx.lineWidth = 1;
-   ctx.beginPath();
-   ctx.moveTo(-dw / 2 + 4, 0);
-   ctx.lineTo(dw / 2 - 4, 0.5);
-   ctx.stroke();
    if (d.branch) {
      // Short stub plank (not a full-size branch)
      const bh = Math.min(8, dh * 0.4);
@@ -1606,7 +1552,7 @@ function togglePause() {
  } else if (phase === "paused") {
    phase = "playing";
    lastTs = performance.now();
-   hint.textContent = "Chap yoki o‘ng tomonga bosing";
+   hint.textContent = "";
  }
 }
  
@@ -1796,9 +1742,10 @@ requestAnimationFrame(() => {
 layout();
 TreeBranchController.reset();
 seedTrunk();
+hint.textContent = "";
 showOverlay(
  "Karate Strike",
- "Chap yoki o‘ng tomonga bosing. Novda siz tomonda bo‘lsa — ehtiyot!",
+ "Novdalardan ehtiyot bo‘ling!",
  "O‘ynash",
 );
 void loadBest();
@@ -1954,4 +1901,7 @@ if (urlParams.has("shot")) {
  };
  requestAnimationFrame(waitHero);
 }
+
+
+
 
