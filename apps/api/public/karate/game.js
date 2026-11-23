@@ -1,6 +1,5 @@
 
 
-
     /**
     * Karate Strike — Timberman-style chop arcade.
     * Tap left/right to chop. Same-side hovering drone = game over.
@@ -110,7 +109,7 @@
     * Live segment count — derived in layout() from TREE_HEIGHT_FRAC.
     * Starts at 5; resized when the canvas lays out.
     */
-    let SEGMENTS = 6;
+    let SEGMENTS = 5;
     const ENERGY_MAX = 100;
     /** Base drain/sec — scaled by difficultyFor(score). */
     const ENERGY_DRAIN = 11;
@@ -1045,7 +1044,7 @@
      const w = canvas.clientWidth;
      const h = canvas.clientHeight;
      const cx = w * 0.5;
-     // Thinner pole (ingichkaroq) — branches still top-mounted on each block
+     // Thinner neon pipe — five longer sections, with no separator lines
      const trunkW = Math.min(46, Math.max(40, w * 0.115));
      // Keep ~1cm ground visible above the canvas bottom (shell already clears
      // safe-area / home indicator via padding-bottom + --app-height).
@@ -1070,8 +1069,8 @@
          treeH * HERO_OF_TREE_FRAC,
        ),
      );
-     // Ustun 6 ta teng, uzunroq yog‘och qismdan iborat.
-     const nextSegs = 6;
+     // Ustun 5 ta teng, uzunroq bo‘lakdan iborat.
+     const nextSegs = 5;
      const segH = treeH / nextSegs;
      if (nextSegs !== SEGMENTS) {
        SEGMENTS = nextSegs;
@@ -1192,7 +1191,7 @@
      ctx.fillStyle = "rgba(255,67,232,0.8)";
      roundRect(towerX + pipeW * 0.78, stackTop + 8, 2, pipeH - 16, 1, "rgba(255,67,232,0.8)");
 
-     // Segmentlar orasidagi nozik neon halqalar; dronlar ularga tegmaydi.
+     // Besh uzun bo‘lakli uzluksiz quvur. Bo‘laklar orasida chiziq yo‘q.
      for (let i = SEGMENTS - 1; i >= 0; i--) {
        const y = baseY - (i + 1) * segH + dropY;
        const ringY = y + 1;
@@ -1320,7 +1319,7 @@
      
      trunk.shift();
      trunk.push(TreeBranchController.next(score + 1));
-     // Upper stack stays visually raised, then slides tekis into the gap (queueable)
+     // Upper pipe stays visually raised, then slides smoothly into place (queueable)
      beginTrunkDrop(segH);
      
      score += 1;
@@ -1942,4 +1941,3 @@
      };
      requestAnimationFrame(waitHero);
     }
-
