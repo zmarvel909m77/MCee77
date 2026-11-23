@@ -1,5 +1,8 @@
 
 
+
+
+
 /**
 * Karate Strike — Timberman-style chop arcade.
 * Tap left/right to chop. Same-side branch = game over.
@@ -109,7 +112,7 @@ const GROUND_MAX = 48;
 * Live segment count — derived in layout() from TREE_HEIGHT_FRAC.
 * Starts at 5; resized when the canvas lays out.
 */
-let SEGMENTS = 7;
+let SEGMENTS = 6;
 const ENERGY_MAX = 100;
 /** Base drain/sec — scaled by difficultyFor(score). */
 const ENERGY_DRAIN = 11;
@@ -155,17 +158,6 @@ heroImg.onerror = () => {
  heroReady = false;
 };
 heroImg.src = HERO_ATLAS.image;
-
-// Orqa fon rasmi. Barglar animatsiyasi va uning chizilish kodi saqlanadi.
-const backgroundImg = new Image();
-let backgroundReady = false;
-backgroundImg.onload = () => {
-  backgroundReady = true;
-};
-backgroundImg.onerror = () => {
-  backgroundReady = false;
-};
-backgroundImg.src = "./background.PNG";
  
 // Fon endi Canvas kodlari bilan chiziladi; tashqi background.png talab qilinmaydi.
  
@@ -557,7 +549,7 @@ function showOverlay(title, text, btnLabel) {
  
 function hideOverlay() {
  overlay.classList.add("hidden");
- hint.style.visibility = "visible";
+ hint.style.visibility = "hidden";
 }
  
 function resize() {
@@ -677,25 +669,90 @@ function drawForestLine(w, y, height, color, seed = 1) {
 }
  
 function drawAtmosphere(w, h, baseY) {
- // Fon rasmi butun Canvas maydonini qoplaydi. O‘yin obyektlari uning ustida chiziladi.
- if (backgroundReady && backgroundImg.naturalWidth > 0 && backgroundImg.naturalHeight > 0) {
-   const scale = Math.max(w / backgroundImg.naturalWidth, h / backgroundImg.naturalHeight);
-   const drawW = backgroundImg.naturalWidth * scale;
-   const drawH = backgroundImg.naturalHeight * scale;
-   ctx.drawImage(
-     backgroundImg,
-     (w - drawW) / 2,
-     (h - drawH) / 2,
-     drawW,
-     drawH,
-   );
- } else {
-   // Rasm yuklanayotgan paytda bo‘sh ekran chiqmasligi uchun zaxira fon.
-   ctx.fillStyle = "#21006d";
-   ctx.fillRect(0, 0, w, h);
+ // Binafsha osmon va pushti shafaq.
+ const sky = ctx.createLinearGradient(0, 0, 0, h);
+ sky.addColorStop(0, "#21006d");
+ sky.addColorStop(0.28, "#5b08a8");
+ sky.addColorStop(0.48, "#b20fc4");
+ sky.addColorStop(0.62, "#f018bd");
+ sky.addColorStop(0.76, "#ff5b9c");
+ sky.addColorStop(1, "#260b62");
+ ctx.fillStyle = sky;
+ ctx.fillRect(0, 0, w, h);
+ 
+ const glow = ctx.createRadialGradient(w * 0.52, h * 0.57, 2, w * 0.52, h * 0.57, w * 0.8);
+ glow.addColorStop(0, "rgba(255, 75, 190, 0.55)");
+ glow.addColorStop(0.55, "rgba(188, 20, 210, 0.22)");
+ glow.addColorStop(1, "rgba(25, 0, 75, 0)");
+ ctx.fillStyle = glow;
+ ctx.fillRect(0, 0, w, h);
+ 
+ // Uzoqdagi tog‘lar.
+ drawMountainRange([
+   [0, h * 0.57], [w * 0.12, h * 0.53], [w * 0.24, h * 0.58],
+   [w * 0.34, h * 0.49], [w * 0.48, h * 0.57], [w * 0.62, h * 0.55],
+   [w * 0.82, h * 0.46], [w, h * 0.52],
+ ], "#4a16a7");
+ drawMountainRange([
+   [0, h * 0.63], [w * 0.17, h * 0.58], [w * 0.31, h * 0.64],
+   [w * 0.49, h * 0.57], [w * 0.67, h * 0.62], [w * 0.84, h * 0.55],
+   [w, h * 0.59],
+ ], "#351078");
+ 
+ // Qorli cho‘qqilar uchun pushti va lavanda qirralar.
+ ctx.lineCap = "round";
+ ctx.lineJoin = "round";
+ const peaks = [
+   [w * 0.31, h * 0.49, w * 0.22, h * 0.57, w * 0.40, h * 0.57],
+   [w * 0.82, h * 0.46, w * 0.69, h * 0.57, w * 0.98, h * 0.55],
+ ];
+ for (const [x, y, lx, ly, rx, ry] of peaks) {
+   ctx.beginPath();
+   ctx.moveTo(lx, ly);
+   ctx.lineTo(x, y);
+   ctx.lineTo(rx, ry);
+   ctx.strokeStyle = "rgba(255, 125, 220, 0.9)";
+   ctx.lineWidth = Math.max(2, w * 0.008);
+   ctx.stroke();
+   ctx.beginPath();
+   ctx.moveTo(x, y);
+   ctx.lineTo(x - w * 0.035, y + h * 0.035);
+   ctx.lineTo(x - w * 0.008, y + h * 0.026);
+   ctx.lineTo(x + w * 0.018, y + h * 0.052);
+   ctx.strokeStyle = "#ffb2d5";
+   ctx.lineWidth = Math.max(2, w * 0.006);
+   ctx.stroke();
  }
-
- // Yer platformasi avvalgi holatida qoldirildi.
+ 
+ // Shafaq bulutlari.
+ drawCloudBand(w, h * 0.43, Math.max(12, w * 0.055), "#ffb06d", 0.9);
+ drawCloudBand(w, h * 0.49, Math.max(10, w * 0.04), "#ff4dbb", 0.72);
+ drawCloudBand(w, h * 0.65, Math.max(12, w * 0.05), "#d72bd6", 0.62);
+ 
+ // Tog‘ etagidagi tuman qatlamlari.
+ for (let i = 0; i < 5; i++) {
+   const y = h * (0.66 + i * 0.045);
+   const mist = ctx.createLinearGradient(0, y - 20, 0, y + 34);
+   mist.addColorStop(0, "rgba(255, 50, 220, 0)");
+   mist.addColorStop(0.5, `rgba(220, 35, 220, ${0.18 - i * 0.018})`);
+   mist.addColorStop(1, "rgba(90, 20, 170, 0)");
+   ctx.fillStyle = mist;
+   ctx.fillRect(0, y - 20, w, 54);
+ }
+ 
+ // Old va uzoq qarag‘ayzorlar.
+ drawForestLine(w, h * 0.73, h * 0.085, "#25106c", 3);
+ drawForestLine(w, h * 0.79, h * 0.095, "#19094e", 8);
+ drawForestLine(w, h * 0.84, h * 0.105, "#100638", 13);
+ 
+ // Pastki binafsha soya, o‘yin maydoniga yumshoq o‘tish.
+ const lower = ctx.createLinearGradient(0, h * 0.82, 0, h);
+ lower.addColorStop(0, "rgba(20, 4, 70, 0)");
+ lower.addColorStop(1, "rgba(20, 5, 65, 0.96)");
+ ctx.fillStyle = lower;
+ ctx.fillRect(0, h * 0.82, w, h * 0.18);
+ 
+ // Yer platformasi.
  const ground = ctx.createLinearGradient(0, baseY, 0, h);
  ground.addColorStop(0, "#351044");
  ground.addColorStop(0.2, "#1b092c");
@@ -706,7 +763,7 @@ function drawAtmosphere(w, h, baseY) {
  ctx.fillRect(0, baseY - 2, w, 3);
  ctx.fillStyle = "rgba(15, 3, 28, 0.85)";
  ctx.fillRect(0, baseY + 3, w, 5);
-
+ 
  ctx.strokeStyle = "rgba(255, 55, 230, 0.25)";
  ctx.lineWidth = 1.5;
  for (let i = 0; i < 5; i++) {
@@ -717,8 +774,8 @@ function drawAtmosphere(w, h, baseY) {
    ctx.lineTo(w * 0.96, gy);
    ctx.stroke();
  }
-
- // Harakatlanuvchi barglar. Animatsiya kodi o‘zgartirilmagan.
+ 
+ // Harakatlanuvchi barglar.
  ctx.fillStyle = "rgba(12, 2, 35, 0.72)";
  for (const p of petals) {
    ctx.save();
@@ -730,7 +787,7 @@ function drawAtmosphere(w, h, baseY) {
    ctx.restore();
  }
 }
-
+ 
 function drawCloud(cx, cy, r) {
  ctx.beginPath();
  ctx.arc(cx, cy, r * 0.55, 0, Math.PI * 2);
@@ -819,15 +876,15 @@ function drawBush(cx, baseY, r) {
 */
 function drawBranch(x, y, trunkW, segH, side) {
  // Top-aligned: plank flush with the upper seam of the block (ref)
- const bh = Math.min(25, Math.max(18, segH * 0.18));
+ const bh = Math.min(18, Math.max(12, segH * 0.12));
  const by = y; // exact top edge
- const bw = trunkW * 1.65; // shorter, thicker branch obstacle
+ const bw = trunkW * 2.15; // longer plank so thin trunk still reads
  const left = side === "left";
  const hx = left ? x - bw + 4 : x + trunkW - 4;
  // Wooden plank — same family as trunk
- roundRect(hx, by, bw, bh, 4, "#D9B486");
+ roundRect(hx, by, bw, bh, 4, "#a67c52");
  // grain
- ctx.strokeStyle = "rgba(105, 65, 30, 0.22)";
+ ctx.strokeStyle = "rgba(70, 40, 20, 0.28)";
  ctx.lineWidth = 1.2;
  for (let i = 0; i < 2; i++) {
    const gy = by + 4 + i * (bh / 2.4);
@@ -837,7 +894,7 @@ function drawBranch(x, y, trunkW, segH, side) {
    ctx.stroke();
  }
  // dark edge near trunk
- ctx.fillStyle = "rgba(105, 65, 30, 0.18)";
+ ctx.fillStyle = "rgba(60, 30, 15, 0.28)";
  if (left) ctx.fillRect(hx + bw - 8, by, 8, bh);
  else ctx.fillRect(hx, by, 8, bh);
 }
@@ -1020,7 +1077,7 @@ function layout() {
  const h = canvas.clientHeight;
  const cx = w * 0.5;
  // Thinner pole (ingichkaroq) — branches still top-mounted on each block
- const trunkW = Math.min(58, Math.max(50, w * 0.14));
+ const trunkW = Math.min(46, Math.max(40, w * 0.115));
  // Keep ~1cm ground visible above the canvas bottom (shell already clears
  // safe-area / home indicator via padding-bottom + --app-height).
  const groundH = Math.max(
@@ -1044,8 +1101,8 @@ function layout() {
      treeH * HERO_OF_TREE_FRAC,
    ),
  );
- // Ustun har doim 8 ta teng yog‘och qismdan iborat bo‘ladi.
- const nextSegs = 7;
+ // Ustun har doim 6 ta teng, balandroq yog‘och qismdan iborat bo‘ladi.
+ const nextSegs = 6;
  const segH = treeH / nextSegs;
  if (nextSegs !== SEGMENTS) {
    SEGMENTS = nextSegs;
@@ -1141,7 +1198,7 @@ function updateTrunkDrop(_dt) {
    trunkW * 1.3,
    14,
    4,
-   "#C99B68",
+   "#8a6238",
  );
  
  // Sample drop every paint so settle can't stall between loop ticks
@@ -1156,20 +1213,25 @@ function updateTrunkDrop(_dt) {
  const stackBottom = baseY + dropY;
  const fillH = Math.max(0, stackBottom - stackTop + 1);
  if (fillH > 0) {
-   ctx.fillStyle = "#D9B486";
+   ctx.fillStyle = "#c49a6c";
    ctx.fillRect(trunkX, stackTop, trunkW, fillH);
-   ctx.fillStyle = "rgba(105, 65, 30, 0.16)";
+   ctx.fillStyle = "rgba(90, 50, 22, 0.22)";
    ctx.fillRect(trunkX, stackTop, 7, fillH);
    ctx.fillRect(trunkX + trunkW - 8, stackTop, 8, fillH);
-   ctx.fillStyle = "rgba(255, 242, 218, 0.28)";
+   ctx.fillStyle = "rgba(255, 230, 190, 0.2)";
    ctx.fillRect(trunkX + 8, stackTop, 5, fillH);
  }
  
  for (let i = SEGMENTS - 1; i >= 0; i--) {
    const y = baseY - (i + 1) * segH + dropY;
    const x = trunkX;
+   // Subtle alternating block shade
+   if (i % 2 === 0) {
+     ctx.fillStyle = "rgba(196, 154, 108, 0.35)";
+     ctx.fillRect(x, y, trunkW, segH + 1.5);
+   }
    // Vertical grain
-   ctx.strokeStyle = "rgba(105, 65, 30, 0.18)";
+   ctx.strokeStyle = "rgba(90, 50, 25, 0.2)";
    ctx.lineWidth = 1.35;
    for (let g = 0; g < 4; g++) {
      const gx = x + 10 + g * ((trunkW - 20) / 3.2);
@@ -1179,7 +1241,7 @@ function updateTrunkDrop(_dt) {
      ctx.stroke();
    }
    // Top seam of this block — branch attaches here (ref)
-   ctx.strokeStyle = "rgba(105, 65, 30, 0.22)";
+   ctx.strokeStyle = "rgba(55, 28, 10, 0.38)";
    ctx.lineWidth = 2.2;
    ctx.beginPath();
    ctx.moveTo(x + 3, y + 1);
@@ -1192,21 +1254,21 @@ function updateTrunkDrop(_dt) {
 
  // Ustun tepasidagi ochiq kesimni yog'och qopqoq bilan yopish.
  // Qopqoq stack bilan birga siljiydi va novdalar chizilgandan keyin ko'rinadi.
- ctx.fillStyle = "#E4C49A";
+ ctx.fillStyle = "#d4ad7e";
  ctx.fillRect(trunkX - 1, stackTop - 2, trunkW + 2, 6);
- ctx.strokeStyle = "rgba(105, 65, 30, 0.28)";
+ ctx.strokeStyle = "rgba(75, 43, 20, 0.55)";
  ctx.lineWidth = 1.5;
  ctx.beginPath();
  ctx.moveTo(trunkX, stackTop);
  ctx.lineTo(trunkX + trunkW, stackTop);
  ctx.stroke();
- ctx.strokeStyle = "rgba(255, 242, 218, 0.42)";
+ ctx.strokeStyle = "rgba(255, 225, 180, 0.35)";
  ctx.lineWidth = 1;
  ctx.beginPath();
  ctx.moveTo(trunkX + 8, stackTop - 1);
  ctx.lineTo(trunkX + trunkW - 8, stackTop - 1);
  ctx.stroke();
- ctx.fillStyle = "rgba(105, 65, 30, 0.18)";
+ ctx.fillStyle = "rgba(90, 50, 22, 0.3)";
  ctx.fillRect(trunkX - 1, stackTop - 2, 3, 6);
  ctx.fillRect(trunkX + trunkW - 2, stackTop - 2, 3, 6);
 
@@ -1236,7 +1298,7 @@ function updateTrunkDrop(_dt) {
    ctx.translate(d.x, d.y);
    ctx.rotate(d.rot);
    ctx.globalAlpha = Math.max(0, Math.min(1, d.life));
-   roundRect(-dw / 2, -dh / 2, dw, dh, 2.5, "#D9B486");
+   roundRect(-dw / 2, -dh / 2, dw, dh, 2.5, "#c49a6c");
    ctx.strokeStyle = "rgba(90, 50, 25, 0.28)";
    ctx.lineWidth = 1;
    ctx.beginPath();
@@ -1249,7 +1311,7 @@ function updateTrunkDrop(_dt) {
      const bw = dw * 1.55;
      const left = d.branch === "left";
      const hx = left ? -dw / 2 - bw + 3 : dw / 2 - 3;
-     roundRect(hx, -dh / 2, bw, bh, 2, "#D9B486");
+     roundRect(hx, -dh / 2, bw, bh, 2, "#a67c52");
    }
    ctx.restore();
  }
@@ -1593,11 +1655,9 @@ function startGame() {
 function togglePause() {
  if (phase === "playing") {
    phase = "paused";
-   hint.textContent = "Davom etish uchun pauzani bosing";
  } else if (phase === "paused") {
    phase = "playing";
    lastTs = performance.now();
-   hint.textContent = "Chap yoki o‘ng tomonga bosing";
  }
 }
  
@@ -1789,7 +1849,7 @@ TreeBranchController.reset();
 seedTrunk();
 showOverlay(
  "Karate Strike",
- "Chap yoki o‘ng tomonga bosing. Novda siz tomonda bo‘lsa — ehtiyot!",
+ "Novda siz tomonda bo‘lsa, ehtiyot bo‘ling!",
  "O‘ynash",
 );
 void loadBest();
@@ -1945,3 +2005,5 @@ if (urlParams.has("shot")) {
  };
  requestAnimationFrame(waitHero);
 }
+
+
