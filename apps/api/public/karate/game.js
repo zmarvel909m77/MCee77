@@ -1,6 +1,3 @@
-
-
-
 /**
 * Karate Strike — Timberman-style chop arcade.
 * Tap left/right to chop. Same-side branch = game over.
@@ -85,10 +82,10 @@ const SPRITE_FPS = 45;
 const WALK_MS = Math.round((4 / SPRITE_FPS) * 1000);
 /** Kick / hit pose hold — mid of 0.08–0.15 s. */
 const CHOP_MS = 120;
-/** Ustun balandligi oshirildi: tepadagi bo‘shliq yopiladi. */
-const TREE_HEIGHT_FRAC = 0.94;
-const TREE_HEIGHT_MIN_FRAC = 0.94;
-const TREE_HEIGHT_MAX_FRAC = 0.94;
+/** Daraxt ustuni canvas balandligining taxminan 82 foizini egallaydi. */
+const TREE_HEIGHT_FRAC = 0.82;
+const TREE_HEIGHT_MIN_FRAC = 0.82;
+const TREE_HEIGHT_MAX_FRAC = 0.82;
 /** Hero height as fraction of tree height (mid of 8–12%). */
 const HERO_OF_TREE_FRAC = 0.1;
 const HERO_OF_TREE_MIN = 0.08;
@@ -110,7 +107,7 @@ const GROUND_MAX = 48;
 * Live segment count — derived in layout() from TREE_HEIGHT_FRAC.
 * Starts at 5; resized when the canvas lays out.
 */
-let SEGMENTS = 8;
+let SEGMENTS = 5;
 const ENERGY_MAX = 100;
 /** Base drain/sec — scaled by difficultyFor(score). */
 const ENERGY_DRAIN = 11;
@@ -156,13 +153,15 @@ heroImg.onerror = () => {
  heroReady = false;
 };
 heroImg.src = HERO_ATLAS.image;
- 
-// O‘yin foni: background.png shu papkada hero-atlas.png bilan birga turadi.
+
+// Alohida fon rasmi. Fayl game.js bilan bir papkada: background.png
 const backgroundImg = new Image();
 let backgroundReady = false;
 backgroundImg.onload = () => { backgroundReady = true; };
 backgroundImg.onerror = () => { backgroundReady = false; };
-backgroundImg.src = "./background.png";
+backgroundImg.src = "./background.PNG";
+ 
+// Fon endi Canvas kodlari bilan chiziladi; tashqi background.png talab qilinmaydi.
  
 /** @type {Phase} */
 let phase = "ready";
@@ -672,36 +671,117 @@ function drawForestLine(w, y, height, color, seed = 1) {
 }
  
 function drawAtmosphere(w, h, baseY) {
- // Fon rasmi ekran nisbatiga mos holda kesilib chiziladi.
+ // Rasm yuklangan bo‘lsa, fon sifatida uni chizamiz.
  if (backgroundReady && backgroundImg.complete && backgroundImg.naturalWidth > 0) {
-   const scale = Math.max(w / backgroundImg.naturalWidth, h / backgroundImg.naturalHeight);
-   const drawW = backgroundImg.naturalWidth * scale;
-   const drawH = backgroundImg.naturalHeight * scale;
-   const drawX = (w - drawW) / 2;
-   const drawY = (h - drawH) / 2;
-   ctx.drawImage(backgroundImg, drawX, drawY, drawW, drawH);
- } else {
-   // Rasm yuklanmasa, zaxira binafsha fon.
-   const sky = ctx.createLinearGradient(0, 0, 0, h);
-   sky.addColorStop(0, "#21006d");
-   sky.addColorStop(0.48, "#8d0bb7");
-   sky.addColorStop(0.72, "#f018bd");
-   sky.addColorStop(1, "#16072e");
-   ctx.fillStyle = sky;
-   ctx.fillRect(0, 0, w, h);
+   ctx.drawImage(backgroundImg, 0, 0, w, h);
+   return;
  }
-
- // Ustun va qahramon aniq ajralishi uchun pastki qismga yengil soya.
- const shade = ctx.createLinearGradient(0, Math.max(0, baseY - 75), 0, h);
- shade.addColorStop(0, "rgba(12, 3, 28, 0)");
- shade.addColorStop(1, "rgba(8, 2, 20, 0.38)");
- ctx.fillStyle = shade;
- ctx.fillRect(0, Math.max(0, baseY - 75), w, h - Math.max(0, baseY - 75));
-
- // Yer chizig‘i.
- ctx.fillStyle = "rgba(255, 75, 230, 0.58)";
- ctx.fillRect(0, baseY - 2, w, 2);
-
+ // Binafsha osmon va pushti shafaq.
+ const sky = ctx.createLinearGradient(0, 0, 0, h);
+ sky.addColorStop(0, "#21006d");
+ sky.addColorStop(0.28, "#5b08a8");
+ sky.addColorStop(0.48, "#b20fc4");
+ sky.addColorStop(0.62, "#f018bd");
+ sky.addColorStop(0.76, "#ff5b9c");
+ sky.addColorStop(1, "#260b62");
+ ctx.fillStyle = sky;
+ ctx.fillRect(0, 0, w, h);
+ 
+ const glow = ctx.createRadialGradient(w * 0.52, h * 0.57, 2, w * 0.52, h * 0.57, w * 0.8);
+ glow.addColorStop(0, "rgba(255, 75, 190, 0.55)");
+ glow.addColorStop(0.55, "rgba(188, 20, 210, 0.22)");
+ glow.addColorStop(1, "rgba(25, 0, 75, 0)");
+ ctx.fillStyle = glow;
+ ctx.fillRect(0, 0, w, h);
+ 
+ // Uzoqdagi tog‘lar.
+ drawMountainRange([
+   [0, h * 0.57], [w * 0.12, h * 0.53], [w * 0.24, h * 0.58],
+   [w * 0.34, h * 0.49], [w * 0.48, h * 0.57], [w * 0.62, h * 0.55],
+   [w * 0.82, h * 0.46], [w, h * 0.52],
+ ], "#4a16a7");
+ drawMountainRange([
+   [0, h * 0.63], [w * 0.17, h * 0.58], [w * 0.31, h * 0.64],
+   [w * 0.49, h * 0.57], [w * 0.67, h * 0.62], [w * 0.84, h * 0.55],
+   [w, h * 0.59],
+ ], "#351078");
+ 
+ // Qorli cho‘qqilar uchun pushti va lavanda qirralar.
+ ctx.lineCap = "round";
+ ctx.lineJoin = "round";
+ const peaks = [
+   [w * 0.31, h * 0.49, w * 0.22, h * 0.57, w * 0.40, h * 0.57],
+   [w * 0.82, h * 0.46, w * 0.69, h * 0.57, w * 0.98, h * 0.55],
+ ];
+ for (const [x, y, lx, ly, rx, ry] of peaks) {
+   ctx.beginPath();
+   ctx.moveTo(lx, ly);
+   ctx.lineTo(x, y);
+   ctx.lineTo(rx, ry);
+   ctx.strokeStyle = "rgba(255, 125, 220, 0.9)";
+   ctx.lineWidth = Math.max(2, w * 0.008);
+   ctx.stroke();
+   ctx.beginPath();
+   ctx.moveTo(x, y);
+   ctx.lineTo(x - w * 0.035, y + h * 0.035);
+   ctx.lineTo(x - w * 0.008, y + h * 0.026);
+   ctx.lineTo(x + w * 0.018, y + h * 0.052);
+   ctx.strokeStyle = "#ffb2d5";
+   ctx.lineWidth = Math.max(2, w * 0.006);
+   ctx.stroke();
+ }
+ 
+ // Shafaq bulutlari.
+ drawCloudBand(w, h * 0.43, Math.max(12, w * 0.055), "#ffb06d", 0.9);
+ drawCloudBand(w, h * 0.49, Math.max(10, w * 0.04), "#ff4dbb", 0.72);
+ drawCloudBand(w, h * 0.65, Math.max(12, w * 0.05), "#d72bd6", 0.62);
+ 
+ // Tog‘ etagidagi tuman qatlamlari.
+ for (let i = 0; i < 5; i++) {
+   const y = h * (0.66 + i * 0.045);
+   const mist = ctx.createLinearGradient(0, y - 20, 0, y + 34);
+   mist.addColorStop(0, "rgba(255, 50, 220, 0)");
+   mist.addColorStop(0.5, `rgba(220, 35, 220, ${0.18 - i * 0.018})`);
+   mist.addColorStop(1, "rgba(90, 20, 170, 0)");
+   ctx.fillStyle = mist;
+   ctx.fillRect(0, y - 20, w, 54);
+ }
+ 
+ // Old va uzoq qarag‘ayzorlar.
+ drawForestLine(w, h * 0.73, h * 0.085, "#25106c", 3);
+ drawForestLine(w, h * 0.79, h * 0.095, "#19094e", 8);
+ drawForestLine(w, h * 0.84, h * 0.105, "#100638", 13);
+ 
+ // Pastki binafsha soya, o‘yin maydoniga yumshoq o‘tish.
+ const lower = ctx.createLinearGradient(0, h * 0.82, 0, h);
+ lower.addColorStop(0, "rgba(20, 4, 70, 0)");
+ lower.addColorStop(1, "rgba(20, 5, 65, 0.96)");
+ ctx.fillStyle = lower;
+ ctx.fillRect(0, h * 0.82, w, h * 0.18);
+ 
+ // Yer platformasi.
+ const ground = ctx.createLinearGradient(0, baseY, 0, h);
+ ground.addColorStop(0, "#351044");
+ ground.addColorStop(0.2, "#1b092c");
+ ground.addColorStop(1, "#08030f");
+ ctx.fillStyle = ground;
+ ctx.fillRect(0, baseY, w, Math.max(0, h - baseY));
+ ctx.fillStyle = "rgba(255, 75, 230, 0.75)";
+ ctx.fillRect(0, baseY - 2, w, 3);
+ ctx.fillStyle = "rgba(15, 3, 28, 0.85)";
+ ctx.fillRect(0, baseY + 3, w, 5);
+ 
+ ctx.strokeStyle = "rgba(255, 55, 230, 0.25)";
+ ctx.lineWidth = 1.5;
+ for (let i = 0; i < 5; i++) {
+   const gy = baseY + 10 + i * 9;
+   if (gy >= h - 2) break;
+   ctx.beginPath();
+   ctx.moveTo(w * 0.04, gy);
+   ctx.lineTo(w * 0.96, gy);
+   ctx.stroke();
+ }
+ 
  // Harakatlanuvchi barglar.
  ctx.fillStyle = "rgba(12, 2, 35, 0.72)";
  for (const p of petals) {
@@ -714,6 +794,7 @@ function drawAtmosphere(w, h, baseY) {
    ctx.restore();
  }
 }
+ 
 function drawCloud(cx, cy, r) {
  ctx.beginPath();
  ctx.arc(cx, cy, r * 0.55, 0, Math.PI * 2);
@@ -1027,8 +1108,9 @@ function layout() {
      treeH * HERO_OF_TREE_FRAC,
    ),
  );
- // Ustun har doim 8 ta teng yog‘och qismdan iborat bo‘ladi.
- const nextSegs = 8;
+ // Tall blocks: each longer than the hero; count fills treeH
+ const minSegH = heroH * 1.55;
+ const nextSegs = Math.max(4, Math.floor(treeH / minSegH));
  const segH = treeH / nextSegs;
  if (nextSegs !== SEGMENTS) {
    SEGMENTS = nextSegs;
