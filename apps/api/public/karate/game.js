@@ -23,6 +23,7 @@ const energyBar = document.getElementById("energyBar");
 const multiBar = document.getElementById("multiBar");
 const multiBadge = document.getElementById("multiBadge");
 const hint = document.getElementById("hint");
+if (hint) hint.style.display = "none";
 const btnMute = document.getElementById("btnMute");
 const btnPause = document.getElementById("btnPause");
  
@@ -553,12 +554,12 @@ function showOverlay(title, text, btnLabel) {
  overlayScore.textContent = String(score);
  primaryBtn.textContent = btnLabel;
  overlay.classList.remove("hidden");
- hint.style.visibility = "hidden";
+ hint.style.display = "none";
 }
  
 function hideOverlay() {
  overlay.classList.add("hidden");
- hint.style.visibility = "visible";
+ hint.style.display = "none";
 }
  
 function resize() {
@@ -818,18 +819,36 @@ function drawBush(cx, baseY, r) {
 * @param {number} segH
 * @param {Side} side
 */
-function drawBranch(x, y, trunkW, segH, side) {
- // Novda ham ustun bilan bir xil rangdagi yaxlit taxta.
- const bh = Math.min(25, Math.max(18, segH * 0.18));
+function drawBranch(x, y, trunkW, segH, side, segmentIndex = 0) {
+ // Novdalar navbatma-navbat turli uzunlikda: kalta, o‘rta va uzun.
+ const branchLengths = [1.45, 2.05, 1.7, 2.25, 1.35, 1.9];
+ const bh = Math.min(19, Math.max(15, segH * 0.095));
  const by = y;
- const bw = trunkW * 1.65;
+ const bw = trunkW * branchLengths[segmentIndex % branchLengths.length];
  const left = side === "left";
- const hx = left ? x - bw + 4 : x + trunkW - 4;
- roundRect(hx, by, bw, bh, 4, "#D9B486");
- // Yuzada chiziq yo‘q, faqat chetida sayoz o‘yma qirrasi bor.
- const edgeX = left ? hx + bw - 5 : hx + 2;
- roundRect(edgeX, by + 3, 3, bh - 6, 1.5, "rgba(125, 87, 49, 0.10)");
- roundRect(edgeX + 3, by + 4, 1.2, bh - 8, 0.6, "rgba(255, 239, 211, 0.18)");
+ const hx = left ? x - bw + 3 : x + trunkW - 3;
+ roundRect(hx, by, bw, bh, 2, "#80421F");
+ ctx.strokeStyle = "#542A16";
+ ctx.lineWidth = 1.5;
+ ctx.stroke();
+ // Yuqori och tusli qirra va pastki to‘q soyasi.
+ ctx.fillStyle = "#D69A65";
+ ctx.fillRect(hx + 5, by + 3, bw - 10, 2);
+ ctx.fillStyle = "#542A16";
+ ctx.fillRect(hx + 4, by + bh - 3, bw - 8, 2);
+ // Taxta tolalari qisqa, ingichka o‘ymalar ko‘rinishida.
+ ctx.strokeStyle = "#D69A65";
+ ctx.lineWidth = 1;
+ ctx.beginPath();
+ ctx.moveTo(hx + bw * 0.18, by + bh * 0.48);
+ ctx.lineTo(hx + bw * 0.43, by + bh * 0.48);
+ ctx.moveTo(hx + bw * 0.58, by + bh * 0.58);
+ ctx.lineTo(hx + bw * 0.84, by + bh * 0.58);
+ ctx.stroke();
+ // Ustunga tutashgan joydagi kesik.
+ ctx.fillStyle = "#542A16";
+ if (left) ctx.fillRect(hx + bw - 5, by + 1, 5, bh - 1);
+ else ctx.fillRect(hx, by + 1, 5, bh - 1);
 }
  
 /**
@@ -1131,7 +1150,7 @@ function updateTrunkDrop(_dt) {
    trunkW * 1.3,
    14,
    4,
-   "#D9B486",
+   "#80421F",
  );
  
  // Sample drop every paint so settle can't stall between loop ticks
@@ -1142,34 +1161,47 @@ function updateTrunkDrop(_dt) {
  ctx.save();
  // No bend / lean / shake — perfectly vertical drop (KK2 slot feel)
  // Fill only the segment stack bounds (never leave a phantom hover slab)
- const stackTop = baseY - treeH + dropY;
+ const stackTop = baseY - SEGMENTS * segH + dropY;
  const stackBottom = baseY + dropY;
  const fillH = Math.max(0, stackBottom - stackTop + 1);
  if (fillH > 0) {
-   // Ustun va barcha bo‘laklar bir xil och yog‘och rangida.
-   ctx.fillStyle = "#D9B486";
+   // Asosiy tana: namunadagi issiq jigarrang-zarg‘aldoq rang.
+   ctx.fillStyle = "#80421F";
    ctx.fillRect(trunkX, stackTop, trunkW, fillH);
-
-   // Taxta tolalari chiziq qilib chizilmaydi. Ular sayoz o‘yma ko‘rinishida.
-   for (let i = 0; i < SEGMENTS; i++) {
-     const y = baseY - (i + 1) * segH + dropY;
-     const grooveTop = y + Math.max(10, segH * 0.09);
-     const grooveH = segH - Math.max(20, segH * 0.18);
-     for (let g = 0; g < 3; g++) {
-       const gx = trunkX + 12 + g * ((trunkW - 24) / 2);
-       roundRect(gx, grooveTop, 3.2, grooveH, 1.6, "rgba(125, 87, 49, 0.10)");
-       roundRect(gx + 3.2, grooveTop + 1, 1.3, grooveH - 2, 0.65, "rgba(255, 239, 211, 0.20)");
+   // Yon qirralar va markaziy tabiiy tuslar.
+   ctx.fillStyle = "#542A16";
+   ctx.fillRect(trunkX, stackTop, 4, fillH);
+   ctx.fillRect(trunkX + trunkW - 5, stackTop, 5, fillH);
+   ctx.fillStyle = "#D69A65";
+   ctx.fillRect(trunkX + 8, stackTop, 5, fillH);
+   // Namunadagi singari uzunasiga ketgan qisqa, notekis o‘yma izlar.
+   const grooveCols = [0.16, 0.31, 0.48, 0.66, 0.82];
+   for (let j = 0; j < grooveCols.length; j++) {
+     const gx = trunkX + trunkW * grooveCols[j];
+     let gy = stackTop + 5 + (j % 3) * 7;
+     while (gy < stackBottom - 3) {
+       const gh = 7 + ((Math.floor(gy / 19) + j * 3) % 4) * 3;
+       ctx.fillStyle = j % 2 === 0 ? "#D69A65" : "#542A16";
+       roundRect(gx, gy, j % 2 === 0 ? 3.5 : 3, Math.min(gh, stackBottom - gy), 1.5, ctx.fillStyle);
+       gy += 17 + ((j + Math.floor(gy / 17)) % 3) * 7;
      }
-     const branch = trunk[i];
-     if (branch) drawBranch(trunkX, y, trunkW, segH, branch);
    }
  }
+ 
+ for (let i = SEGMENTS - 1; i >= 0; i--) {
+   const y = baseY - (i + 1) * segH + dropY;
+   const x = trunkX;
+   const branch = trunk[i];
+   if (branch) drawBranch(x, y, trunkW, segH, branch, i);
+ }
+
  // Ustun tepasidagi ochiq kesimni yog'och qopqoq bilan yopish.
  // Qopqoq stack bilan birga siljiydi va novdalar chizilgandan keyin ko'rinadi.
- ctx.fillStyle = "#D9B486";
+ ctx.fillStyle = "#80421F";
  ctx.fillRect(trunkX - 1, stackTop - 2, trunkW + 2, 6);
- ctx.fillStyle = "rgba(120, 82, 45, 0.10)";
- ctx.fillRect(trunkX - 1, stackTop + 2, trunkW + 2, 2);
+ ctx.fillStyle = "#542A16";
+ ctx.fillRect(trunkX - 1, stackTop - 2, 3, 6);
+ ctx.fillRect(trunkX + trunkW - 2, stackTop - 2, 3, 6);
 
  ctx.restore();
  
@@ -1197,21 +1229,27 @@ function updateTrunkDrop(_dt) {
    ctx.translate(d.x, d.y);
    ctx.rotate(d.rot);
    ctx.globalAlpha = Math.max(0, Math.min(1, d.life));
-   roundRect(-dw / 2, -dh / 2, dw, dh, 2.5, "#D9B486");
+   roundRect(-dw / 2, -dh / 2, dw, dh, 2.5, "#80421F");
+   ctx.strokeStyle = "#542A16";
+   ctx.lineWidth = 1;
+   ctx.beginPath();
+   ctx.moveTo(-dw / 2 + 4, 0);
+   ctx.lineTo(dw / 2 - 4, 0.5);
+   ctx.stroke();
    if (d.branch) {
      // Short stub plank (not a full-size branch)
      const bh = Math.min(8, dh * 0.4);
      const bw = dw * 1.55;
      const left = d.branch === "left";
      const hx = left ? -dw / 2 - bw + 3 : dw / 2 - 3;
-     roundRect(hx, -dh / 2, bw, bh, 2, "#D9B486");
+     roundRect(hx, -dh / 2, bw, bh, 2, "#80421F");
    }
    ctx.restore();
  }
  
  for (const c of chips) {
    ctx.globalAlpha = Math.max(0, c.a);
-   ctx.fillStyle = "#d4a574";
+   ctx.fillStyle = "#D69A65";
    ctx.beginPath();
    ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
    ctx.fill();
@@ -1548,11 +1586,11 @@ function startGame() {
 function togglePause() {
  if (phase === "playing") {
    phase = "paused";
-   hint.textContent = "Davom etish uchun pauzani bosing";
+   hint.style.display = "none";
  } else if (phase === "paused") {
    phase = "playing";
    lastTs = performance.now();
-   hint.textContent = "";
+   hint.style.display = "none";
  }
 }
  
@@ -1742,10 +1780,9 @@ requestAnimationFrame(() => {
 layout();
 TreeBranchController.reset();
 seedTrunk();
-hint.textContent = "";
 showOverlay(
  "Karate Strike",
- "Novdalardan ehtiyot bo‘ling!",
+ "Novda siz tomonda bo‘lsa, ehtiyot bo‘ling!",
  "O‘ynash",
 );
 void loadBest();
@@ -1901,7 +1938,5 @@ if (urlParams.has("shot")) {
  };
  requestAnimationFrame(waitHero);
 }
-
-
 
 
