@@ -1,9 +1,4 @@
 
-
-
-
-
-
 /**
 * Karate Strike — Timberman-style chop arcade.
 * Tap left/right to chop. Same-side branch = game over.
@@ -559,7 +554,8 @@ function showOverlay(title, text, btnLabel) {
  
 function hideOverlay() {
  overlay.classList.add("hidden");
- hint.style.visibility = "visible";
+ // Pastki boshqaruv yozuvi ekranda ko‘rsatilmaydi.
+ hint.style.visibility = "hidden";
 }
  
 function resize() {
