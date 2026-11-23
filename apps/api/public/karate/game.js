@@ -5,6 +5,7 @@
 
 
 
+
 /**
 * Karate Strike — Timberman-style chop arcade.
 * Tap left/right to chop. Same-side branch = game over.
@@ -89,10 +90,10 @@ const SPRITE_FPS = 45;
 const WALK_MS = Math.round((4 / SPRITE_FPS) * 1000);
 /** Kick / hit pose hold — mid of 0.08–0.15 s. */
 const CHOP_MS = 120;
-/** Daraxt ustuni canvas balandligining taxminan 82 foizini egallaydi. */
-const TREE_HEIGHT_FRAC = 0.82;
-const TREE_HEIGHT_MIN_FRAC = 0.82;
-const TREE_HEIGHT_MAX_FRAC = 0.82;
+/** Ustun balandligi oshirildi: tepadagi bo‘shliq yopiladi. */
+const TREE_HEIGHT_FRAC = 0.94;
+const TREE_HEIGHT_MIN_FRAC = 0.94;
+const TREE_HEIGHT_MAX_FRAC = 0.94;
 /** Hero height as fraction of tree height (mid of 8–12%). */
 const HERO_OF_TREE_FRAC = 0.1;
 const HERO_OF_TREE_MIN = 0.08;
