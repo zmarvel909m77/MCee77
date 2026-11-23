@@ -1,3 +1,9 @@
+
+
+
+
+
+
 /**
 * Karate Strike — Timberman-style chop arcade.
 * Tap left/right to chop. Same-side branch = game over.
@@ -107,7 +113,7 @@ const GROUND_MAX = 48;
 * Live segment count — derived in layout() from TREE_HEIGHT_FRAC.
 * Starts at 5; resized when the canvas lays out.
 */
-let SEGMENTS = 5;
+let SEGMENTS = 7;
 const ENERGY_MAX = 100;
 /** Base drain/sec — scaled by difficultyFor(score). */
 const ENERGY_DRAIN = 11;
@@ -1096,9 +1102,8 @@ function layout() {
      treeH * HERO_OF_TREE_FRAC,
    ),
  );
- // Tall blocks: each longer than the hero; count fills treeH
- const minSegH = heroH * 1.55;
- const nextSegs = Math.max(4, Math.floor(treeH / minSegH));
+ // Ustun har doim 7 ta teng yog‘och qismdan iborat bo‘ladi.
+ const nextSegs = 7;
  const segH = treeH / nextSegs;
  if (nextSegs !== SEGMENTS) {
    SEGMENTS = nextSegs;
@@ -2003,3 +2008,7 @@ if (urlParams.has("shot")) {
  };
  requestAnimationFrame(waitHero);
 }
+
+
+
+
