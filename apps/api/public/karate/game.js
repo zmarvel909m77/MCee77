@@ -1,4 +1,6 @@
 
+
+
 /**
 * Karate Strike — Timberman-style chop arcade.
 * Tap left/right to chop. Same-side branch = game over.
@@ -21,7 +23,6 @@ const energyBar = document.getElementById("energyBar");
 const multiBar = document.getElementById("multiBar");
 const multiBadge = document.getElementById("multiBadge");
 const hint = document.getElementById("hint");
-if (hint) hint.style.display = "none";
 const btnMute = document.getElementById("btnMute");
 const btnPause = document.getElementById("btnPause");
  
@@ -109,7 +110,7 @@ const GROUND_MAX = 48;
 * Live segment count — derived in layout() from TREE_HEIGHT_FRAC.
 * Starts at 5; resized when the canvas lays out.
 */
-let SEGMENTS = 6;
+let SEGMENTS = 7;
 const ENERGY_MAX = 100;
 /** Base drain/sec — scaled by difficultyFor(score). */
 const ENERGY_DRAIN = 11;
@@ -825,9 +826,9 @@ function drawBranch(x, y, trunkW, segH, side) {
  const left = side === "left";
  const hx = left ? x - bw + 4 : x + trunkW - 4;
  // Wooden plank — same family as trunk
- roundRect(hx, by, bw, bh, 4, "#76502f");
+ roundRect(hx, by, bw, bh, 4, "#D9B486");
  // grain
- ctx.strokeStyle = "rgba(70, 40, 20, 0.28)";
+ ctx.strokeStyle = "rgba(105, 65, 30, 0.22)";
  ctx.lineWidth = 1.2;
  for (let i = 0; i < 2; i++) {
    const gy = by + 4 + i * (bh / 2.4);
@@ -837,7 +838,7 @@ function drawBranch(x, y, trunkW, segH, side) {
    ctx.stroke();
  }
  // dark edge near trunk
- ctx.fillStyle = "rgba(60, 30, 15, 0.28)";
+ ctx.fillStyle = "rgba(105, 65, 30, 0.18)";
  if (left) ctx.fillRect(hx + bw - 8, by, 8, bh);
  else ctx.fillRect(hx, by, 8, bh);
 }
@@ -1045,7 +1046,7 @@ function layout() {
    ),
  );
  // Ustun har doim 8 ta teng yog‘och qismdan iborat bo‘ladi.
- const nextSegs = 6;
+ const nextSegs = 7;
  const segH = treeH / nextSegs;
  if (nextSegs !== SEGMENTS) {
    SEGMENTS = nextSegs;
@@ -1141,7 +1142,7 @@ function updateTrunkDrop(_dt) {
    trunkW * 1.3,
    14,
    4,
-   "#8a6238",
+   "#C99B68",
  );
  
  // Sample drop every paint so settle can't stall between loop ticks
@@ -1152,31 +1153,61 @@ function updateTrunkDrop(_dt) {
  ctx.save();
  // No bend / lean / shake — perfectly vertical drop (KK2 slot feel)
  // Fill only the segment stack bounds (never leave a phantom hover slab)
- const stackTop = baseY - SEGMENTS * segH + dropY;
+ const stackTop = baseY - treeH + dropY;
  const stackBottom = baseY + dropY;
  const fillH = Math.max(0, stackBottom - stackTop + 1);
  if (fillH > 0) {
-   ctx.fillStyle = "#855b37";
+   ctx.fillStyle = "#D9B486";
    ctx.fillRect(trunkX, stackTop, trunkW, fillH);
-   ctx.fillStyle = "rgba(35, 19, 9, 0.30)";
+   ctx.fillStyle = "rgba(105, 65, 30, 0.16)";
    ctx.fillRect(trunkX, stackTop, 7, fillH);
    ctx.fillRect(trunkX + trunkW - 8, stackTop, 8, fillH);
-   ctx.fillStyle = "rgba(190, 139, 91, 0.12)";
+   ctx.fillStyle = "rgba(255, 242, 218, 0.28)";
    ctx.fillRect(trunkX + 8, stackTop, 5, fillH);
  }
  
  for (let i = SEGMENTS - 1; i >= 0; i--) {
    const y = baseY - (i + 1) * segH + dropY;
    const x = trunkX;
+   // Vertical grain
+   ctx.strokeStyle = "rgba(105, 65, 30, 0.18)";
+   ctx.lineWidth = 1.35;
+   for (let g = 0; g < 4; g++) {
+     const gx = x + 10 + g * ((trunkW - 20) / 3.2);
+     ctx.beginPath();
+     ctx.moveTo(gx, y + 6);
+     ctx.lineTo(gx + (g % 2 ? 1.4 : -1), y + segH - 4);
+     ctx.stroke();
+   }
+   // Top seam of this block — branch attaches here (ref)
+   ctx.strokeStyle = "rgba(105, 65, 30, 0.22)";
+   ctx.lineWidth = 2.2;
+   ctx.beginPath();
+   ctx.moveTo(x + 3, y + 1);
+   ctx.lineTo(x + trunkW - 3, y + 1);
+   ctx.stroke();
+ 
    const branch = trunk[i];
    if (branch) drawBranch(x, y, trunkW, segH, branch);
  }
 
  // Ustun tepasidagi ochiq kesimni yog'och qopqoq bilan yopish.
  // Qopqoq stack bilan birga siljiydi va novdalar chizilgandan keyin ko'rinadi.
- ctx.fillStyle = "#8b623e";
+ ctx.fillStyle = "#E4C49A";
  ctx.fillRect(trunkX - 1, stackTop - 2, trunkW + 2, 6);
- ctx.fillStyle = "rgba(90, 50, 22, 0.3)";
+ ctx.strokeStyle = "rgba(105, 65, 30, 0.28)";
+ ctx.lineWidth = 1.5;
+ ctx.beginPath();
+ ctx.moveTo(trunkX, stackTop);
+ ctx.lineTo(trunkX + trunkW, stackTop);
+ ctx.stroke();
+ ctx.strokeStyle = "rgba(255, 242, 218, 0.42)";
+ ctx.lineWidth = 1;
+ ctx.beginPath();
+ ctx.moveTo(trunkX + 8, stackTop - 1);
+ ctx.lineTo(trunkX + trunkW - 8, stackTop - 1);
+ ctx.stroke();
+ ctx.fillStyle = "rgba(105, 65, 30, 0.18)";
  ctx.fillRect(trunkX - 1, stackTop - 2, 3, 6);
  ctx.fillRect(trunkX + trunkW - 2, stackTop - 2, 3, 6);
 
@@ -1206,7 +1237,7 @@ function updateTrunkDrop(_dt) {
    ctx.translate(d.x, d.y);
    ctx.rotate(d.rot);
    ctx.globalAlpha = Math.max(0, Math.min(1, d.life));
-   roundRect(-dw / 2, -dh / 2, dw, dh, 2.5, "#c49a6c");
+   roundRect(-dw / 2, -dh / 2, dw, dh, 2.5, "#D9B486");
    ctx.strokeStyle = "rgba(90, 50, 25, 0.28)";
    ctx.lineWidth = 1;
    ctx.beginPath();
@@ -1219,7 +1250,7 @@ function updateTrunkDrop(_dt) {
      const bw = dw * 1.55;
      const left = d.branch === "left";
      const hx = left ? -dw / 2 - bw + 3 : dw / 2 - 3;
-     roundRect(hx, -dh / 2, bw, bh, 2, "#a67c52");
+     roundRect(hx, -dh / 2, bw, bh, 2, "#D9B486");
    }
    ctx.restore();
  }
@@ -1915,5 +1946,7 @@ if (urlParams.has("shot")) {
  };
  requestAnimationFrame(waitHero);
 }
+
+
 
 
