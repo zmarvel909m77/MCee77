@@ -1311,7 +1311,7 @@
      const choppedBranch = danger;
      spawnDebris(cx, baseY, trunkW, segH, side, choppedBranch);
      // Visual feedback +1 — DB contract is 1 hit = 1 point
-     spawnFloat(cx + (side === "left" ? -8 : 8), baseY - segH * 1.35, "01");
+     spawnFloat(cx + (side === "left" ? -8 : 8), baseY - segH * 1.35, "10");
      
      trunk.shift();
      trunk.push(TreeBranchController.next(score + 1));
@@ -1909,7 +1909,7 @@
              vy: 0,
              a: 1,
            }));
-           spawnFloat(L.cx + 10, L.baseY - L.segH * 0.7, "01");
+           spawnFloat(L.cx + 10, L.baseY - L.segH * 0.7, "10");
            if (floats[0]) {
              floats[0].vy = 0;
              floats[0].life = 1;
