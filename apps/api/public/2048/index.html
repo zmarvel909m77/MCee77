@@ -251,6 +251,22 @@ body{
   touch-action:manipulation;
 }
 
+.leaderboard{
+  margin-top:12px;
+  padding:12px 14px;
+  border:1px solid #ffffff18;
+  border-radius:15px;
+  background:#211f36;
+  max-height:155px;
+  overflow:auto;
+}
+.leaderboard-head{display:flex;justify-content:space-between;color:#c9b9ff;font-size:11px;margin-bottom:8px}
+.leaderboard-head span{color:#8984a6}
+.leaderboard-row{display:grid;grid-template-columns:25px 1fr auto;gap:8px;padding:5px 0;border-top:1px solid #ffffff0d;font-size:11px}
+.leaderboard-row strong{color:#d7c9ff}
+.leaderboard-row em{font-style:normal;color:#fff;font-weight:800}
+.leaderboard-empty{font-size:11px;color:#aaa8c5}
+
 .foot{
   text-align:center;
   color:#77738f;
@@ -283,6 +299,11 @@ body{
   <div class="board-wrap">
     <div class="board" id="board" aria-label="2048 o‘yin maydoni"></div>
   </div>
+
+  <section class="leaderboard" aria-label="2048 reytingi">
+    <div class="leaderboard-head"><b>2048 REYTINGI</b><span>TOP 10</span></div>
+    <div id="leaderboardList" class="leaderboard-list">Reyting yuklanmoqda...</div>
+  </section>
 
   <div class="foot">MCee77 Telegram Mini App</div>
 
@@ -450,6 +471,54 @@ body{
     $('best').textContent=best;
   }
 
+  async function load2048Leaderboard(){
+    const box=$('leaderboardList');
+    try{
+      const response=await fetch('/api/v1/2048/leaderboard?limit=10');
+      if(!response.ok)throw new Error('leaderboard request failed');
+      const data=await response.json();
+      box.replaceChildren();
+      if(!data.items?.length){
+        box.textContent='Hozircha natijalar yo‘q';
+        box.className='leaderboard-list leaderboard-empty';
+        return;
+      }
+      data.items.forEach(item=>{
+        const row=document.createElement('div');
+        row.className='leaderboard-row';
+        const rank=document.createElement('strong'); rank.textContent=item.rank+'.';
+        const name=document.createElement('span'); name.textContent=item.displayName;
+        const points=document.createElement('em'); points.textContent=Number(item.bestScore).toLocaleString('uz-UZ');
+        row.append(rank,name,points); box.appendChild(row);
+      });
+    }catch{
+      box.textContent='Reytingni yuklab bo‘lmadi';
+    }
+  }
+
+  async function submit2048Score(){
+    const initData=window.Telegram?.WebApp?.initData||'';
+    if(!initData){
+      $('endText').textContent+=' Reyting uchun o‘yinni Telegram ichidan oching.';
+      return;
+    }
+    try{
+      const response=await fetch('/api/v1/2048/score',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({initData,points:score})
+      });
+      if(!response.ok)throw new Error('score submit failed');
+      const result=await response.json();
+      best=Math.max(best,Number(result.bestScore)||0);
+      $('best').textContent=best;
+      localStorage.setItem('mc2048_best',String(best));
+      await load2048Leaderboard();
+    }catch{
+      $('endText').textContent+=' Natijani serverga yuborib bo‘lmadi.';
+    }
+  }
+
   function move(dir){
     if(over)return;
 
@@ -529,12 +598,14 @@ body{
         $('endTitle').textContent='2048 ga yetdingiz!';
         $('endText').textContent='Tabriklaymiz. Ball: '+score;
         $('overlay').style.display='flex';
+        submit2048Score();
 
       }else if(!movesLeft()){
         over=true;
         $('endTitle').textContent='O‘yin tugadi';
         $('endText').textContent='Natijangiz: '+score;
         $('overlay').style.display='flex';
+        submit2048Score();
       }
     },140);
   }
@@ -636,6 +707,7 @@ body{
   $('again').onclick=fresh;
 
   fresh();
+  load2048Leaderboard();
 })();
 </script>
 
