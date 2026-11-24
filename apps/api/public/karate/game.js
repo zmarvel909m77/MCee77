@@ -1136,7 +1136,7 @@
      if (!(segH > 0) || !Number.isFinite(segH)) return;
      const now = performance.now();
      const current = sampleTrunkDropY(now);
-     const from = current - segH;
+     const from = current - segH*0.7;
      const segs = Math.max(1, Math.abs(from) / segH);
      const duration = Math.min(
        DROP_DURATION_MAX_MS,
