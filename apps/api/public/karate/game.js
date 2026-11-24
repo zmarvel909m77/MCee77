@@ -823,7 +823,7 @@
       const direction = side === "left" ? -1 : 1;
       const gap = Math.max(24, trunkW * 0.72);
       const droneX = x + trunkW / 2 + direction * (trunkW / 2 + gap + radius);
-      const droneY = y + segH * 0.5 + Math.sin(now * 0.0028 + y * 0.018) * 5;
+      const droneY = y + segH * 0.1 + Math.sin(now * 0.0028 + y * 0.018) * 5;
       const color = side === "left" ? "#00eaff" : "#ff43e8";
       const spin = now * 0.002;
 
