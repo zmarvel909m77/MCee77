@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="uz">
 <head>
@@ -8,46 +9,228 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+
 <style>
-:root{color-scheme:dark;--bg:#101020;--panel:#1c1b31;--muted:#aaa8c5;--accent:#9b75ff}
-*{box-sizing:border-box}
-html,body{margin:0;width:100%;height:100%;background:radial-gradient(ellipse at 50% 0%,#30205a,#101020 65%);color:#fff;font-family:Manrope,sans-serif;overscroll-behavior:none}
-body{padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom);display:flex;align-items:center;justify-content:center;overflow:auto}
-.app{width:min(100%,460px);min-height:100%;display:flex;flex-direction:column;justify-content:center;padding:10px 0 20px}
-.heading{display:flex;align-items:end;justify-content:space-between;margin-bottom:14px}
-.heading h1{font-size:52px;line-height:1;margin:0;font-weight:900;letter-spacing:-4px}
-.stats{display:flex;gap:8px}
-.stat{background:#292640;border:1px solid #ffffff12;border-radius:13px;padding:8px 12px;text-align:center;min-width:76px}
-.stat small{display:block;color:#aaa6c3;font-size:10px;font-weight:800;text-transform:uppercase}
-.stat b{font-size:19px}
-.board-wrap{background:#292640;border:1px solid #ffffff20;border-radius:19px;padding:9px;box-shadow:0 16px 40px #0006;touch-action:none}
-.board{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;aspect-ratio:1}
-.tile{border-radius:11px;background:#3a3651;display:flex;align-items:center;justify-content:center;font-size:clamp(22px,7vw,34px);font-weight:900;color:#51465b;transition:background .1s}
-.v2{background:#eee4da}.v4{background:#ede0c8}.v8{background:#f2b179;color:#fff}.v16{background:#f59563;color:#fff}.v32{background:#f67c5f;color:#fff}.v64{background:#f65e3b;color:#fff}
-.v128{background:#edcf72;color:#fff;font-size:clamp(18px,5vw,28px)}.v256{background:#edcc61;color:#fff;font-size:clamp(18px,5vw,28px)}.v512{background:#edc850;color:#fff;font-size:clamp(18px,5vw,28px)}
-.v1024,.v2048,.vhigh{background:linear-gradient(135deg,#b58aff,#7454dc);color:#fff;font-size:clamp(16px,4.5vw,25px)}
-.overlay{position:fixed;inset:0;background:#090817c9;display:none;align-items:center;justify-content:center;padding:24px;z-index:4}
-.dialog{width:min(100%,330px);background:#24213b;border:1px solid #ffffff25;border-radius:22px;padding:25px;text-align:center;box-shadow:0 20px 60px #0009}
-.dialog h2{margin:0 0 8px;font-size:26px}.dialog p{color:#c3bfd8;font-size:13px}
-.action{width:100%;border:0;border-radius:13px;padding:13px 8px;font:800 13px Manrope;background:#8c68ef;color:#fff;margin-top:12px}
-.action.secondary{background:#292640;border:1px solid #ffffff20}
-.foot{text-align:center;color:#77738f;font-size:10px;margin-top:14px;padding-top:0}
+:root{
+  color-scheme:dark;
+  --bg:#101020;
+  --panel:#1c1b31;
+  --muted:#aaa8c5;
+  --accent:#9b75ff;
+}
+
+*{
+  box-sizing:border-box;
+}
+
+html,body{
+  margin:0;
+  width:100%;
+  height:100%;
+  background:radial-gradient(ellipse at 50% 0%,#30205a,#101020 65%);
+  color:#fff;
+  font-family:Manrope,sans-serif;
+  overscroll-behavior:none;
+}
+
+body{
+  padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom);
+  display:flex;
+  justify-content:center;
+  overflow:auto;
+}
+
+.app{
+  width:min(100%,460px);
+  min-height:100%;
+  display:flex;
+  flex-direction:column;
+  padding:18px 0 20px;
+}
+
+.heading{
+  display:flex;
+  align-items:end;
+  justify-content:space-between;
+  margin-bottom:14px;
+}
+
+.heading h1{
+  font-size:52px;
+  line-height:1;
+  margin:0;
+  font-weight:900;
+  letter-spacing:-4px;
+}
+
+.stats{
+  display:flex;
+  gap:8px;
+}
+
+.stat{
+  background:#292640;
+  border:1px solid #ffffff12;
+  border-radius:13px;
+  padding:8px 12px;
+  text-align:center;
+  min-width:76px;
+}
+
+.stat small{
+  display:block;
+  color:#aaa6c3;
+  font-size:10px;
+  font-weight:800;
+  text-transform:uppercase;
+}
+
+.stat b{
+  font-size:19px;
+}
+
+.board-wrap{
+  background:#292640;
+  border:1px solid #ffffff20;
+  border-radius:19px;
+  padding:9px;
+  box-shadow:0 16px 40px #0006;
+  touch-action:none;
+
+  /* O‘yin maydoni 12px yuqoriga ko‘tarildi */
+  transform:translateY(-12px);
+}
+
+.board{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:8px;
+  aspect-ratio:1;
+}
+
+.tile{
+  border-radius:11px;
+  background:#3a3651;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:clamp(22px,7vw,34px);
+  font-weight:900;
+  color:#51465b;
+  transition:background .1s;
+}
+
+.v2{background:#eee4da}
+.v4{background:#ede0c8}
+.v8{background:#f2b179;color:#fff}
+.v16{background:#f59563;color:#fff}
+.v32{background:#f67c5f;color:#fff}
+.v64{background:#f65e3b;color:#fff}
+
+.v128{
+  background:#edcf72;
+  color:#fff;
+  font-size:clamp(18px,5vw,28px);
+}
+
+.v256{
+  background:#edcc61;
+  color:#fff;
+  font-size:clamp(18px,5vw,28px);
+}
+
+.v512{
+  background:#edc850;
+  color:#fff;
+  font-size:clamp(18px,5vw,28px);
+}
+
+.v1024,.v2048,.vhigh{
+  background:linear-gradient(135deg,#b58aff,#7454dc);
+  color:#fff;
+  font-size:clamp(16px,4.5vw,25px);
+}
+
+.overlay{
+  position:fixed;
+  inset:0;
+  background:#090817c9;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+  z-index:4;
+}
+
+.dialog{
+  width:min(100%,330px);
+  background:#24213b;
+  border:1px solid #ffffff25;
+  border-radius:22px;
+  padding:25px;
+  text-align:center;
+  box-shadow:0 20px 60px #0009;
+}
+
+.dialog h2{
+  margin:0 0 8px;
+  font-size:26px;
+}
+
+.dialog p{
+  color:#c3bfd8;
+  font-size:13px;
+}
+
+.action{
+  width:100%;
+  border:0;
+  border-radius:13px;
+  padding:13px 8px;
+  font:800 13px Manrope;
+  background:#8c68ef;
+  color:#fff;
+  margin-top:12px;
+}
+
+.action.secondary{
+  background:#292640;
+  border:1px solid #ffffff20;
+}
+
+.foot{
+  text-align:center;
+  color:#77738f;
+  font-size:10px;
+  margin-top:auto;
+  padding-top:16px;
+}
 </style>
 </head>
+
 <body>
 <main class="app">
+
   <div class="heading">
     <h1>2048</h1>
     <div class="stats">
-      <div class="stat"><small>Ball</small><b id="score">0</b></div>
-      <div class="stat"><small>Rekord</small><b id="best">0</b></div>
+      <div class="stat">
+        <small>Ball</small>
+        <b id="score">0</b>
+      </div>
+      <div class="stat">
+        <small>Rekord</small>
+        <b id="best">0</b>
+      </div>
     </div>
   </div>
 
   <div class="board-wrap">
     <div class="board" id="board" aria-label="2048 o‘yin maydoni"></div>
   </div>
+
   <div class="foot">MCee77 Telegram Mini App</div>
+
 </main>
 
 <div class="overlay" id="overlay">
@@ -61,85 +244,188 @@ body{padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom);display:f
 <script>
 (()=>{
   const tg=window.Telegram?.WebApp;
-  try{tg?.ready();tg?.expand();tg?.disableVerticalSwipes?.();}catch{}
-  const $=id=>document.getElementById(id),boardEl=$('board');
-  let board,score=0,best=Number(localStorage.getItem('mc2048_best')||0),over=false;
-  const dirs={up:[-1,0],down:[1,0],left:[0,-1],right:[0,1]};
+
+  try{
+    tg?.ready();
+    tg?.expand();
+    tg?.disableVerticalSwipes?.();
+  }catch{}
+
+  const $=id=>document.getElementById(id);
+  const boardEl=$('board');
+
+  let board,score=0;
+  let best=Number(localStorage.getItem('mc2048_best')||0);
+  let over=false;
+
+  const dirs={
+    up:[-1,0],
+    down:[1,0],
+    left:[0,-1],
+    right:[0,1]
+  };
+
   $('best').textContent=best;
 
   function fresh(){
     board=Array.from({length:4},()=>[0,0,0,0]);
-    score=0;over=false;$('overlay').style.display='none';
-    spawn();spawn();render();
+    score=0;
+    over=false;
+    $('overlay').style.display='none';
+    spawn();
+    spawn();
+    render();
   }
+
   function spawn(){
     const empty=[];
-    for(let r=0;r<4;r++)for(let c=0;c<4;c++)if(!board[r][c])empty.push([r,c]);
+
+    for(let r=0;r<4;r++)
+      for(let c=0;c<4;c++)
+        if(!board[r][c])empty.push([r,c]);
+
     if(!empty.length)return;
+
     const [r,c]=empty[Math.floor(Math.random()*empty.length)];
     board[r][c]=Math.random()<.9?2:4;
   }
+
   function render(){
     boardEl.innerHTML='';
-    for(let r=0;r<4;r++)for(let c=0;c<4;c++){
-      const n=board[r][c],d=document.createElement('div');
-      d.className='tile'+(n?' v'+(n<=2048?n:'high'):'');
-      d.textContent=n||'';boardEl.append(d);
+
+    for(let r=0;r<4;r++){
+      for(let c=0;c<4;c++){
+        const n=board[r][c];
+        const d=document.createElement('div');
+
+        d.className='tile'+(n?' v'+(n<=2048?n:'high'):'');
+        d.textContent=n||'';
+        boardEl.append(d);
+      }
     }
-    $('score').textContent=score;$('best').textContent=best;
+
+    $('score').textContent=score;
+    $('best').textContent=best;
   }
+
   function move(dir){
     if(over)return;
-    const old=board.map(r=>r.slice()),oldScore=score,[dr,dc]=dirs[dir];
+
+    const old=board.map(r=>r.slice());
+    const oldScore=score;
+    const [dr,dc]=dirs[dir];
+
     for(let line=0;line<4;line++){
       const cells=[];
+
       for(let k=0;k<4;k++){
         const r=dr===0?line:(dr===-1?k:3-k);
         const c=dc===0?line:(dc===-1?k:3-k);
         cells.push([r,c]);
       }
-      const vals=cells.map(([r,c])=>board[r][c]).filter(Boolean),out=[];
+
+      const vals=cells
+        .map(([r,c])=>board[r][c])
+        .filter(Boolean);
+
+      const out=[];
+
       for(let i=0;i<vals.length;i++){
-        if(vals[i]===vals[i+1]){const n=vals[i]*2;out.push(n);score+=n;i++;}
-        else out.push(vals[i]);
+        if(vals[i]===vals[i+1]){
+          const n=vals[i]*2;
+          out.push(n);
+          score+=n;
+          i++;
+        }else{
+          out.push(vals[i]);
+        }
       }
+
       while(out.length<4)out.push(0);
-      cells.forEach(([r,c],i)=>board[r][c]=out[i]);
+
+      cells.forEach(([r,c],i)=>{
+        board[r][c]=out[i];
+      });
     }
-    if(JSON.stringify(old)===JSON.stringify(board)){score=oldScore;return;}
+
+    if(JSON.stringify(old)===JSON.stringify(board)){
+      score=oldScore;
+      return;
+    }
+
     spawn();
-    if(score>best){best=score;localStorage.setItem('mc2048_best',String(best));}
+
+    if(score>best){
+      best=score;
+      localStorage.setItem('mc2048_best',String(best));
+    }
+
     render();
+
     if(board.flat().includes(2048)){
-      over=true;$('endTitle').textContent='2048 ga yetdingiz!';
+      over=true;
+      $('endTitle').textContent='2048 ga yetdingiz!';
       $('endText').textContent='Tabriklaymiz. Ball: '+score;
       $('overlay').style.display='flex';
     }else if(!movesLeft()){
-      over=true;$('endTitle').textContent='O‘yin tugadi';
+      over=true;
+      $('endTitle').textContent='O‘yin tugadi';
       $('endText').textContent='Natijangiz: '+score;
       $('overlay').style.display='flex';
     }
   }
+
   function movesLeft(){
     if(board.flat().some(x=>!x))return true;
-    for(let r=0;r<4;r++)for(let c=0;c<4;c++)
-      if((r<3&&board[r][c]===board[r+1][c])||(c<3&&board[r][c]===board[r][c+1]))return true;
+
+    for(let r=0;r<4;r++){
+      for(let c=0;c<4;c++){
+        if(
+          (r<3&&board[r][c]===board[r+1][c])||
+          (c<3&&board[r][c]===board[r][c+1])
+        )return true;
+      }
+    }
+
     return false;
   }
+
   document.addEventListener('keydown',e=>{
-    const map={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right'};
-    if(map[e.key]){e.preventDefault();move(map[e.key]);}
+    const map={
+      ArrowUp:'up',
+      ArrowDown:'down',
+      ArrowLeft:'left',
+      ArrowRight:'right'
+    };
+
+    if(map[e.key]){
+      e.preventDefault();
+      move(map[e.key]);
+    }
   });
+
   let sx=0,sy=0;
+
   boardEl.addEventListener('touchstart',e=>{
-    sx=e.changedTouches[0].clientX;sy=e.changedTouches[0].clientY;
+    sx=e.changedTouches[0].clientX;
+    sy=e.changedTouches[0].clientY;
   },{passive:true});
+
   boardEl.addEventListener('touchend',e=>{
-    const dx=e.changedTouches[0].clientX-sx,dy=e.changedTouches[0].clientY-sy;
+    const dx=e.changedTouches[0].clientX-sx;
+    const dy=e.changedTouches[0].clientY-sy;
+
     if(Math.max(Math.abs(dx),Math.abs(dy))<22)return;
-    move(Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up'));
+
+    move(
+      Math.abs(dx)>Math.abs(dy)
+        ?(dx>0?'right':'left')
+        :(dy>0?'down':'up')
+    );
   },{passive:true});
+
   $('again').onclick=fresh;
+
   fresh();
 })();
 </script>
