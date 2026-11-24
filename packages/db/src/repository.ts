@@ -191,6 +191,15 @@ export class UserRepository {
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS game_2048_scores (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL UNIQUE REFERENCES users(id),
+        best_score INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_2048_best_score
+        ON game_2048_scores(best_score DESC);
     `);
   }
 
@@ -249,6 +258,15 @@ export class UserRepository {
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS game_2048_scores (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL UNIQUE REFERENCES users(id),
+        best_score INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_2048_best_score
+        ON game_2048_scores(best_score DESC);
     `);
 
     // Migration-safe for existing SQLite DBs created before newer columns.
@@ -413,6 +431,44 @@ export class UserRepository {
       id,
     ]);
     return row ? mapUser(row) : null;
+  }
+
+  async submit2048Score(userId: string, points: number): Promise<{ bestScore: number; isNewBest: boolean }> {
+    const safePoints = Math.max(0, Math.min(10_000_000, Math.floor(points)));
+    const now = new Date().toISOString();
+    return this.db.transaction(async () => {
+      const existing = await this.db.get<{ best_score: number }>(
+        `SELECT best_score FROM game_2048_scores WHERE user_id = ?`, [userId],
+      );
+      const previous = Number(existing?.best_score ?? 0);
+      const bestScore = Math.max(previous, safePoints);
+      await this.db.run(
+        `INSERT INTO game_2048_scores (id, user_id, best_score, updated_at)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(user_id) DO UPDATE SET
+           best_score = CASE WHEN excluded.best_score > game_2048_scores.best_score THEN excluded.best_score ELSE game_2048_scores.best_score END,
+           updated_at = CASE WHEN excluded.best_score > game_2048_scores.best_score THEN excluded.updated_at ELSE game_2048_scores.updated_at END`,
+        [randomUUID(), userId, safePoints, now],
+      );
+      return { bestScore, isNewBest: safePoints > previous };
+    });
+  }
+
+  async get2048Leaderboard(limit = 10): Promise<Array<{ rank: number; displayName: string; username: string | null; bestScore: number }>> {
+    const rows = await this.db.all<{
+      display_name: string; nickname: string | null; username: string | null; best_score: number;
+    }>(
+      `SELECT u.display_name, u.nickname, u.username, s.best_score
+       FROM game_2048_scores s JOIN users u ON u.id = s.user_id
+       WHERE s.best_score > 0
+       ORDER BY s.best_score DESC, s.updated_at ASC LIMIT ?`, [limit],
+    );
+    return rows.map((row, index) => ({
+      rank: index + 1,
+      displayName: publicDisplayName({ nickname: row.nickname, displayName: row.display_name }),
+      username: row.username,
+      bestScore: Number(row.best_score),
+    }));
   }
 
   async getLeaderboard(limit = 10): Promise<LeaderboardEntry[]> {
