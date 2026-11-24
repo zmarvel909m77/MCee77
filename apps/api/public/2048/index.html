@@ -115,6 +115,7 @@ body{
   aspect-ratio:1;
   touch-action:none;
   overflow:hidden;
+  contain:layout paint;
 }
 
 .cell{
@@ -139,40 +140,40 @@ body{
   pointer-events:none;
   will-change:transform;
   transition:
-    transform 180ms cubic-bezier(.22,.75,.25,1),
-    background .12s,
-    opacity 180ms ease;
+    transform 110ms cubic-bezier(.2,.8,.2,1),
+    background .1s;
 }
 
-/* Yangi raqam o'z katagida paydo bo'ladi */
-.tile.new{
-  opacity:0;
-  scale:.2;
+/* Yangi raqam katak ichida paydo bo'ladi */
+.tile.spawn{
+  animation:tileSpawn 220ms cubic-bezier(.16,1,.3,1) both;
 }
 
-/* Faqat kattalashish va ko'rinish animatsiyasi */
-.tile.appear{
-  opacity:1;
-  scale:1;
-  transition:
-    scale 450ms cubic-bezier(.16,1,.3,1),
-    opacity 450ms ease;
+@keyframes tileSpawn{
+  from{
+    opacity:0;
+    scale:.35;
+  }
+  to{
+    opacity:1;
+    scale:1;
+  }
 }
 
 .tile.merging{
-  animation:mergePop 180ms ease;
+  animation:mergePop 140ms ease-out;
+}
+
+@keyframes mergePop{
+  0%{scale:1}
+  55%{scale:1.13}
+  100%{scale:1}
 }
 
 .tile.removing{
   opacity:0;
   scale:.3;
-  transition:opacity 120ms ease,scale 120ms ease;
-}
-
-@keyframes mergePop{
-  0%{scale:1}
-  55%{scale:1.18}
-  100%{scale:1}
+  transition:opacity 100ms ease,scale 100ms ease;
 }
 
 .v2{background:#eee4da}
@@ -317,6 +318,9 @@ body{
   let tileNodes=new Map();
   let busy=false;
 
+  const MOVE_TIME=110;
+  const CHECK_TIME=130;
+
   const dirs={
     up:[-1,0],
     down:[1,0],
@@ -383,14 +387,13 @@ body{
 
     if(!animate){
       node.style.transition='none';
+      node.style.transform=`translate3d(${x}px,${y}px,0)`;
+      node.getBoundingClientRect();
+      node.style.transition='';
+      return;
     }
 
     node.style.transform=`translate3d(${x}px,${y}px,0)`;
-
-    if(!animate){
-      node.offsetHeight;
-      node.style.transition='';
-    }
   }
 
   function render(initial=false){
@@ -408,8 +411,10 @@ body{
 
         if(!node){
           node=document.createElement('div');
-          node.className='tile new';
+          node.className='tile';
           node.textContent=tile.value;
+          node.style.transition='none';
+
           boardEl.appendChild(node);
           tileNodes.set(tile.id,node);
           isNew=true;
@@ -418,16 +423,18 @@ body{
         node.className='tile v'+(tile.value<=2048?tile.value:'high');
         node.textContent=tile.value;
 
-        /* Yangi raqam avval o'z katagiga joylashadi.
-           Eski raqamlarning harakat animatsiyasi saqlanadi. */
-        positionTile(node,r,c,!initial&&!isNew);
+        /* Yangi raqam uchun joylashuv darhol belgilanadi */
+        positionTile(node,r,c,!(initial||isNew));
 
         if(isNew){
-          node.classList.add('new');
+          node.style.transition='none';
+          node.style.transform=`translate3d(${c*((boardEl.clientWidth-24)/4+8)}px,${r*((boardEl.clientWidth-24)/4+8)}px,0)`;
+
+          node.getBoundingClientRect();
 
           requestAnimationFrame(()=>{
-            node.classList.remove('new');
-            node.classList.add('appear');
+            node.style.transition='';
+            node.classList.add('spawn');
           });
         }
       }
@@ -441,7 +448,7 @@ body{
           if(!node.isConnected)return;
           node.remove();
           tileNodes.delete(id);
-        },130);
+        },110);
       }
     }
 
@@ -512,6 +519,7 @@ body{
 
     for(const id of mergedIds){
       const node=tileNodes.get(id);
+
       if(node){
         node.classList.remove('merging');
         void node.offsetWidth;
@@ -534,7 +542,7 @@ body{
         $('endText').textContent='Natijangiz: '+score;
         $('overlay').style.display='flex';
       }
-    },190);
+    },CHECK_TIME);
   }
 
   function movesLeft(){
@@ -597,7 +605,7 @@ body{
     const dx=e.clientX-sx;
     const dy=e.clientY-sy;
 
-    if(Math.max(Math.abs(dx),Math.abs(dy))<22)return;
+    if(Math.max(Math.abs(dx),Math.abs(dy))<18)return;
 
     if(Math.abs(dx)>Math.abs(dy)){
       move(dx>0?'right':'left');
@@ -617,6 +625,7 @@ body{
       for(let r=0;r<4;r++){
         for(let c=0;c<4;c++){
           const tile=board[r][c];
+
           if(tile){
             const node=tileNodes.get(tile.id);
             if(node)positionTile(node,r,c,false);
