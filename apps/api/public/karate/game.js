@@ -1116,7 +1116,7 @@
        return 0;
      }
      // Ease-out cubic — fast start, soft settle flush on stump (KK2 feel)
-     const e = 1 - (1 - t) ** 5;
+     const e = 1 - (1 - t) ** 4;
      trunkDropY = trunkDropAnim.from * (1 - e);
      // Snap when essentially flush so no sub-pixel hover remains
      if (trunkDropY > -0.5) {
@@ -1136,7 +1136,7 @@
      if (!(segH > 0) || !Number.isFinite(segH)) return;
      const now = performance.now();
      const current = sampleTrunkDropY(now);
-     const from = current - segH*0.7;
+     const from = current - segH*0.8;
      const segs = Math.max(1, Math.abs(from) / segH);
      const duration = Math.min(
        DROP_DURATION_MAX_MS,
@@ -1211,7 +1211,7 @@
      roundRect(towerX - 3, stackTop - 5, pipeW + 6, 8, 4, "#00dfff");
      ctx.shadowColor = "#ff28e8";
      ctx.shadowBlur = 14;
-     roundRect(towerX - 3, baseY + dropY - 3, pipeW + 6, 7, 3, "#ff28e8");
+    // roundRect(towerX - 3, baseY + dropY - 3, pipeW + 6, 7, 3, "#ff28e8");
      ctx.restore();
 
      // Player — feet on the existing ground line, facing the neon tower.
