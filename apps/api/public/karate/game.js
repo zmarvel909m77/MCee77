@@ -1211,7 +1211,7 @@
      roundRect(towerX - 3, stackTop - 5, pipeW + 6, 8, 4, "#00dfff");
      ctx.shadowColor = "#ff28e8";
      ctx.shadowBlur = 14;
-    // roundRect(towerX - 3, baseY + dropY - 3, pipeW + 6, 7, 3, "#ff28e8");
+     roundRect(towerX - 3, baseY - 3, pipeW + 6, 7, 3, "#ff28e8");
      ctx.restore();
 
      // Player — feet on the existing ground line, facing the neon tower.
