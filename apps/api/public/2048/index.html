@@ -44,7 +44,7 @@ body{padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom);display:f
     </div>
   </div>
 
-  <div class="board-wrap">
+  <div class="board-wrap" id="gameArea">
     <div class="board" id="board" aria-label="2048 o‘yin maydoni"></div>
   </div>
   <div class="foot">MCee77 Telegram Mini App</div>
@@ -62,7 +62,7 @@ body{padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom);display:f
 (()=>{
   const tg=window.Telegram?.WebApp;
   try{tg?.ready();tg?.expand();tg?.disableVerticalSwipes?.();}catch{}
-  const $=id=>document.getElementById(id),boardEl=$('board');
+  const $=id=>document.getElementById(id),boardEl=$('board'),gameArea=$('gameArea');
   let board,score=0,best=Number(localStorage.getItem('mc2048_best')||0),over=false;
   const dirs={up:[-1,0],down:[1,0],left:[0,-1],right:[0,1]};
   $('best').textContent=best;
@@ -131,10 +131,10 @@ body{padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom);display:f
     if(map[e.key]){e.preventDefault();move(map[e.key]);}
   });
   let sx=0,sy=0;
-  boardEl.addEventListener('touchstart',e=>{
+  gameArea.addEventListener('touchstart',e=>{
     sx=e.changedTouches[0].clientX;sy=e.changedTouches[0].clientY;
   },{passive:true});
-  boardEl.addEventListener('touchend',e=>{
+  gameArea.addEventListener('touchend',e=>{
     const dx=e.changedTouches[0].clientX-sx,dy=e.changedTouches[0].clientY-sy;
     if(Math.max(Math.abs(dx),Math.abs(dy))<22)return;
     move(Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up'));
@@ -145,4 +145,3 @@ body{padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom);display:f
 </script>
 </body>
 </html>
- 
