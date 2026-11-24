@@ -94,7 +94,7 @@
     const HERO_OF_TREE_MIN = 0.08;
     const HERO_OF_TREE_MAX = 0.12;
     /** One segment settles in this many ms — mid of 0.25–0.6 s; queueable. */
-    const DROP_DURATION_MS = 320;
+    const DROP_DURATION_MS = 310;
     const DROP_DURATION_MIN_MS = 250;
     const DROP_DURATION_MAX_MS = 600;
     /** Debris spin while flying — mid of 90°–180°. */
@@ -1116,7 +1116,7 @@
        return 0;
      }
      // Ease-out cubic — fast start, soft settle flush on stump (KK2 feel)
-     const e = 1 - (1 - t) ** 3;
+     const e = 1 - (1 - t) ** 5;
      trunkDropY = trunkDropAnim.from * (1 - e);
      // Snap when essentially flush so no sub-pixel hover remains
      if (trunkDropY > -0.5) {
@@ -1136,7 +1136,7 @@
      if (!(segH > 0) || !Number.isFinite(segH)) return;
      const now = performance.now();
      const current = sampleTrunkDropY(now);
-     const from = current - segH*0.8;
+     const from = current - segH*0.7;
      const segs = Math.max(1, Math.abs(from) / segH);
      const duration = Math.min(
        DROP_DURATION_MAX_MS,
