@@ -94,7 +94,7 @@
     const HERO_OF_TREE_MIN = 0.08;
     const HERO_OF_TREE_MAX = 0.12;
     /** One segment settles in this many ms — mid of 0.25–0.6 s; queueable. */
-    const DROP_DURATION_MS = 300;
+    const DROP_DURATION_MS = 320;
     const DROP_DURATION_MIN_MS = 250;
     const DROP_DURATION_MAX_MS = 600;
     /** Debris spin while flying — mid of 90°–180°. */
