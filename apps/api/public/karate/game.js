@@ -1,5 +1,9 @@
 
 
+
+
+
+
     /**
     * Karate Strike — Timberman-style chop arcade.
     * Tap left/right to chop. Same-side hovering drone = game over.
@@ -109,7 +113,7 @@
     * Live segment count — derived in layout() from TREE_HEIGHT_FRAC.
     * Starts at 5; resized when the canvas lays out.
     */
-    let SEGMENTS = 5;
+    let SEGMENTS = 6;
     const ENERGY_MAX = 100;
     /** Base drain/sec — scaled by difficultyFor(score). */
     const ENERGY_DRAIN = 11;
@@ -1044,7 +1048,7 @@
      const w = canvas.clientWidth;
      const h = canvas.clientHeight;
      const cx = w * 0.5;
-     // Thinner neon pipe — five longer sections, with no separator lines
+     // Thinner pole (ingichkaroq) — branches still top-mounted on each block
      const trunkW = Math.min(46, Math.max(40, w * 0.115));
      // Keep ~1cm ground visible above the canvas bottom (shell already clears
      // safe-area / home indicator via padding-bottom + --app-height).
@@ -1069,8 +1073,8 @@
          treeH * HERO_OF_TREE_FRAC,
        ),
      );
-     // Ustun 5 ta teng, uzunroq bo‘lakdan iborat.
-     const nextSegs = 5;
+     // Ustun 6 ta teng, uzunroq yog‘och qismdan iborat.
+     const nextSegs = 6;
      const segH = treeH / nextSegs;
      if (nextSegs !== SEGMENTS) {
        SEGMENTS = nextSegs;
@@ -1159,65 +1163,11 @@
      
      drawAtmosphere(w, h, baseY);
      
-     // Zamonaviy silindrsimon neon quvur — yog‘och ustun o‘rnida.
-     const dropY = sampleTrunkDropY(
-       typeof now === "number" ? now : performance.now(),
-     );
-     const towerX = cx - trunkW / 2;
-     const stackTop = baseY - treeH + dropY;
-     const pipeW = trunkW;
-     const pipeH = treeH;
-
-     // Quvur tanasi: metall gradient, yumaloq chetlar va markaziy nur.
-     ctx.save();
-     ctx.shadowColor = "#8b2cff";
-     ctx.shadowBlur = 22;
-     const pipeGradient = ctx.createLinearGradient(towerX, 0, towerX + pipeW, 0);
-     pipeGradient.addColorStop(0, "#090b19");
-     pipeGradient.addColorStop(0.12, "#39445e");
-     pipeGradient.addColorStop(0.28, "#151d32");
-     pipeGradient.addColorStop(0.52, "#69758b");
-     pipeGradient.addColorStop(0.72, "#20283e");
-     pipeGradient.addColorStop(0.9, "#46516c");
-     pipeGradient.addColorStop(1, "#080b17");
-     roundRect(towerX, stackTop, pipeW, pipeH, pipeW * 0.42, pipeGradient);
-
-     // Silindr bo‘ylab uzluksiz yoritish chiziqlari.
-     ctx.shadowBlur = 12;
-     ctx.shadowColor = "#00eaff";
-     ctx.fillStyle = "rgba(0,234,255,0.9)";
-     roundRect(towerX + pipeW * 0.16, stackTop + 8, 2.5, pipeH - 16, 1.2, "rgba(0,234,255,0.9)");
-     ctx.shadowColor = "#ff43e8";
-     ctx.fillStyle = "rgba(255,67,232,0.8)";
-     roundRect(towerX + pipeW * 0.78, stackTop + 8, 2, pipeH - 16, 1, "rgba(255,67,232,0.8)");
-
-     // Besh uzun bo‘lakli uzluksiz quvur. Bo‘laklar orasida chiziq yo‘q.
-     for (let i = SEGMENTS - 1; i >= 0; i--) {
-       const y = baseY - (i + 1) * segH + dropY;
-       // Metall yuzadagi qisqa aks.
-       ctx.shadowBlur = 0;
-       ctx.fillStyle = "rgba(255,255,255,0.2)";
-       roundRect(towerX + pipeW * 0.43, y + 7, 2, Math.max(4, segH - 14), 1, "rgba(255,255,255,0.2)");
-
-       // Quvurdan ajralib turgan xavf droni.
-       const hazard = trunk[i];
-       if (hazard) drawBranch(towerX, y, pipeW, segH, hazard, now);
-     }
-
-     // Quvurning yuqori va pastki metall gardishlari.
-     ctx.shadowColor = "#00dfff";
-     ctx.shadowBlur = 18;
-     roundRect(towerX - 3, stackTop - 5, pipeW + 6, 8, 4, "#00dfff");
-     ctx.shadowColor = "#ff28e8";
-     ctx.shadowBlur = 14;
-     roundRect(towerX - 3, baseY + dropY - 3, pipeW + 6, 7, 3, "#ff28e8");
-     ctx.restore();
+     // Ustun va to‘siqlar olib tashlandi. Fon va qahramon saqlanadi.
 
      // Player — feet on the existing ground line, facing the neon tower.
      const playerY = baseY + 2;
-     const sideGap = Math.max(32, trunkW * 0.52 + 10);
-     const px =
-       playerSide === "left" ? cx - trunkW / 2 - sideGap : cx + trunkW / 2 + sideGap;
+     const px = playerSide === "left" ? cx - 34 : cx + 34;
      drawPlayer(px, playerY, playerSide, now);
      
      // Soft reflection of player
@@ -1254,8 +1204,8 @@
      ctx.globalAlpha = 1;
      ctx.shadowBlur = 0;
      
-     // Floating +N near kick (HUD Ball/Rekord stays — no mid-trunk score)
-     for (const f of floats) {
+     // Zarba paytidagi +1 yozuvi olib tashlandi.
+     for (const f of []) {
        ctx.globalAlpha = Math.max(0, f.life);
        ctx.fillStyle = "#fff";
        ctx.font = "800 22px Manrope, sans-serif";
@@ -1306,15 +1256,10 @@
      }
      
      const { cx, trunkW, segH, baseY } = layout();
-     // Chopped segment flies away (branch rides along if present on opposite side)
-     const choppedBranch = danger;
-     spawnDebris(cx, baseY, trunkW, segH, side, choppedBranch);
-     // Visual feedback +1 — DB contract is 1 hit = 1 point
-     spawnFloat(cx + (side === "left" ? -8 : 8), baseY - segH * 1.35, "+1");
      
      trunk.shift();
-     trunk.push(TreeBranchController.next(score + 1));
-     // Upper pipe stays visually raised, then slides smoothly into place (queueable)
+     trunk.push(null);
+     // Upper stack stays visually raised, then slides tekis into the gap (queueable)
      beginTrunkDrop(segH);
      
      score += 1;
