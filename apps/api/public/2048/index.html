@@ -140,7 +140,7 @@ body{
   pointer-events:none;
   will-change:transform;
   transition:
-    transform 60ms linear,
+    transform 105ms cubic-bezier(.16,1,.3,1),
     background .08s;
 }
 
@@ -316,9 +316,8 @@ body{
   let over=false;
   let nextId=1;
   let tileNodes=new Map();
-  let busy=false;
 
-  const CHECK_TIME=75;
+  let gameVersion=0;
 
   const dirs={
     up:[-1,0],
@@ -343,10 +342,11 @@ body{
   }
 
   function fresh(){
+    gameVersion++;
+
     board=Array.from({length:4},()=>Array(4).fill(null));
     score=0;
     over=false;
-    busy=false;
 
     tileNodes.forEach(node=>node.remove());
     tileNodes.clear();
@@ -422,12 +422,13 @@ body{
         node.className='tile v'+(tile.value<=2048?tile.value:'high');
         node.textContent=tile.value;
 
-        /* Yangi raqam darhol o'z katagiga joylashadi */
         positionTile(node,r,c,!(initial||isNew));
 
         if(isNew){
           requestAnimationFrame(()=>{
-            node.classList.add('spawn');
+            if(node.isConnected){
+              node.classList.add('spawn');
+            }
           });
         }
       }
@@ -441,7 +442,7 @@ body{
           if(!node.isConnected)return;
           node.remove();
           tileNodes.delete(id);
-        },100);
+        },110);
       }
     }
 
@@ -450,7 +451,7 @@ body{
   }
 
   function move(dir){
-    if(over||busy)return;
+    if(over)return;
 
     const [dr,dc]=dirs[dir];
     const old=board.map(row=>row.slice());
@@ -499,7 +500,7 @@ body{
 
     if(!changed)return;
 
-    busy=true;
+    const currentVersion=gameVersion;
 
     spawn();
 
@@ -521,9 +522,9 @@ body{
     }
 
     setTimeout(()=>{
-      busy=false;
+      if(currentVersion!==gameVersion||over)return;
 
-      if(board.flat().some(tile=>tile?.value===2048)){
+      if(board.flat().some(tile=>tile?.value>=2048)){
         over=true;
         $('endTitle').textContent='2048 ga yetdingiz!';
         $('endText').textContent='Tabriklaymiz. Ball: '+score;
@@ -535,7 +536,7 @@ body{
         $('endText').textContent='Natijangiz: '+score;
         $('overlay').style.display='flex';
       }
-    },CHECK_TIME);
+    },140);
   }
 
   function movesLeft(){
@@ -574,14 +575,16 @@ body{
   let sx=0;
   let sy=0;
   let swiping=false;
+  let activePointer=null;
 
   app.addEventListener('pointerdown',e=>{
-    if(over||busy)return;
+    if(over)return;
     if(e.target.closest('button'))return;
 
     sx=e.clientX;
     sy=e.clientY;
     swiping=true;
+    activePointer=e.pointerId;
 
     try{
       app.setPointerCapture(e.pointerId);
@@ -589,16 +592,17 @@ body{
   });
 
   app.addEventListener('pointerup',e=>{
-    if(!swiping)return;
+    if(!swiping||e.pointerId!==activePointer)return;
 
     swiping=false;
+    activePointer=null;
 
-    if(over||busy)return;
+    if(over)return;
 
     const dx=e.clientX-sx;
     const dy=e.clientY-sy;
 
-    if(Math.max(Math.abs(dx),Math.abs(dy))<18)return;
+    if(Math.max(Math.abs(dx),Math.abs(dy))<14)return;
 
     if(Math.abs(dx)>Math.abs(dy)){
       move(dx>0?'right':'left');
@@ -609,6 +613,7 @@ body{
 
   app.addEventListener('pointercancel',()=>{
     swiping=false;
+    activePointer=null;
   });
 
   if('ResizeObserver' in window){
