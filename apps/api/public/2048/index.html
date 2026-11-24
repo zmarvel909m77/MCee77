@@ -140,11 +140,11 @@ body{
   pointer-events:none;
   will-change:transform;
   transition:
-    transform 110ms cubic-bezier(.2,.8,.2,1),
-    background .1s;
+    transform 60ms linear,
+    background .08s;
 }
 
-/* Yangi raqam katak ichida paydo bo'ladi */
+/* Yangi raqam o'z katagida paydo bo'ladi */
 .tile.spawn{
   animation:tileSpawn 220ms cubic-bezier(.16,1,.3,1) both;
 }
@@ -318,8 +318,7 @@ body{
   let tileNodes=new Map();
   let busy=false;
 
-  const MOVE_TIME=110;
-  const CHECK_TIME=130;
+  const CHECK_TIME=75;
 
   const dirs={
     up:[-1,0],
@@ -423,17 +422,11 @@ body{
         node.className='tile v'+(tile.value<=2048?tile.value:'high');
         node.textContent=tile.value;
 
-        /* Yangi raqam uchun joylashuv darhol belgilanadi */
+        /* Yangi raqam darhol o'z katagiga joylashadi */
         positionTile(node,r,c,!(initial||isNew));
 
         if(isNew){
-          node.style.transition='none';
-          node.style.transform=`translate3d(${c*((boardEl.clientWidth-24)/4+8)}px,${r*((boardEl.clientWidth-24)/4+8)}px,0)`;
-
-          node.getBoundingClientRect();
-
           requestAnimationFrame(()=>{
-            node.style.transition='';
             node.classList.add('spawn');
           });
         }
@@ -448,7 +441,7 @@ body{
           if(!node.isConnected)return;
           node.remove();
           tileNodes.delete(id);
-        },110);
+        },100);
       }
     }
 
