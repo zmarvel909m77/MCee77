@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="uz">
 <head>
@@ -5,7 +6,6 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#101020">
 <title>2048 | MCee77</title>
-
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&display=swap" rel="stylesheet">
@@ -107,24 +107,71 @@ body{
 }
 
 .board{
+  position:relative;
   display:grid;
   grid-template-columns:repeat(4,1fr);
+  grid-template-rows:repeat(4,1fr);
   gap:8px;
   aspect-ratio:1;
   touch-action:none;
+  overflow:hidden;
+}
+
+.cell{
+  border-radius:11px;
+  background:#3a3651;
+  min-width:0;
+  min-height:0;
 }
 
 .tile{
-  border-radius:11px;
-  background:#3a3651;
+  position:absolute;
+  top:0;
+  left:0;
   display:flex;
   align-items:center;
   justify-content:center;
+  border-radius:11px;
   font-size:clamp(22px,7vw,34px);
   font-weight:900;
   color:#51465b;
-  transition:background .1s;
+  z-index:2;
   pointer-events:none;
+  will-change:transform;
+  transition:
+    transform 180ms cubic-bezier(.22,.75,.25,1),
+    background .12s,
+    opacity 180ms ease;
+}
+
+.tile.new{
+  opacity:0;
+  scale:.2;
+}
+
+.tile.appear{
+  opacity:1;
+  scale:1;
+  transition:
+    transform 180ms cubic-bezier(.22,.75,.25,1),
+    scale 180ms cubic-bezier(.22,.75,.25,1),
+    opacity 180ms ease;
+}
+
+.tile.merging{
+  animation:mergePop 180ms ease;
+}
+
+.tile.removing{
+  opacity:0;
+  scale:.3;
+  transition:opacity 120ms ease,scale 120ms ease;
+}
+
+@keyframes mergePop{
+  0%{scale:1}
+  55%{scale:1.18}
+  100%{scale:1}
 }
 
 .v2{background:#eee4da}
@@ -202,11 +249,6 @@ body{
   touch-action:manipulation;
 }
 
-.action.secondary{
-  background:#292640;
-  border:1px solid #ffffff20;
-}
-
 .foot{
   text-align:center;
   color:#77738f;
@@ -224,13 +266,11 @@ body{
 
   <div class="heading">
     <h1>2048</h1>
-
     <div class="stats">
       <div class="stat">
         <small>Ball</small>
         <b id="score">0</b>
       </div>
-
       <div class="stat">
         <small>Rekord</small>
         <b id="best">0</b>
@@ -238,7 +278,7 @@ body{
     </div>
   </div>
 
-  <div class="board-wrap" id="gameArea">
+  <div class="board-wrap">
     <div class="board" id="board" aria-label="2048 o‘yin maydoni"></div>
   </div>
 
@@ -272,6 +312,9 @@ body{
   let score=0;
   let best=Number(localStorage.getItem('mc2048_best')||0);
   let over=false;
+  let nextId=1;
+  let tileNodes=new Map();
+  let busy=false;
 
   const dirs={
     up:[-1,0],
@@ -282,16 +325,34 @@ body{
 
   $('best').textContent=best;
 
+  // Kataklarning orqa fonini bir marta chizamiz
+  for(let i=0;i<16;i++){
+    const cell=document.createElement('div');
+    cell.className='cell';
+    boardEl.appendChild(cell);
+  }
+
+  function newTile(value){
+    return {
+      id:nextId++,
+      value
+    };
+  }
+
   function fresh(){
-    board=Array.from({length:4},()=>[0,0,0,0]);
+    board=Array.from({length:4},()=>Array(4).fill(null));
     score=0;
     over=false;
+    busy=false;
+
+    tileNodes.forEach(node=>node.remove());
+    tileNodes.clear();
 
     $('overlay').style.display='none';
 
     spawn();
     spawn();
-    render();
+    render(true);
   }
 
   function spawn(){
@@ -306,22 +367,81 @@ body{
     if(!empty.length)return;
 
     const [r,c]=empty[Math.floor(Math.random()*empty.length)];
-
-    board[r][c]=Math.random()<.9?2:4;
+    board[r][c]=newTile(Math.random()<.9?2:4);
   }
 
-  function render(){
-    boardEl.innerHTML='';
+  function positionTile(node,r,c,animate=true){
+    const gap=8;
+    const size=boardEl.clientWidth;
+    const cell=(size-gap*3)/4;
+
+    node.style.width=cell+'px';
+    node.style.height=cell+'px';
+
+    const x=c*(cell+gap);
+    const y=r*(cell+gap);
+
+    if(!animate){
+      node.style.transition='none';
+    }
+
+    node.style.transform=`translate3d(${x}px,${y}px,0)`;
+
+    if(!animate){
+      node.offsetHeight;
+      node.style.transition='';
+    }
+  }
+
+  function render(initial=false){
+    const activeIds=new Set();
 
     for(let r=0;r<4;r++){
       for(let c=0;c<4;c++){
-        const n=board[r][c];
-        const d=document.createElement('div');
+        const tile=board[r][c];
+        if(!tile)continue;
 
-        d.className='tile'+(n?' v'+(n<=2048?n:'high'):'');
-        d.textContent=n||'';
+        activeIds.add(tile.id);
 
-        boardEl.append(d);
+        let node=tileNodes.get(tile.id);
+        let isNew=false;
+
+        if(!node){
+          node=document.createElement('div');
+          node.className='tile new';
+          node.textContent=tile.value;
+          boardEl.appendChild(node);
+          tileNodes.set(tile.id,node);
+          isNew=true;
+        }
+
+        node.className='tile v'+(tile.value<=2048?tile.value:'high');
+        node.textContent=tile.value;
+
+        positionTile(node,r,c,!initial);
+
+        if(isNew){
+          node.classList.add('new');
+
+          requestAnimationFrame(()=>{
+            requestAnimationFrame(()=>{
+              node.classList.remove('new');
+              node.classList.add('appear');
+            });
+          });
+        }
+      }
+    }
+
+    for(const [id,node] of tileNodes){
+      if(!activeIds.has(id)){
+        node.classList.add('removing');
+
+        setTimeout(()=>{
+          if(!node.isConnected)return;
+          node.remove();
+          tileNodes.delete(id);
+        },130);
       }
     }
 
@@ -330,11 +450,11 @@ body{
   }
 
   function move(dir){
-    if(over)return;
+    if(over||busy)return;
 
-    const old=board.map(r=>r.slice());
-    const oldScore=score;
     const [dr,dc]=dirs[dir];
+    const old=board.map(row=>row.slice());
+    const mergedIds=new Set();
 
     for(let line=0;line<4;line++){
       const cells=[];
@@ -342,38 +462,44 @@ body{
       for(let k=0;k<4;k++){
         const r=dr===0?line:(dr===-1?k:3-k);
         const c=dc===0?line:(dc===-1?k:3-k);
-
         cells.push([r,c]);
       }
 
-      const vals=cells
+      const tiles=cells
         .map(([r,c])=>board[r][c])
         .filter(Boolean);
 
-      const out=[];
+      const result=[];
 
-      for(let i=0;i<vals.length;i++){
-        if(vals[i]===vals[i+1]){
-          const n=vals[i]*2;
-          out.push(n);
-          score+=n;
+      for(let i=0;i<tiles.length;i++){
+        const current=tiles[i];
+        const next=tiles[i+1];
+
+        if(next&&current.value===next.value){
+          current.value*=2;
+          score+=current.value;
+          mergedIds.add(current.id);
+          result.push(current);
           i++;
         }else{
-          out.push(vals[i]);
+          result.push(current);
         }
       }
 
-      while(out.length<4)out.push(0);
+      while(result.length<4)result.push(null);
 
       cells.forEach(([r,c],i)=>{
-        board[r][c]=out[i];
+        board[r][c]=result[i];
       });
     }
 
-    if(JSON.stringify(old)===JSON.stringify(board)){
-      score=oldScore;
-      return;
-    }
+    const changed=board.some((row,r)=>
+      row.some((tile,c)=>tile!==old[r][c])
+    );
+
+    if(!changed)return;
+
+    busy=true;
 
     spawn();
 
@@ -384,28 +510,43 @@ body{
 
     render();
 
-    if(board.flat().includes(2048)){
-      over=true;
-      $('endTitle').textContent='2048 ga yetdingiz!';
-      $('endText').textContent='Tabriklaymiz. Ball: '+score;
-      $('overlay').style.display='flex';
-
-    }else if(!movesLeft()){
-      over=true;
-      $('endTitle').textContent='O‘yin tugadi';
-      $('endText').textContent='Natijangiz: '+score;
-      $('overlay').style.display='flex';
+    for(const id of mergedIds){
+      const node=tileNodes.get(id);
+      if(node){
+        node.classList.remove('merging');
+        void node.offsetWidth;
+        node.classList.add('merging');
+      }
     }
+
+    setTimeout(()=>{
+      busy=false;
+
+      if(board.flat().some(tile=>tile?.value===2048)){
+        over=true;
+        $('endTitle').textContent='2048 ga yetdingiz!';
+        $('endText').textContent='Tabriklaymiz. Ball: '+score;
+        $('overlay').style.display='flex';
+
+      }else if(!movesLeft()){
+        over=true;
+        $('endTitle').textContent='O‘yin tugadi';
+        $('endText').textContent='Natijangiz: '+score;
+        $('overlay').style.display='flex';
+      }
+    },190);
   }
 
   function movesLeft(){
-    if(board.flat().some(x=>!x))return true;
+    if(board.flat().some(tile=>!tile))return true;
 
     for(let r=0;r<4;r++){
       for(let c=0;c<4;c++){
+        const value=board[r][c]?.value;
+
         if(
-          (r<3&&board[r][c]===board[r+1][c])||
-          (c<3&&board[r][c]===board[r][c+1])
+          (r<3&&value===board[r+1][c]?.value)||
+          (c<3&&value===board[r][c+1]?.value)
         ){
           return true;
         }
@@ -415,6 +556,7 @@ body{
     return false;
   }
 
+  // Klaviatura boshqaruvi
   document.addEventListener('keydown',e=>{
     const map={
       ArrowUp:'up',
@@ -430,14 +572,14 @@ body{
   });
 
   // Butun ilova bo‘ylab surish
-  // Faqat o‘yin raqamlari harakatlanadi
+  // Faqat raqamlar harakatlanadi
 
   let sx=0;
   let sy=0;
   let swiping=false;
 
   app.addEventListener('pointerdown',e=>{
-    if(over)return;
+    if(over||busy)return;
     if(e.target.closest('button'))return;
 
     sx=e.clientX;
@@ -454,7 +596,7 @@ body{
 
     swiping=false;
 
-    if(over)return;
+    if(over||busy)return;
 
     const dx=e.clientX-sx;
     const dy=e.clientY-sy;
@@ -471,6 +613,23 @@ body{
   app.addEventListener('pointercancel',()=>{
     swiping=false;
   });
+
+  // Ekran o‘lchami o‘zgarsa kataklarni qayta joylaymiz
+  if('ResizeObserver' in window){
+    new ResizeObserver(()=>{
+      if(!board)return;
+
+      for(let r=0;r<4;r++){
+        for(let c=0;c<4;c++){
+          const tile=board[r][c];
+          if(tile){
+            const node=tileNodes.get(tile.id);
+            if(node)positionTile(node,r,c,false);
+          }
+        }
+      }
+    }).observe(boardEl);
+  }
 
   $('again').onclick=fresh;
 
