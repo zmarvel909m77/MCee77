@@ -84,7 +84,7 @@
     /** Walk cycle uses 4 atlas frames at SPRITE_FPS. */
     const WALK_MS = Math.round((4 / SPRITE_FPS) * 1000);
     /** Kick / hit pose hold — mid of 0.08–0.15 s. */
-    const CHOP_MS = 120;
+    const CHOP_MS = 80;
     /** Ustun balandligi oshirildi: tepadagi bo‘shliq yopiladi. */
     const TREE_HEIGHT_FRAC = 0.98;
     const TREE_HEIGHT_MIN_FRAC = 0.98;
@@ -94,7 +94,7 @@
     const HERO_OF_TREE_MIN = 0.08;
     const HERO_OF_TREE_MAX = 0.12;
     /** One segment settles in this many ms — mid of 0.25–0.6 s; queueable. */
-    const DROP_DURATION_MS = 280;
+    const DROP_DURATION_MS = 270;
     const DROP_DURATION_MIN_MS = 250;
     const DROP_DURATION_MAX_MS = 600;
     /** Debris spin while flying — mid of 90°–180°. */
