@@ -1,5 +1,10 @@
 
 
+
+
+
+
+
 <!DOCTYPE html>
 <html lang="uz">
 <head>
@@ -23,6 +28,80 @@
   <link rel="stylesheet" href="./styles.css" />
 
   <style>
+    /* IKKI O‘YINLI YONMA-YON SLAYDER */
+    .games-carousel {
+      width: 100%;
+      overflow: hidden;
+      border-radius: 24px;
+      touch-action: pan-y;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .games-track {
+      display: flex;
+      width: 100%;
+      transform: translate3d(0, 0, 0);
+      transition: transform 380ms cubic-bezier(.22,.75,.25,1);
+      will-change: transform;
+    }
+
+    .game-slide {
+      flex: 0 0 100%;
+      min-width: 100%;
+      padding: 0;
+    }
+
+    .game-slide .game-hero-banner {
+      width: 100%;
+      height: 240px;
+      margin: 16px 0 12px;
+    }
+
+    .game-2048-banner {
+      background: linear-gradient(135deg, #49317e, #17152d);
+    }
+
+    .game-2048-content {
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      padding: 18px;
+    }
+
+    .game-2048-title {
+      color: #fff;
+      font-size: clamp(42px, 12vw, 58px);
+      font-weight: 900;
+      letter-spacing: -5px;
+    }
+
+    .games-dots {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 9px;
+      padding: 2px 0 14px;
+    }
+
+    .games-dot {
+      width: 8px;
+      height: 8px;
+      padding: 0;
+      border: 0;
+      border-radius: 50%;
+      background: rgba(255,255,255,.28);
+      transition: width 220ms ease, background 220ms ease;
+    }
+
+    .games-dot.active {
+      width: 23px;
+      border-radius: 99px;
+      background: #9b7cff;
+    }
+
     /* BANNER */
     .game-hero-banner {
       position: relative;
@@ -302,48 +381,57 @@
           <h2>GAMES</h2>
         </div>
 
-        <div
-          id="playKarateBtn"
-          class="game-hero-banner"
-          role="button"
-          tabindex="0"
-        >
-          <img
-            src="./49BAC606-C8B7-48AC-834F-F0F183854913.png"
-            alt="KidoChop O‘yini"
-            class="banner-bg"
-          />
-
-          <div class="banner-overlay-bar">
-            <div class="banner-info">
-              <div class="banner-mini-icon">
+        <div class="games-carousel" id="gamesCarousel" aria-label="O‘yinlarni ko‘rish">
+          <div class="games-track" id="gamesTrack">
+            <div class="game-slide">
+              <div
+                id="playKarateBtn"
+                class="game-hero-banner"
+                role="button"
+                tabindex="0"
+                aria-label="KidoChop o‘yinini boshlash"
+              >
                 <img
                   src="./49BAC606-C8B7-48AC-834F-F0F183854913.png"
-                  alt="Icon"
+                  alt="KidoChop O‘yini"
+                  class="banner-bg"
                 />
-              </div>
-
-              <div class="banner-titles">
-                <h3>KidoChop</h3>
-              
+                <div class="banner-overlay-bar">
+                  <div class="banner-info">
+                    <div class="banner-mini-icon">
+                      <img
+                        src="./49BAC606-C8B7-48AC-834F-F0F183854913.png"
+                        alt="KidoChop"
+                      />
+                    </div>
+                    <div class="banner-titles">
+                      <h3>KidoChop</h3>
+                    </div>
+                  </div>
+                  <div class="banner-play-btn">PLAY</div>
+                </div>
               </div>
             </div>
 
-            <div class="banner-play-btn">
-             PLAY
+            <div class="game-slide">
+              <div
+                id="play2048Btn"
+                class="game-hero-banner game-2048-banner"
+                role="button"
+                tabindex="0"
+                aria-label="2048 o‘yinini boshlash"
+              >
+                <div class="game-2048-content">
+                  <div class="game-2048-title">2048</div>
+                  <div class="banner-play-btn">PLAY</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-
-        <div id="play2048Btn" class="game-hero-banner" role="button" tabindex="0"
-          style="height:170px;background:linear-gradient(135deg,#49317e,#17152d)">
-          <div style="height:100%;display:flex;align-items:center;justify-content:center;gap:20px;padding:18px">
-            <div style="font-size:54px;font-weight:900;color:#fff;letter-spacing:-5px">2048</div>
-            <div style="color:#fff">
-            
-              <div class="banner-play-btn" style="display:inline-block;margin-top:12px">PLAY</div>
-            </div>
-          </div>
+        <div class="games-dots" id="gamesDots" aria-label="O‘yin sahifalari">
+          <button type="button" class="games-dot active" data-slide="0" aria-label="KidoChop"></button>
+          <button type="button" class="games-dot" data-slide="1" aria-label="2048"></button>
         </div>
       </section>
 
@@ -552,6 +640,10 @@
 
 </body>
 </html>
+
+
+
+
 
 
 
