@@ -1,3 +1,10 @@
+
+
+
+
+
+
+
 /**
  * GAME BOT Mini App shell — Magazin / O‘yinlar / Reyting
  * GAMEE-like: profile chip top-left, games default tab.
@@ -259,6 +266,61 @@ function readFileAsDataUrl(file) {
   });
 }
 
+// O‘yinlar orasida chapga va o‘ngga surish
+const gamesCarousel = document.getElementById("gamesCarousel");
+const gamesTrack = document.getElementById("gamesTrack");
+const gamesDots = [...document.querySelectorAll(".games-dot")];
+let gamesSlideIndex = 0;
+let gamesPointerStartX = 0;
+let gamesPointerStartY = 0;
+let gamesDragging = false;
+let suppressGameClick = false;
+
+function setGamesSlide(index) {
+  gamesSlideIndex = Math.max(0, Math.min(1, index));
+  if (gamesTrack) {
+    gamesTrack.style.transform = `translate3d(-${gamesSlideIndex * 100}%, 0, 0)`;
+  }
+  gamesDots.forEach((dot, i) => {
+    dot.classList.toggle("active", i === gamesSlideIndex);
+  });
+}
+
+gamesDots.forEach((dot) => {
+  dot.addEventListener("click", () => {
+    setGamesSlide(Number(dot.dataset.slide || 0));
+  });
+});
+
+gamesCarousel?.addEventListener("pointerdown", (event) => {
+  if (event.pointerType === "mouse" && event.button !== 0) return;
+  gamesPointerStartX = event.clientX;
+  gamesPointerStartY = event.clientY;
+  gamesDragging = true;
+});
+
+gamesCarousel?.addEventListener("pointerup", (event) => {
+  if (!gamesDragging) return;
+  gamesDragging = false;
+  const dx = event.clientX - gamesPointerStartX;
+  const dy = event.clientY - gamesPointerStartY;
+  if (Math.abs(dx) < 35 || Math.abs(dx) < Math.abs(dy)) return;
+
+  setGamesSlide(gamesSlideIndex + (dx < 0 ? 1 : -1));
+  suppressGameClick = true;
+  setTimeout(() => { suppressGameClick = false; }, 350);
+});
+
+gamesCarousel?.addEventListener("pointercancel", () => {
+  gamesDragging = false;
+});
+
+gamesCarousel?.addEventListener("click", (event) => {
+  if (!suppressGameClick) return;
+  event.preventDefault();
+  event.stopPropagation();
+}, true);
+
 // O‘yin boshlanish tugmasi bosilganda yangi chop.m4a ovozini chalish
 els.playKarateBtn?.addEventListener("click", (e) => {
   e.preventDefault(); // Sahifaning darhol sakrab o'tib ketishini oldini oladi
@@ -283,6 +345,13 @@ play2048Btn?.addEventListener("keydown", (ev) => {
   if (ev.key === "Enter" || ev.key === " ") {
     ev.preventDefault();
     location.href = "/2048/";
+  }
+});
+
+els.playKarateBtn?.addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter" || ev.key === " ") {
+    ev.preventDefault();
+    els.playKarateBtn.click();
   }
 });
 
@@ -334,3 +403,7 @@ document.addEventListener("visibilitychange", () => {
     void bootstrapMe();
   }
 });
+
+
+
+
