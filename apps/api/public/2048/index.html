@@ -283,7 +283,12 @@ body{
 <main class="app" id="app">
 
   <div class="heading">
-    <h1>2048</h1>
+    <div>
+      <h1 id="tileRecord">0</h1>
+      <div style="font-size:9px;font-weight:800;letter-spacing:1px;color:#aaa6c3;margin-top:5px">
+        ENG KATTA RAQAM
+      </div>
+    </div>
     <div class="stats">
       <div class="stat">
         <small>Ball</small>
@@ -334,6 +339,7 @@ body{
   let board;
   let score=0;
   let best=Number(localStorage.getItem('mc2048_best')||0);
+  let tileRecord=Number(localStorage.getItem('mc2048_tile_best')||0);
   let over=false;
   let nextId=1;
   let tileNodes=new Map();
@@ -348,6 +354,7 @@ body{
   };
 
   $('best').textContent=best;
+  $('tileRecord').textContent=tileRecord;
 
   for(let i=0;i<16;i++){
     const cell=document.createElement('div');
@@ -469,6 +476,7 @@ body{
 
     $('score').textContent=score;
     $('best').textContent=best;
+    $('tileRecord').textContent=tileRecord;
   }
 
   async function load2048Leaderboard(){
@@ -548,6 +556,13 @@ body{
         if(next&&current.value===next.value){
           current.value*=2;
           score+=current.value;
+
+          if(current.value>tileRecord){
+            tileRecord=current.value;
+            localStorage.setItem('mc2048_tile_best',String(tileRecord));
+            $('tileRecord').textContent=tileRecord;
+          }
+
           mergedIds.add(current.id);
           result.push(current);
           i++;
