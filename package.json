@@ -2,13 +2,13 @@
   "name": "mcee77-game-bot",
   "version": "0.1.0",
   "private": true,
-  "description": "GAME BOT — Telegram Mini App Karate Strike (GAMEE-style) with high-score rating",
+  "description": "GAME BOT — Telegram Mini App Kido Chop (GAMEE-style) with high-score rating",
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build -w @mcee77/shared -w @mcee77/db -w @mcee77/bot -w @mcee77/api",
+    "build": "npm run build -w @mcee77/shared && npm run build -w @mcee77/db && npm run build -w @mcee77/bot && npm run build -w @mcee77/api",
     "dev:bot": "npm run dev -w @mcee77/bot",
     "dev:admin-bot": "npm run dev:admin -w @mcee77/bot",
     "dev:api": "npm run dev -w @mcee77/api",
@@ -16,7 +16,7 @@
     "start:admin-bot": "npm run start:admin -w @mcee77/bot",
     "start:api": "npm run start -w @mcee77/api",
     "start:prod": "npm run start -w @mcee77/api",
-    "typecheck": "npm run typecheck -w @mcee77/shared -w @mcee77/db -w @mcee77/bot -w @mcee77/api"
+    "typecheck": "npm run typecheck -w @mcee77/shared && npm run typecheck -w @mcee77/db && npm run typecheck -w @mcee77/bot && npm run typecheck -w @mcee77/api"
   },
   "engines": {
     "node": ">=20"
