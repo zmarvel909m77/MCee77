@@ -9,7 +9,7 @@ export function welcomeMessage(_displayName: string): string {
     "MCee Game",
     "",
 
-    "👇 Mini Appni ochish uchun tugmani bosing:",
+    "  Mini Appni ochish uchun tugmani bosing:",
   ].join("\n");
 }
 
