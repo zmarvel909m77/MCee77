@@ -2,9 +2,9 @@ import { InlineKeyboard } from "grammy";
 
 /** Inline button labels (Uzbek Latin). */
 export const BTN = {
-  play: "🥋 O‘ynash",
-  shop: "🛒 Magazin",
-  open: "OCHISH",
+  play: "✅ PLAY",
+  shop: "🛒 SHOP",
+  open: "OPEN",
 } as const;
 
 export const CB = {
