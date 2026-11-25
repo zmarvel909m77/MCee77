@@ -41,9 +41,7 @@ export function leaderboardMessage(entries: LeaderboardEntry[]): string {
   if (entries.length === 0) {
     return [
       "🏆 Reyting",
-      "",
     
-      "Reyting Mini App ichida ochiladi.",
     ].join("\n");
   }
 
@@ -55,8 +53,6 @@ export function leaderboardMessage(entries: LeaderboardEntry[]): string {
     "🏆 Reyting (Kido Chop)",
     "",
     ...lines,
-    "",
-    "To‘liq reyting Mini App ichida.",
   ].join("\n");
 }
 
@@ -64,7 +60,6 @@ export function miniAppOpenMessage(hasWebApp: boolean): string {
   if (hasWebApp) {
     return [
       "MCee Game",
-      "",
       "Mini App ochish uchun pastdagi tugmani bosing.",
       "Magazin · O‘yinlar · Reyting",
     ].join("\n");
