@@ -6,10 +6,9 @@ import { publicDisplayName } from "@mcee77/shared";
  */
 export function welcomeMessage(_displayName: string): string {
   return [
-    "🏙️ GAME BOT ga xush kelibsiz!",
+    "MCee Game",
     "",
-    "Karate Strike o‘ynang, rekordingizni yangilang va reytingda yuqoriga chiqing.",
-    "",
+
     "👇 Mini Appni ochish uchun tugmani bosing:",
   ].join("\n");
 }
@@ -19,9 +18,9 @@ export function shopUnavailableMessage(): string {
   return [
     "Magazin",
     "",
-    "Hozircha resurslar yo‘q — omborimiz yangi imkoniyatlar bilan to‘ldirilmoqda.",
+    "Hozircha resurslar yo‘q",
     "",
-    "Tez orada bu yerda sovg‘alar paydo bo‘ladi. Sabr-toqatingiz uchun rahmat.",
+    "Ho'zircha resurslar yo'q",
   ].join("\n");
 }
 
@@ -30,7 +29,7 @@ export function profileMessage(user: User): string {
     "👤 Profil",
     "",
     `Taxallus: ${publicDisplayName(user)}`,
-    `O‘yin: Karate Strike`,
+    `O‘yin: Kido Chop`,
     `Eng yaxshi ball: ${user.totalPoints}`,
     `O‘yinlar: ${user.gamesPlayed}`,
     "",
@@ -43,9 +42,7 @@ export function leaderboardMessage(entries: LeaderboardEntry[]): string {
     return [
       "🏆 Reyting",
       "",
-      "Hali hech kim rekord qo‘ymagan.",
-      "Karate Strike o‘ynab birinchi bo‘ling!",
-      "",
+    
       "Reyting Mini App ichida ochiladi.",
     ].join("\n");
   }
@@ -55,7 +52,7 @@ export function leaderboardMessage(entries: LeaderboardEntry[]): string {
   });
 
   return [
-    "🏆 Reyting (Karate Strike)",
+    "🏆 Reyting (Kido Chop)",
     "",
     ...lines,
     "",
@@ -66,7 +63,7 @@ export function leaderboardMessage(entries: LeaderboardEntry[]): string {
 export function miniAppOpenMessage(hasWebApp: boolean): string {
   if (hasWebApp) {
     return [
-      "🏙️ GAME BOT",
+      "MCee Game",
       "",
       "Mini App ochish uchun pastdagi tugmani bosing.",
       "Magazin · O‘yinlar · Reyting",
