@@ -9,7 +9,7 @@ export function welcomeMessage(_displayName: string): string {
     "MCee Game",
     "",
 
-    "  Mini Appni ochish uchun tugmani bosing:",
+      "MINI APPNI OCHISH UCHUN TUGMANI BOSING:",
   ].join("\n");
 }
 
@@ -17,8 +17,6 @@ export function welcomeMessage(_displayName: string): string {
 export function shopUnavailableMessage(): string {
   return [
     "Magazin",
-    "",
-    "Hozircha resurslar yo‘q",
     "",
     "Ho'zircha resurslar yo'q",
   ].join("\n");
@@ -61,7 +59,7 @@ export function miniAppOpenMessage(hasWebApp: boolean): string {
     return [
       "MCee Game",
       "Mini App ochish uchun pastdagi tugmani bosing.",
-      "Magazin · O‘yinlar · Reyting",
+      " SHOP · GAMES · RANKING",
     ].join("\n");
   }
   return [
