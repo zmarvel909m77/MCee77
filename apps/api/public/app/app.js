@@ -5,6 +5,8 @@
 
 
 
+
+
 /**
  * GAME BOT Mini App shell — Magazin / O‘yinlar / Reyting
  * GAMEE-like: profile chip top-left, games default tab.
@@ -266,24 +268,50 @@ function readFileAsDataUrl(file) {
   });
 }
 
-// O‘yinlar orasida chapga va o‘ngga surish
+// O‘yin kartalari: barmoq bilan tortish va silliq joyiga tushirish
 const gamesCarousel = document.getElementById("gamesCarousel");
 const gamesTrack = document.getElementById("gamesTrack");
 const gamesDots = [...document.querySelectorAll(".games-dot")];
+
 let gamesSlideIndex = 0;
-let gamesPointerStartX = 0;
-let gamesPointerStartY = 0;
 let gamesDragging = false;
+let gamesStartX = 0;
+let gamesStartY = 0;
+let gamesLastX = 0;
+let gamesLastTime = 0;
+let gamesDragX = 0;
+let gamesBaseX = 0;
+let gamesPointerId = null;
 let suppressGameClick = false;
 
-function setGamesSlide(index) {
-  gamesSlideIndex = Math.max(0, Math.min(1, index));
-  if (gamesTrack) {
-    gamesTrack.style.transform = `translate3d(-${gamesSlideIndex * 100}%, 0, 0)`;
-  }
+function gameSlideStep() {
+  const first = gamesTrack?.querySelector(".game-slide");
+  if (!first) return 0;
+  const trackStyle = getComputedStyle(gamesTrack);
+  const gap = parseFloat(trackStyle.columnGap || trackStyle.gap || "0") || 0;
+  return first.getBoundingClientRect().width + gap;
+}
+
+function gameBaseOffset(index) {
+  return -index * gameSlideStep();
+}
+
+function updateGameDots() {
   gamesDots.forEach((dot, i) => {
     dot.classList.toggle("active", i === gamesSlideIndex);
   });
+}
+
+function setGamesSlide(index) {
+  gamesSlideIndex = Math.max(0, Math.min(1, index));
+  gamesDragging = false;
+  gamesTrack?.classList.remove("is-dragging");
+  gamesCarousel?.classList.remove("is-dragging");
+  if (gamesTrack) {
+    gamesTrack.style.transition = "transform 420ms cubic-bezier(.2,.75,.25,1)";
+    gamesTrack.style.transform = `translate3d(${gameBaseOffset(gamesSlideIndex)}px,0,0)`;
+  }
+  updateGameDots();
 }
 
 gamesDots.forEach((dot) => {
@@ -294,25 +322,83 @@ gamesDots.forEach((dot) => {
 
 gamesCarousel?.addEventListener("pointerdown", (event) => {
   if (event.pointerType === "mouse" && event.button !== 0) return;
-  gamesPointerStartX = event.clientX;
-  gamesPointerStartY = event.clientY;
+  if (event.target.closest(".banner-play-btn")) return;
+
   gamesDragging = true;
+  gamesPointerId = event.pointerId;
+  gamesStartX = event.clientX;
+  gamesStartY = event.clientY;
+  gamesLastX = event.clientX;
+  gamesLastTime = performance.now();
+  gamesDragX = 0;
+  gamesBaseX = gameBaseOffset(gamesSlideIndex);
+
+  gamesTrack?.classList.add("is-dragging");
+  gamesCarousel.classList.add("is-dragging");
+  if (gamesTrack) {
+    gamesTrack.style.transition = "none";
+    gamesTrack.style.transform = `translate3d(${gamesBaseX}px,0,0)`;
+  }
+  try {
+    gamesCarousel.setPointerCapture(event.pointerId);
+  } catch {}
 });
 
-gamesCarousel?.addEventListener("pointerup", (event) => {
-  if (!gamesDragging) return;
-  gamesDragging = false;
-  const dx = event.clientX - gamesPointerStartX;
-  const dy = event.clientY - gamesPointerStartY;
-  if (Math.abs(dx) < 35 || Math.abs(dx) < Math.abs(dy)) return;
+gamesCarousel?.addEventListener("pointermove", (event) => {
+  if (!gamesDragging || event.pointerId !== gamesPointerId) return;
 
-  setGamesSlide(gamesSlideIndex + (dx < 0 ? 1 : -1));
-  suppressGameClick = true;
-  setTimeout(() => { suppressGameClick = false; }, 350);
+  const dx = event.clientX - gamesStartX;
+  const dy = event.clientY - gamesStartY;
+  if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 10) return;
+
+  gamesDragX = dx;
+  const minX = gameBaseOffset(1);
+  let nextX = gamesBaseX + dx;
+
+  // Chegaralarda ortiqcha tortishni yumshatadi.
+  if (nextX > 0) nextX *= 0.28;
+  if (nextX < minX) nextX = minX + (nextX - minX) * 0.28;
+
+  if (gamesTrack) {
+    gamesTrack.style.transform = `translate3d(${nextX}px,0,0)`;
+  }
+
+  gamesLastX = event.clientX;
+  gamesLastTime = performance.now();
 });
 
-gamesCarousel?.addEventListener("pointercancel", () => {
+function finishGamesDrag(event) {
+  if (!gamesDragging || (event && event.pointerId !== gamesPointerId)) return;
+
+  const dx = gamesDragX;
+  const elapsed = Math.max(1, performance.now() - gamesLastTime);
+  const velocity = (event ? event.clientX - gamesLastX : 0) / elapsed;
+  const threshold = Math.max(38, gameSlideStep() * 0.16);
+
   gamesDragging = false;
+  gamesPointerId = null;
+  gamesTrack?.classList.remove("is-dragging");
+  gamesCarousel?.classList.remove("is-dragging");
+
+  if (Math.abs(dx) > threshold || Math.abs(velocity) > 0.45) {
+    if (dx < 0 || velocity < -0.45) {
+      setGamesSlide(1);
+    } else if (dx > 0 || velocity > 0.45) {
+      setGamesSlide(0);
+    } else {
+      setGamesSlide(gamesSlideIndex);
+    }
+    suppressGameClick = true;
+    setTimeout(() => { suppressGameClick = false; }, 350);
+  } else {
+    setGamesSlide(gamesSlideIndex);
+  }
+}
+
+gamesCarousel?.addEventListener("pointerup", finishGamesDrag);
+gamesCarousel?.addEventListener("pointercancel", finishGamesDrag);
+gamesCarousel?.addEventListener("lostpointercapture", () => {
+  if (gamesDragging) setGamesSlide(gamesSlideIndex);
 });
 
 gamesCarousel?.addEventListener("click", (event) => {
@@ -320,6 +406,10 @@ gamesCarousel?.addEventListener("click", (event) => {
   event.preventDefault();
   event.stopPropagation();
 }, true);
+
+window.addEventListener("resize", () => {
+  if (!gamesDragging) setGamesSlide(gamesSlideIndex);
+});
 
 // O‘yin boshlanish tugmasi bosilganda yangi chop.m4a ovozini chalish
 els.playKarateBtn?.addEventListener("click", (e) => {
@@ -396,6 +486,7 @@ async function loadLeaderboard() {
   }
 }
 
+setGamesSlide(0);
 void bootstrapMe();
 
 document.addEventListener("visibilitychange", () => {
