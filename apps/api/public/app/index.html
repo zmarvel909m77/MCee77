@@ -7,8 +7,6 @@
 
 
 
-
-
 <!DOCTYPE html>
 <html lang="uz">
 <head>
@@ -36,7 +34,7 @@
     .games-carousel {
       width: 100%;
       overflow: hidden;
-      padding-left: 20px;
+      padding-left: max(0px, calc((100% - min(87vw, 710px)) / 2));
       box-sizing: border-box;
       touch-action: pan-y;
       user-select: none;
@@ -62,9 +60,9 @@
     }
 
     .game-slide {
-      flex: 0 0 min(89vw, 710px);
-      width: min(89vw, 710px);
-      min-width: min(89vw, 710px);
+      flex: 0 0 min(87vw, 710px);
+      width: min(87vw, 710px);
+      min-width: min(87vw, 710px);
       padding: 0;
       box-sizing: border-box;
     }
