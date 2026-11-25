@@ -16,7 +16,7 @@ export function welcomeMessage(_displayName: string): string {
 /** Do‘kon — resources not ready yet (literary, polite). */
 export function shopUnavailableMessage(): string {
   return [
-    "Magazin",
+    "SHOP:",
     "",
     "Ho'zircha resurslar yo'q",
   ].join("\n");
