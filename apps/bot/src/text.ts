@@ -70,7 +70,7 @@ export function miniAppOpenMessage(hasWebApp: boolean): string {
     ].join("\n");
   }
   return [
-    "🏙️ GAME BOT",
+    "MCee Game",
     "",
     "WEBAPP_URL sozlanmagan.",
     "Serverda HTTPS Mini App URL ni `.env` ga qo‘ying.",
