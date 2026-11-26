@@ -84,7 +84,7 @@
     /** Walk cycle uses 4 atlas frames at SPRITE_FPS. */
     const WALK_MS = Math.round((4 / SPRITE_FPS) * 1000);
     /** Kick / hit pose hold — mid of 0.08–0.15 s. */
-    const CHOP_MS = 90;
+    const CHOP_MS = 150;
     /** Ustun balandligi oshirildi: tepadagi bo‘shliq yopiladi. */
     const TREE_HEIGHT_FRAC = 0.98;
     const TREE_HEIGHT_MIN_FRAC = 0.98;
