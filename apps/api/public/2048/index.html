@@ -5,6 +5,14 @@
 
 
 
+
+
+
+
+
+
+
+
 <!doctype html>
 <html lang="uz">
 <head>
@@ -29,8 +37,13 @@ body{padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom);display:f
 .stat small{display:block;color:#aaa6c3;font-size:10px;font-weight:800;text-transform:uppercase}
 .stat b{font-size:19px}
 .board-wrap{background:#292640;border:1px solid #ffffff20;border-radius:19px;padding:9px;box-shadow:0 16px 40px #0006;margin:auto 0;}
-.board{position:relative;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(4,1fr);gap:8px;aspect-ratio:1;touch-action:none;overflow:hidden;contain:layout paint}
+.board{position:relative;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(4,1fr);gap:8px;height:var(--board-height,360px);width:100%;touch-action:none;overflow:hidden;contain:layout paint}
 .cell{border-radius:11px;background:#3a3651;min-width:0;min-height:0}
+.board-size-control{margin-top:12px;padding:12px 14px;border:1px solid #ffffff18;border-radius:14px;background:#211f36}
+.board-size-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;font-size:11px;font-weight:800;color:#c9b9ff}
+.board-size-head output{color:#fff;font-size:12px}
+.board-size-control input{display:block;width:100%;height:22px;margin:0;accent-color:#9b75ff;touch-action:pan-x}
+
 .tile{position:absolute;top:0;left:0;display:flex;align-items:center;justify-content:center;border-radius:11px;font-size:clamp(22px,7vw,34px);font-weight:900;color:#51465b;z-index:2;pointer-events:none;will-change:transform;transition:transform 457ms cubic-bezier(.16,1,.3,1),background .08s}
 .tile.spawn{animation:tileSpawn 290ms cubic-bezier(.16,1,.3,1) both}
 @keyframes tileSpawn{from{opacity:0;scale:.35}to{opacity:1;scale:1}}
@@ -63,6 +76,7 @@ body{padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom);display:f
 <div class="heading"><div><h1 id="tileRecord">0</h1><div style="font-size:9px;font-weight:800;letter-spacing:1px;color:#aaa6c3;margin-top:5px">TOP NUMBER</div></div>
 <div class="stats"><div class="stat"><small>SCORE</small><b id="score">0</b></div><div class="stat"><small>BEST</small><b id="best">0</b></div></div></div>
 <div class="board-wrap"><div class="board" id="board" aria-label="2048 o‘yin maydoni"></div></div>
+<div class="board-size-control"><div class="board-size-head"><label for="boardHeight">Maydon balandligi</label><output id="boardHeightValue">360 px</output></div><input id="boardHeight" type="range" min="240" max="520" step="10" value="360" aria-label="Maydon balandligi"></div>
 
 </main>
 <div class="overlay" id="overlay"><div class="dialog"><h2 id="endTitle">O‘yin tugadi</h2><p id="endText">Natija: 0</p><button class="action" id="again">Qayta o‘ynash</button></div></div>
@@ -71,6 +85,10 @@ body{padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom);display:f
 const tg=window.Telegram?.WebApp;
 try{tg?.ready();tg?.expand();tg?.disableVerticalSwipes?.()}catch{}
 const $=id=>document.getElementById(id),boardEl=$('board'),app=$('app');
+const heightInput=$('boardHeight'),heightValue=$('boardHeightValue');
+function setBoardHeight(value,save=true){const height=Math.max(240,Math.min(520,Number(value)||360));boardEl.style.setProperty('--board-height',height+'px');heightInput.value=String(height);heightValue.textContent=height+' px';if(save)localStorage.setItem('mc2048_board_height',String(height));if(board){for(let r=0;r<4;r++)for(let c=0;c<4;c++){const tile=board[r][c];if(tile){const node=tileNodes.get(tile.id);if(node)positionTile(node,r,c,false)}}}}
+setBoardHeight(localStorage.getItem('mc2048_board_height')||360,false);
+heightInput.addEventListener('input',()=>setBoardHeight(heightInput.value));
 let board,score=0,best=Number(localStorage.getItem('mc2048_best')||0),tileRecord=Number(localStorage.getItem('mc2048_tile_best')||0),over=false,nextId=1,tileNodes=new Map(),gameVersion=0;
 const dirs={up:[-1,0],down:[1,0],left:[0,-1],right:[0,1]};
 $('best').textContent=best;$('tileRecord').textContent=tileRecord;
@@ -78,7 +96,7 @@ for(let i=0;i<16;i++){const cell=document.createElement('div');cell.className='c
 function newTile(value){return{id:nextId++,value}}
 function fresh(){gameVersion++;board=Array.from({length:4},()=>Array(4).fill(null));score=0;over=false;tileNodes.forEach(node=>node.remove());tileNodes.clear();$('overlay').style.display='none';spawn();spawn();render(true)}
 function spawn(){const empty=[];for(let r=0;r<4;r++)for(let c=0;c<4;c++)if(!board[r][c])empty.push([r,c]);if(!empty.length)return;const [r,c]=empty[Math.floor(Math.random()*empty.length)];board[r][c]=newTile(Math.random()<.9?2:4)}
-function positionTile(node,r,c,animate=true){const gap=8,size=boardEl.clientWidth,cell=(size-gap*3)/4;node.style.width=cell+'px';node.style.height=cell+'px';const x=c*(cell+gap),y=r*(cell+gap);if(!animate){node.style.transition='none';node.style.transform=`translate3d(${x}px,${y}px,0)`;node.getBoundingClientRect();node.style.transition='';return}node.style.transform=`translate3d(${x}px,${y}px,0)`}
+function positionTile(node,r,c,animate=true){const gap=8,width=(boardEl.clientWidth-gap*3)/4,height=(boardEl.clientHeight-gap*3)/4;node.style.width=width+'px';node.style.height=height+'px';const x=c*(width+gap),y=r*(height+gap);if(!animate){node.style.transition='none';node.style.transform=`translate3d(${x}px,${y}px,0)`;node.getBoundingClientRect();node.style.transition='';return}node.style.transform=`translate3d(${x}px,${y}px,0)`}
 function render(initial=false){const activeIds=new Set();for(let r=0;r<4;r++)for(let c=0;c<4;c++){const tile=board[r][c];if(!tile)continue;activeIds.add(tile.id);let node=tileNodes.get(tile.id),isNew=false;if(!node){node=document.createElement('div');node.className='tile';node.textContent=tile.value;node.style.transition='none';boardEl.appendChild(node);tileNodes.set(tile.id,node);isNew=true}node.className='tile v'+(tile.value<=2048?tile.value:'high');node.textContent=tile.value;positionTile(node,r,c,!(initial||isNew));if(isNew)requestAnimationFrame(()=>{if(node.isConnected)node.classList.add('spawn')})}
 for(const [id,node] of tileNodes)if(!activeIds.has(id)){node.classList.add('removing');setTimeout(()=>{if(!node.isConnected)return;node.remove();tileNodes.delete(id)},110)}
 $('score').textContent=score;$('best').textContent=best;$('tileRecord').textContent=tileRecord}
@@ -100,6 +118,10 @@ $('again').onclick=fresh;fresh();load2048Leaderboard();
 </script>
 </body>
 </html>
+
+
+
+
 
 
 
