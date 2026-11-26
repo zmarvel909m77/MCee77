@@ -89,7 +89,7 @@ export function createBot(options: CreateBotOptions): Bot {
     await ctx.answerCallbackQuery();
     await upsertFromContext(ctx);
     const inline = shopApp
-      ? new InlineKeyboard().webApp("SHOP", shopApp)
+      ? new InlineKeyboard().webApp("SHOP MENU", shopApp)
       : undefined;
     await ctx.reply(shopUnavailableMessage(), {
       reply_markup: inline,
