@@ -76,7 +76,7 @@
      
     /* ── Feel / timing targets (2D side-view sprite game) ─────────────── */
     /** Target game loop rate (requestAnimationFrame + dt clamp). */
-    const TARGET_FPS = 320;
+    const TARGET_FPS = 120;
     /** Max simulation step (seconds) — clamps hitches; ~2 frames @ 60 FPS. */
     const DT_MAX = 2 / TARGET_FPS;
     /** Hero atlas frame cadence (walk cycle) — mid of 30–60 FPS. */
