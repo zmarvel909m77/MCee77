@@ -280,6 +280,40 @@ app.post("/api/v1/scores", async (request, reply) => {
   };
 });
 
+/** 2048 leaderboard is independent from the Kido Chop leaderboard. */
+app.get("/api/v1/2048/leaderboard", async (request) => {
+  const query = request.query as { limit?: string };
+  const limit = Math.min(Math.max(Number(query.limit ?? 7) || 7, 1), 50);
+  return { items: await users.get2048Leaderboard(limit) };
+});
+
+/** Save only a user's personal BEST SCORE for 2048. */
+app.post("/api/v1/2048/score", async (request, reply) => {
+  const body = (request.body ?? {}) as ScoreBody;
+  const identity = resolveTelegramIdentity(body, {
+    botToken,
+    allowDevScoreSubmit,
+    log: request.log,
+  });
+  if (!identity.ok) {
+    return reply.code(identity.status).send({ error: identity.error });
+  }
+
+  const rawPoints = Number(body.points ?? 0);
+  if (!Number.isFinite(rawPoints) || rawPoints < 0) {
+    return reply.code(400).send({ error: "invalid points" });
+  }
+  const points = Math.min(Math.floor(rawPoints), 10_000_000);
+  const user = await upsertFromIdentity(users, identity);
+  const result = await users.submit2048Score(user.id, points);
+
+  return {
+    ok: true,
+    bestScore: result.bestScore,
+    isNewBest: result.isNewBest,
+  };
+});
+
 app.get("/", async (_request, reply) => reply.redirect("/app/", 302));
 app.get("/app", async (_request, reply) => reply.redirect("/app/", 302));
 app.get("/app/shop", async (_request, reply) =>
