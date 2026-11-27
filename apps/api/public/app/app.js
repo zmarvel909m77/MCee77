@@ -4,9 +4,6 @@
 
 
 
-
-
-
 /**
  * GAME BOT Mini App shell — Magazin / O‘yinlar / Reyting
  * GAMEE-like: profile chip top-left, games default tab.
@@ -47,6 +44,10 @@ const els = {
   leaderboard: document.getElementById("leaderboard"),
   boardEmpty: document.getElementById("boardEmpty"),
   boardStatus: document.getElementById("boardStatus"),
+  ratingChooser: document.getElementById("ratingChooser"),
+  ratingResults: document.getElementById("ratingResults"),
+  ratingBack: document.getElementById("ratingBack"),
+  ratingSubtitle: document.getElementById("ratingSubtitle"),
 };
 
 /** @type {any} */
@@ -87,7 +88,7 @@ function setTab(name) {
   document.querySelectorAll(".view").forEach((v) => {
     v.classList.toggle("active", v.getAttribute("data-view") === name);
   });
-  if (name === "reyting") void loadLeaderboard();
+  if (name === "reyting") showRatingChooser();
   try {
     history.replaceState(null, "", `#${name}`);
   } catch {
@@ -445,34 +446,71 @@ els.playKarateBtn?.addEventListener("keydown", (ev) => {
   }
 });
 
-async function loadLeaderboard() {
+function showRatingChooser() {
+  els.ratingChooser?.classList.remove("hidden");
+  els.ratingResults?.classList.add("hidden");
+  if (els.ratingSubtitle) els.ratingSubtitle.textContent = "O‘yin reytingini tanlang";
+}
+
+document.querySelectorAll("[data-rating-game]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const game = button.getAttribute("data-rating-game");
+    if (game === "karate" || game === "2048") void loadLeaderboard(game);
+  });
+});
+
+els.ratingBack?.addEventListener("click", showRatingChooser);
+
+async function loadLeaderboard(game = "karate") {
+  els.ratingChooser?.classList.add("hidden");
+  els.ratingResults?.classList.remove("hidden");
+  if (els.ratingSubtitle) {
+    els.ratingSubtitle.textContent =
+      game === "2048" ? "2048 GAME TOP 7" : "KIDO CHOP TOP 7";
+  }
   if (els.boardStatus) els.boardStatus.textContent = "Yuklanmoqda…";
+  els.boardEmpty?.classList.add("hidden");
+
   try {
-    const res = await fetch("/api/v1/leaderboard?limit=30");
+    const endpoint =
+      game === "2048"
+        ? "/api/v1/2048/leaderboard?limit=7"
+        : "/api/v1/leaderboard?limit=7";
+    const res = await fetch(endpoint);
+    if (!res.ok) throw new Error("Reyting yuklanmadi");
     const data = await res.json();
     const items = data.items || [];
     if (els.leaderboard) els.leaderboard.innerHTML = "";
+
     if (!items.length) {
       els.boardEmpty?.classList.remove("hidden");
       if (els.boardStatus) els.boardStatus.textContent = "";
       return;
     }
-    els.boardEmpty?.classList.add("hidden");
-    items.forEach((row, i) => {
+
+    const medals = ["🥇", "🥈", "🥉"];
+    items.forEach((row) => {
       const li = document.createElement("li");
       const rank = document.createElement("div");
-      rank.className = "rank" + (i === 0 ? " gold" : "");
-      rank.textContent = String(row.rank);
+      rank.className = "rank" + (row.rank === 1 ? " gold" : "");
+      rank.textContent = row.rank <= 3 ? medals[row.rank - 1] : String(row.rank);
+
       const mid = document.createElement("div");
       mid.innerHTML = `<p class="u-name"></p><p class="u-meta"></p>`;
-      mid.querySelector(".u-name").textContent = row.displayName;
+      const playerName = row.displayName || row.username || "O‘yinchi";
+      mid.querySelector(".u-name").textContent = row.username
+        ? `${playerName} (@${row.username})`
+        : playerName;
       mid.querySelector(".u-meta").textContent = "Eng yaxshi ball";
+
       const pts = document.createElement("div");
       pts.className = "points";
-      pts.textContent = String(row.totalPoints);
+      const score = game === "2048" ? row.bestScore : row.totalPoints;
+      pts.textContent = Number(score || 0).toLocaleString("uz-UZ");
       li.append(rank, mid, pts);
       els.leaderboard?.appendChild(li);
     });
+
     if (els.boardStatus) {
       els.boardStatus.textContent = "";
       els.boardStatus.classList.remove("error");
