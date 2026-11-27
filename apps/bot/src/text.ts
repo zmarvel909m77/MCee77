@@ -35,23 +35,48 @@ export function profileMessage(user: User): string {
   ].join("\n");
 }
 
-export function leaderboardMessage(entries: LeaderboardEntry[]): string {
-  if (entries.length === 0) {
-    return [
-      "🏆 Reyting",
-    
-    ].join("\n");
-  }
+function ratingPosition(rank: number): string {
+  if (rank === 1) return "🥇";
+  if (rank === 2) return "🥈";
+  if (rank === 3) return "🥉";
+  return `${rank}.`;
+}
 
-  const lines = entries.map((e) => {
-    return `${e.rank}. ${e.displayName} — ${e.totalPoints} ball`;
-  });
+function ratingPlayerName(displayName: string, username: string | null): string {
+  return username ? `${displayName} (@${username})` : displayName;
+}
 
+export function ratingMenuMessage(): string {
+  return ["🏆 RATING", "", "Qaysi o‘yin reytingini ko‘rmoqchisiz?"].join("\n");
+}
+
+export function kidoLeaderboardMessage(entries: LeaderboardEntry[]): string {
+  if (!entries.length) return "🏆 KIDO CHOP TOP 7\n\nHozircha natijalar yo‘q.";
   return [
-    "🏆 Reyting (Kido Chop)",
+    "🏆 KIDO CHOP TOP 7",
     "",
-    ...lines,
+    ...entries.slice(0, 7).map((entry) =>
+      `${ratingPosition(entry.rank)} ${ratingPlayerName(entry.displayName, entry.username)} — ${entry.totalPoints} ball`
+    ),
   ].join("\n");
+}
+
+export function game2048LeaderboardMessage(
+  entries: Array<{ rank: number; displayName: string; username: string | null; bestScore: number }>,
+): string {
+  if (!entries.length) return "🏆 2048 GAME TOP 7\n\nHozircha natijalar yo‘q.";
+  return [
+    "🏆 2048 GAME TOP 7",
+    "",
+    ...entries.slice(0, 7).map((entry) =>
+      `${ratingPosition(entry.rank)} ${ratingPlayerName(entry.displayName, entry.username)} — ${entry.bestScore} ball`
+    ),
+  ].join("\n");
+}
+
+/** Backward-compatible alias for the admin bot's existing Kido Chop output. */
+export function leaderboardMessage(entries: LeaderboardEntry[]): string {
+  return kidoLeaderboardMessage(entries);
 }
 
 export function miniAppOpenMessage(hasWebApp: boolean): string {
