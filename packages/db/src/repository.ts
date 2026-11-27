@@ -454,18 +454,33 @@ export class UserRepository {
     });
   }
 
-  async get2048Leaderboard(limit = 10): Promise<Array<{ rank: number; displayName: string; username: string | null; bestScore: number }>> {
+  async get2048Leaderboard(limit = 7): Promise<Array<{ rank: number; displayName: string; username: string | null; bestScore: number }>> {
     const rows = await this.db.all<{
-      display_name: string; nickname: string | null; username: string | null; best_score: number;
+      display_name: string;
+      nickname: string | null;
+      username: string | null;
+      best_score: number;
+      rank: number;
     }>(
-      `SELECT u.display_name, u.nickname, u.username, s.best_score
-       FROM game_2048_scores s JOIN users u ON u.id = s.user_id
-       WHERE s.best_score > 0
-       ORDER BY s.best_score DESC, s.updated_at ASC LIMIT ?`, [limit],
+      `SELECT ranked.display_name, ranked.nickname, ranked.username,
+              ranked.best_score, ranked.rank
+       FROM (
+         SELECT u.display_name, u.nickname, u.username, s.best_score,
+                RANK() OVER (ORDER BY s.best_score DESC) AS rank
+         FROM game_2048_scores s
+         JOIN users u ON u.id = s.user_id
+         WHERE s.best_score > 0
+       ) AS ranked
+       ORDER BY ranked.best_score DESC, ranked.display_name ASC
+       LIMIT ?`,
+      [limit],
     );
-    return rows.map((row, index) => ({
-      rank: index + 1,
-      displayName: publicDisplayName({ nickname: row.nickname, displayName: row.display_name }),
+    return rows.map((row) => ({
+      rank: Number(row.rank),
+      displayName: publicDisplayName({
+        nickname: row.nickname,
+        displayName: row.display_name,
+      }),
       username: row.username,
       bestScore: Number(row.best_score),
     }));
@@ -480,20 +495,28 @@ export class UserRepository {
       avatar_url: string | null;
       total_points: number;
       rating: number;
+      rank: number;
     }>(
       `
-        SELECT telegram_id, username, display_name, nickname, avatar_url,
-               total_points, rating
-        FROM users
-        WHERE total_points > 0
-        ORDER BY total_points DESC, games_played ASC, created_at ASC
+        SELECT ranked.telegram_id, ranked.username, ranked.display_name,
+               ranked.nickname, ranked.avatar_url, ranked.total_points,
+               ranked.rating, ranked.rank, ranked.games_played, ranked.created_at
+        FROM (
+          SELECT telegram_id, username, display_name, nickname, avatar_url,
+                 total_points, rating, games_played, created_at,
+                 RANK() OVER (ORDER BY total_points DESC) AS rank
+          FROM users
+          WHERE total_points > 0
+        ) AS ranked
+        ORDER BY ranked.total_points DESC, ranked.games_played ASC,
+                 ranked.created_at ASC
         LIMIT ?
       `,
       [limit],
     );
 
-    return rows.map((row, index) => ({
-      rank: index + 1,
+    return rows.map((row) => ({
+      rank: Number(row.rank),
       telegramId: Number(row.telegram_id),
       displayName: publicDisplayName({
         nickname: row.nickname,
