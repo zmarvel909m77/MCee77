@@ -1,4 +1,3 @@
-import { InlineKeyboard } from "grammy";
 
 /** Inline button labels (Uzbek Latin). */
 export const BTN = {
@@ -9,6 +8,10 @@ export const BTN = {
 
 export const CB = {
   shop: "shop",
+  ratingMenu: "rating_menu",
+  ratingKido: "rating_kido",
+  rating2048: "rating_2048",
+  ratingBack: "rating_back",
 } as const;
 
 export interface StartInlineOptions {
@@ -46,3 +49,15 @@ export function startInlineKeyboard(opts: StartInlineOptions = {}): InlineKeyboa
 export const REMOVE_REPLY_KEYBOARD = {
   remove_keyboard: true as const,
 };
+
+/** Rating game selection and navigation keyboards. */
+export function ratingMenuKeyboard(): InlineKeyboard {
+  return new InlineKeyboard()
+    .text("KIDO CHOP", CB.ratingKido)
+    .row()
+    .text("2048 GAME", CB.rating2048);
+}
+
+export function ratingBackKeyboard(): InlineKeyboard {
+  return new InlineKeyboard().text("Orqaga", CB.ratingBack);
+}
