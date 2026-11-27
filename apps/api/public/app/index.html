@@ -382,7 +382,14 @@
         padding: 9px 10px;
       }
     }
-  </style>
+   
+    .rating-chooser{display:grid;gap:12px;margin-top:18px}
+    .rating-choice{width:100%;min-height:76px;border:1px solid #ffffff20;border-radius:18px;background:linear-gradient(135deg,#29213d,#1b1729);color:#fff;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;text-align:left;font:inherit;cursor:pointer}
+    .rating-choice strong{font-size:16px;letter-spacing:.5px}
+    .rating-choice span{font-size:11px;font-weight:800;color:#c9b9ff}
+    .rating-back{border:1px solid #ffffff22;border-radius:12px;background:#282239;color:#fff;padding:9px 14px;font:700 12px inherit;margin:4px 0 14px;cursor:pointer}
+
+</style>
 </head>
 
 <body>
@@ -534,26 +541,27 @@
       >
         <div class="section-head">
           <h2>RATING</h2>
-          <p>KidoChop RATING</p>
+          <p id="ratingSubtitle">O‘yin reytingini tanlang</p>
         </div>
 
-        <ol id="leaderboard" class="board"></ol>
+        <div id="ratingChooser" class="rating-chooser">
+          <button type="button" class="rating-choice" data-rating-game="karate">
+            <strong>KIDO CHOP</strong>
+            <span>TOP 7</span>
+          </button>
+          <button type="button" class="rating-choice" data-rating-game="2048">
+            <strong>2048 GAME</strong>
+            <span>TOP 7</span>
+          </button>
+        </div>
 
-        <p id="boardEmpty" class="empty hidden">
-          <span class="empty-ico" aria-hidden="true">
-            <svg
-              viewBox="0 0 24 24"
-              width="28"
-              height="28"
-              fill="currentColor"
-            >
-              <path d="M5 21h4v-8H5zm5 0h4V9h-4zm5 0h4V3h-4z"/>
-            </svg>
-          </span>
-          Reyting hali shakllanmagan
-        </p>
+        <div id="ratingResults" class="hidden">
+          <button type="button" id="ratingBack" class="rating-back">‹ Orqaga</button>
+          <ol id="leaderboard" class="board"></ol>
+          <p id="boardEmpty" class="empty hidden">Reyting hali shakllanmagan</p>
+          <p id="boardStatus" class="status center"></p>
+        </div>
 
-        <p id="boardStatus" class="status center"></p>
       </section>
 
     </main>
