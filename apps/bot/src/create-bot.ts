@@ -1,10 +1,12 @@
 import { Bot, InlineKeyboard, type Context } from "grammy";
 import type { UserRepository } from "@mcee77/db";
 import { publicDisplayName } from "@mcee77/shared";
-import { BTN, CB } from "./keyboard.js";
+import { BTN, CB, ratingBackKeyboard, ratingMenuKeyboard } from "./keyboard.js";
 import {
   airHockeyOpenMessage,
-  leaderboardMessage,
+  game2048LeaderboardMessage,
+  kidoLeaderboardMessage,
+  ratingMenuMessage,
   profileMessage,
   shopUnavailableMessage,
 } from "./text.js";
@@ -115,12 +117,44 @@ export function createBot(options: CreateBotOptions): Bot {
     });
   });
 
+  async function showRatingMenu(ctx: Context, edit = false) {
+    const options = { reply_markup: ratingMenuKeyboard() };
+    if (edit && ctx.callbackQuery.message) {
+      await ctx.editMessageText(ratingMenuMessage(), options);
+    } else {
+      await ctx.reply(ratingMenuMessage(), options);
+    }
+  }
+
   bot.command("rating", async (ctx) => {
     await upsertFromContext(ctx);
-    const board = await users.getLeaderboard(10);
-    await ctx.reply(leaderboardMessage(board), {
-      reply_markup: openAppInline("Reytingni ochish"),
+    await showRatingMenu(ctx);
+  });
+
+  bot.callbackQuery(CB.ratingMenu, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await showRatingMenu(ctx, true);
+  });
+
+  bot.callbackQuery(CB.ratingKido, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    const board = await users.getLeaderboard(7);
+    await ctx.editMessageText(kidoLeaderboardMessage(board), {
+      reply_markup: ratingBackKeyboard(),
     });
+  });
+
+  bot.callbackQuery(CB.rating2048, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    const board = await users.get2048Leaderboard(7);
+    await ctx.editMessageText(game2048LeaderboardMessage(board), {
+      reply_markup: ratingBackKeyboard(),
+    });
+  });
+
+  bot.callbackQuery(CB.ratingBack, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await showRatingMenu(ctx, true);
   });
 
   bot.catch((err) => {
