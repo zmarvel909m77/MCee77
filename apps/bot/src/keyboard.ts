@@ -1,3 +1,4 @@
+import { InlineKeyboard } from "grammy";
 
 /** Inline button labels (Uzbek Latin). */
 export const BTN = {
